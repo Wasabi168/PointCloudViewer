@@ -1,0 +1,2097 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title data-i18n-title>點雲檢視器</title>
+<style>
+    :root {
+        --bg: #1e1e28;
+        --panel: #2a2a38;
+        --border: #3a3a4a;
+        --text: #e6e6ef;
+        --accent: #4f8cff;
+        --accent-hover: #6aa1ff;
+        --muted: #9a9ab0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0;
+        font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+    }
+
+    header {
+        padding: 16px 24px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+    }
+
+    .controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-left: auto;
+    }
+
+    button, select, label.file-btn {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.15s ease;
+    }
+
+    button:hover, label.file-btn:hover { background: var(--accent-hover); }
+
+    select {
+        background: #3a3a4a;
+        color: var(--text);
+        border: 1px solid var(--border);
+    }
+
+    input[type="file"] { display: none; }
+
+    main {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 16px;
+        padding: 16px 24px;
+    }
+
+    .viewer {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        position: relative;
+        overflow: hidden;
+        min-height: 500px;
+        transition: border-color 0.15s ease, background 0.15s ease;
+        user-select: none;
+    }
+
+    .viewer.drag-over {
+        border: 2px dashed var(--accent);
+        background: rgba(79, 140, 255, 0.08);
+    }
+
+    .viewer.drag-reject {
+        border: 2px dashed #ff5c5c;
+        background: rgba(255, 92, 92, 0.08);
+    }
+
+    .drop-hint {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: none;
+        font-size: 16px;
+        color: var(--accent);
+        background: rgba(30, 30, 40, 0.65);
+        backdrop-filter: blur(2px);
+    }
+    .viewer.drag-over .drop-hint,
+    .viewer.drag-reject .drop-hint { display: flex; }
+    .viewer.drag-reject .drop-hint { color: #ff7a7a; }
+
+    .drop-hint .icon {
+        font-size: 40px;
+        line-height: 1;
+    }
+
+    .toast {
+        position: fixed;
+        bottom: 28px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: #d9534f;
+        color: #fff;
+        padding: 10px 18px;
+        border-radius: 6px;
+        font-size: 14px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        z-index: 1000;
+    }
+    .toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+    .toast.info { background: #4f8cff; }
+
+    #canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform-origin: 0 0;
+        image-rendering: pixelated;
+        background: #000;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        cursor: grab;
+        will-change: transform;
+    }
+    #canvas.grabbing { cursor: grabbing; }
+
+    .placeholder {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        color: var(--muted);
+        font-size: 14px;
+        text-align: center;
+        pointer-events: none;
+    }
+
+    .zoom-indicator {
+        position: absolute;
+        right: 12px;
+        bottom: 12px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-family: Consolas, monospace;
+        pointer-events: none;
+        display: none;
+        z-index: 5;
+    }
+    .zoom-indicator.show { display: block; }
+
+    .zoom-hint {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        color: var(--muted);
+        font-size: 11px;
+        pointer-events: none;
+        opacity: 0.8;
+        display: none;
+    }
+    .zoom-hint.show { display: block; }
+
+    .side {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        overflow-y: auto;
+        max-height: calc(100vh - 120px);
+    }
+
+    .side h2 {
+        font-size: 14px;
+        margin: 0 0 8px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 0;
+        border-bottom: 1px dashed var(--border);
+        font-size: 13px;
+    }
+
+    .info-row .k { color: var(--muted); }
+    .info-row .v { color: var(--text); font-family: Consolas, monospace; }
+
+    .progress {
+        width: 100%;
+        height: 6px;
+        background: #3a3a4a;
+        border-radius: 3px;
+        overflow: hidden;
+        margin: 8px 0;
+        display: none;
+    }
+    .progress.show { display: block; }
+    .progress-bar {
+        height: 100%;
+        background: var(--accent);
+        width: 0%;
+        transition: width 0.15s linear;
+    }
+
+    .colorbar {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .colorbar canvas {
+        flex: 1;
+        height: 14px;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+    }
+    .colorbar .minmax {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 2px;
+    }
+
+    .status {
+        font-size: 13px;
+        color: var(--muted);
+        margin-top: 8px;
+    }
+
+    .lang-toggle,
+    .cursor-toggle {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+        background: #3a3a4a;
+    }
+    .lang-toggle button,
+    .cursor-toggle button {
+        background: transparent;
+        color: var(--muted);
+        padding: 6px 12px;
+        font-size: 12px;
+        border: none;
+        border-radius: 0;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+    .lang-toggle button:hover,
+    .cursor-toggle button:hover { color: var(--text); }
+    .lang-toggle button.active,
+    .cursor-toggle button.active {
+        background: var(--accent);
+        color: #fff;
+    }
+
+    /* 數值顯示模式的鼠標樣式 */
+    #canvas.inspect-mode { cursor: default; }
+
+    /* 鼠標位置數值顯示 */
+    .value-indicator {
+        position: absolute;
+        pointer-events: none;
+        background: rgba(0, 0, 0, 0.75);
+        color: #fff;
+        padding: 6px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-family: Consolas, monospace;
+        line-height: 1.4;
+        white-space: nowrap;
+        display: none;
+        z-index: 10;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+    .value-indicator.show { display: block; }
+    .value-indicator .k { color: var(--muted); margin-right: 4px; }
+
+    @media (max-width: 900px) {
+        main { grid-template-columns: 1fr; }
+        .side { max-height: none; }
+    }
+</style>
+</head>
+<body>
+
+<header>
+    <h1>
+        <span data-i18n="appTitle">點雲檢視器</span>
+        <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .tiff / .bmp / .png / .jpg / .jpeg)</span>
+    </h1>
+    <div class="controls">
+        <label class="file-btn">
+            <span data-i18n="btnOpen">讀取檔案</span>
+            <input type="file" id="fileInput" accept=".bcrf,.asc,.tif,.tiff,.bmp,.png,.jpg,.jpeg" />
+        </label>
+
+        <label style="color:var(--muted);font-size:13px;">
+            <span data-i18n="labelColormap">色彩：</span>
+            <select id="colormap">
+                <option value="viridis">Viridis</option>
+                <option value="jet" selected>Jet</option>
+                <option value="hot">Hot</option>
+                <option value="gray">Gray</option>
+                <option value="inferno">Inferno</option>
+            </select>
+        </label>
+
+        <label style="color:var(--muted);font-size:13px;">
+            <span data-i18n="labelSaveFormat">儲存格式：</span>
+            <select id="saveFormat">
+                <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
+                <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
+                <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
+                <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
+                <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
+                <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
+            </select>
+        </label>
+        <button id="btnSave" data-i18n="btnSave">儲存</button>
+
+        <div class="cursor-toggle" id="cursorToggle">
+            <button type="button" data-cursor="pan" class="active" data-i18n="cursorPan" title="拖曳模式">拖曳</button>
+            <button type="button" data-cursor="inspect" data-i18n="cursorInspect" title="數值顯示模式">數值</button>
+        </div>
+
+        <div class="lang-toggle" id="langToggle">
+            <button type="button" data-lang="zh-Hant" class="active">繁中</button>
+            <button type="button" data-lang="en">EN</button>
+        </div>
+    </div>
+</header>
+
+<div class="toast" id="toast"></div>
+
+<main>
+    <div class="viewer" id="viewer">
+        <div class="placeholder" id="placeholder" data-i18n="placeholder">
+            點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .bmp / .png / .jpg 檔案拖曳到此處
+        </div>
+        <canvas id="canvas" style="display:none;"></canvas>
+        <div class="zoom-hint" id="zoomHint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+        <div class="value-indicator" id="valueIndicator"></div>
+        <div class="drop-hint" id="dropHint">
+            <div class="icon" id="dropIcon">&#x2B07;</div>
+            <div id="dropText" data-i18n="dropSupported">放開以載入檔案</div>
+        </div>
+    </div>
+
+    <aside class="side">
+        <h2 data-i18n="sideProgress">進度</h2>
+        <div class="progress" id="progress"><div class="progress-bar" id="progressBar"></div></div>
+        <div class="status" id="status">尚未載入檔案</div>
+
+        <h2 style="margin-top:20px;" data-i18n="sideColorbar">色階 (Z 值)</h2>
+        <div class="colorbar">
+            <canvas id="colorbarCanvas" width="240" height="14"></canvas>
+        </div>
+        <div class="colorbar">
+            <div class="minmax" style="flex:1;">
+                <span id="zMin">-</span>
+                <span id="zMax">-</span>
+            </div>
+        </div>
+
+        <h2 style="margin-top:20px;" data-i18n="sideInfo">檔案資訊</h2>
+        <div id="infoList"></div>
+    </aside>
+</main>
+
+<script>
+/* =========================================================================
+ *  0. 多語系 (i18n)
+ * ========================================================================= */
+
+const I18N = {
+    'zh-Hant': {
+        appTitle: '點雲檢視器',
+        btnOpen: '讀取檔案',
+        labelColormap: '色彩：',
+        labelSaveFormat: '儲存格式：',
+        btnSave: '儲存',
+        btnSaving: '儲存中…',
+        'saveFormat.bcrf': 'BCRF (原始資料)',
+        'saveFormat.asc':  'ASC (文字資料)',
+        'saveFormat.tiff': 'TIFF (float32 原始資料)',
+        'saveFormat.bmp':  'BMP (灰階)',
+        'saveFormat.png':  'PNG (彩色畫面)',
+        'saveFormat.jpg':  'JPG (灰階)',
+        placeholder: '點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .bmp / .png / .jpg 檔案拖曳到此處',
+        dropSupported: '放開以載入檔案',
+        dropReject: '不支援此檔案',
+        zoomHint: '滾輪縮放 · 拖曳平移 · 雙擊還原',
+        cursorPan: '拖曳',
+        cursorInspect: '數值',
+        cursorPanTitle: '拖曳模式：可平移圖片',
+        cursorInspectTitle: '數值模式：顯示鼠標位置的像素數值',
+        valueLabel: '數值',
+        valuePos: '位置',
+        sideProgress: '進度',
+        sideColorbar: '色階 (Z 值)',
+        sideInfo: '檔案資訊',
+        infoSize: '影像尺寸',
+        statusIdle: '尚未載入檔案',
+        statusReading: '讀取中：{0}',
+        statusLoaded: '已載入：{0} ({1}×{2})',
+        statusReadFailed: '讀取失敗：{0}',
+        statusUnsupported: '不支援的檔案：{0}（僅支援 {1}）',
+        statusSaving: '儲存中：{0}',
+        statusSaved: '已儲存：{0}',
+        statusSaveFailed: '儲存失敗：{0}',
+        toastNoData: '尚未載入資料',
+        toastMultiFile: '一次只能載入一個檔案，僅會載入第一個',
+        toastSaved: '已儲存 {0}',
+        errBcrfNoHeader: 'BCRF header 缺少 xpixels / ypixels',
+        errAscNoData: 'ASC 檔案沒有找到任何數值資料',
+        errImgDecodeFailed: '圖像解碼失敗',
+        errTiffSmall: 'TIFF 檔案過小',
+        errTiffInvalid: '不是合法的 TIFF 檔案',
+        errTiffBigTiff: '不支援 BigTIFF (magic={0})',
+        errTiffBadIfd: 'TIFF IFD offset 超出檔案範圍',
+        errTiffMissingDim: 'TIFF 缺少 ImageWidth / ImageLength',
+        errTiffCompressed: '僅支援未壓縮 TIFF (目前 Compression={0})',
+        errTiffTiled: 'TIFF 缺少 StripOffsets / StripByteCounts (可能為 tiled TIFF)',
+        errTiffSampleFmt: '不支援的 TIFF sample 格式: bps={0}, sampleFormat={1}',
+        errUnknownExt: '未實作的副檔名: .{0}',
+        errSaveFmt: '不支援的儲存格式：{0}'
+    },
+    'en': {
+        appTitle: 'Point Cloud Viewer',
+        btnOpen: 'Open File',
+        labelColormap: 'Colormap:',
+        labelSaveFormat: 'Save as:',
+        btnSave: 'Save',
+        btnSaving: 'Saving…',
+        'saveFormat.bcrf': 'BCRF (raw data)',
+        'saveFormat.asc':  'ASC (text data)',
+        'saveFormat.tiff': 'TIFF (float32 raw data)',
+        'saveFormat.bmp':  'BMP (grayscale)',
+        'saveFormat.png':  'PNG (rendered view)',
+        'saveFormat.jpg':  'JPG (grayscale)',
+        placeholder: 'Click "Open File" above, or drag a .bcrf / .asc / .tif / .bmp / .png / .jpg file here',
+        dropSupported: 'Release to load file',
+        dropReject: 'Unsupported file',
+        zoomHint: 'Scroll to zoom · Drag to pan · Double-click to reset',
+        cursorPan: 'Pan',
+        cursorInspect: 'Inspect',
+        cursorPanTitle: 'Pan mode: drag to move the image',
+        cursorInspectTitle: 'Inspect mode: show pixel value at cursor',
+        valueLabel: 'Value',
+        valuePos: 'Pos',
+        sideProgress: 'Progress',
+        sideColorbar: 'Color scale (Z)',
+        sideInfo: 'File Info',
+        infoSize: 'Image size',
+        statusIdle: 'No file loaded',
+        statusReading: 'Loading: {0}',
+        statusLoaded: 'Loaded: {0} ({1}×{2})',
+        statusReadFailed: 'Load failed: {0}',
+        statusUnsupported: 'Unsupported file: {0} (only {1})',
+        statusSaving: 'Saving: {0}',
+        statusSaved: 'Saved: {0}',
+        statusSaveFailed: 'Save failed: {0}',
+        toastNoData: 'No data loaded',
+        toastMultiFile: 'Only one file at a time; loading the first one',
+        toastSaved: 'Saved {0}',
+        errBcrfNoHeader: 'BCRF header missing xpixels / ypixels',
+        errAscNoData: 'No numeric data found in ASC file',
+        errImgDecodeFailed: 'Image decode failed',
+        errTiffSmall: 'TIFF file too small',
+        errTiffInvalid: 'Not a valid TIFF file',
+        errTiffBigTiff: 'BigTIFF not supported (magic={0})',
+        errTiffBadIfd: 'TIFF IFD offset out of range',
+        errTiffMissingDim: 'TIFF missing ImageWidth / ImageLength',
+        errTiffCompressed: 'Only uncompressed TIFF is supported (Compression={0})',
+        errTiffTiled: 'TIFF missing StripOffsets / StripByteCounts (possibly tiled TIFF)',
+        errTiffSampleFmt: 'Unsupported TIFF sample format: bps={0}, sampleFormat={1}',
+        errUnknownExt: 'Unsupported extension: .{0}',
+        errSaveFmt: 'Unsupported save format: {0}'
+    }
+};
+
+const DEFAULT_LANG = 'zh-Hant';
+
+/**
+ * 判斷一個 BCP 47 語系字串是否屬於「繁體中文」。
+ * 僅以下情況視為繁中：
+ *   - 腳本標籤為 Hant，例如 zh-Hant、zh-Hant-TW、zh-Hant-HK
+ *   - 地區為傳統繁中使用地：TW (台灣)、HK (香港)、MO (澳門)
+ * 其他中文變體 (zh-CN / zh-SG / zh-Hans …) 一律視為非繁中 → 使用英文。
+ */
+function isTraditionalChinese(tag) {
+    if (!tag) return false;
+    const parts = String(tag).toLowerCase().split(/[-_]/);
+    if (parts[0] !== 'zh') return false;
+    for (let i = 1; i < parts.length; i++) {
+        const p = parts[i];
+        if (p === 'hant') return true;
+        if (p === 'hans') return false;
+        if (p === 'tw' || p === 'hk' || p === 'mo') return true;
+        if (p === 'cn' || p === 'sg' || p === 'my') return false;
+    }
+    return false;
+}
+
+let currentLang = (() => {
+    try {
+        const saved = localStorage.getItem('pcviewer.lang');
+        if (saved && I18N[saved]) return saved;
+    } catch (_) {}
+    // 依瀏覽器語系自動判斷：僅繁體中文 → zh-Hant，其餘 (含簡體中文) → en
+    const candidates = [];
+    if (Array.isArray(navigator.languages)) candidates.push(...navigator.languages);
+    if (navigator.language) candidates.push(navigator.language);
+    for (const tag of candidates) {
+        if (isTraditionalChinese(tag)) return 'zh-Hant';
+    }
+    return 'en';
+})();
+
+function t(key, ...args) {
+    const dict = I18N[currentLang] || I18N[DEFAULT_LANG];
+    let s = (dict && dict[key] != null) ? dict[key] : (I18N[DEFAULT_LANG][key] ?? key);
+    for (let i = 0; i < args.length; i++) {
+        s = s.split('{' + i + '}').join(args[i]);
+    }
+    return s;
+}
+
+function applyLanguage(lang) {
+    if (!I18N[lang]) lang = DEFAULT_LANG;
+    currentLang = lang;
+    try { localStorage.setItem('pcviewer.lang', lang); } catch (_) {}
+
+    document.documentElement.lang = lang;
+
+    // 更新所有帶 data-i18n 的節點
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        el.textContent = t(key);
+    });
+
+    // 標題
+    const titleEl = document.querySelector('title[data-i18n-title]');
+    if (titleEl) titleEl.textContent = t('appTitle');
+
+    // 語言切換按鈕的 active 狀態
+    document.querySelectorAll('#langToggle button').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-lang') === lang);
+    });
+
+    // 鼠標模式切換按鈕的 title
+    const cursorPanBtn = document.querySelector('#cursorToggle button[data-cursor="pan"]');
+    const cursorInspectBtn = document.querySelector('#cursorToggle button[data-cursor="inspect"]');
+    if (cursorPanBtn) cursorPanBtn.title = t('cursorPanTitle');
+    if (cursorInspectBtn) cursorInspectBtn.title = t('cursorInspectTitle');
+
+    // 狀態列依情境更新：已載入則重新翻譯，否則為 idle
+    if (typeof statusEl !== 'undefined' && statusEl) {
+        if (typeof currentDataset !== 'undefined' && currentDataset) {
+            statusEl.textContent = t('statusLoaded',
+                currentDataset.filename,
+                currentDataset.width,
+                currentDataset.height);
+        } else {
+            statusEl.textContent = t('statusIdle');
+        }
+    }
+    // 儲存按鈕若非儲存中，更新文字
+    if (typeof btnSave !== 'undefined' && btnSave && !btnSave.disabled) {
+        btnSave.textContent = t('btnSave');
+    }
+    // 更新拖放提示 (依目前是否為 drag-reject 狀態)
+    if (typeof dropText !== 'undefined' && dropText && typeof viewerEl !== 'undefined' && viewerEl) {
+        dropText.textContent = viewerEl.classList.contains('drag-reject')
+            ? t('dropReject') : t('dropSupported');
+    }
+}
+
+
+/* =========================================================================
+ *  1. 檔案解析 (對應 wr_file.py 中的 read_bcrf_file_thread / read_asc_file_thread)
+ * ========================================================================= */
+
+/** 解析 BCRF 格式：header 2048 bytes + float32 little-endian 資料 */
+async function readBcrf(file, onProgress) {
+    const HEADER_SIZE = 2048;
+
+    // 讀取整個檔案
+    const buffer = await file.arrayBuffer();
+    const totalBytes = buffer.byteLength;
+
+    // 解析 header
+    const headerBytes = new Uint8Array(buffer, 0, HEADER_SIZE);
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    let headerText = decoder.decode(headerBytes);
+    headerText = headerText.replace(/\x00/g, '');
+
+    const headerDict = {};
+    for (const line of headerText.split('\n')) {
+        const idx = line.indexOf('=');
+        if (idx >= 0) {
+            const key = line.slice(0, idx).trim();
+            const value = line.slice(idx + 1).trim();
+            if (key) headerDict[key] = value;
+        }
+    }
+
+    // 補齊預設值 + 去掉單位中的方括號
+    if (!headerDict.xunit) headerDict.xunit = 'nm';
+    if (!headerDict.yunit) headerDict.yunit = 'nm';
+    for (const k of ['zunit', 'xunit', 'yunit']) {
+        if (headerDict[k]) headerDict[k] = headerDict[k].replace(/[\[\]]/g, '');
+    }
+
+    const xPixels = parseInt(parseFloat(headerDict.xpixels));
+    const yPixels = parseInt(parseFloat(headerDict.ypixels));
+    if (!xPixels || !yPixels) {
+        throw new Error(t('errBcrfNoHeader'));
+    }
+
+    const expectedDataSize = xPixels * yPixels * 4;
+    let dataStart = HEADER_SIZE;
+    let dataBytes = totalBytes - dataStart;
+
+    // 對應 bytes_to_float 的 '%' padding 過濾行為：
+    // 若實際資料長度 > 預期，取最後 N bytes；否則若開頭有 '%' padding，跳過
+    if (dataBytes > expectedDataSize) {
+        dataStart = totalBytes - expectedDataSize;
+        dataBytes = expectedDataSize;
+    } else {
+        // 嘗試過濾開頭連續的 '%' (0x25) 或 NULL (0x00)
+        const bytes = new Uint8Array(buffer, HEADER_SIZE);
+        if (bytes.length > 0 && bytes[0] === 0x25) {
+            let pos = -1;
+            for (let i = 0; i < bytes.length; i++) {
+                const b = bytes[i];
+                if (b === 0x25 || b === 0x00) {
+                    if (b === 0x00 && i > 0 && bytes[i - 1] === 0x00) break;
+                    if (i >= 2 && bytes[i - 2] === 0x25 && bytes[i - 1] === 0x25 && bytes[i] === 0x00) break;
+                    pos = i;
+                } else {
+                    break;
+                }
+            }
+            dataStart = HEADER_SIZE + pos + 1;
+            dataBytes = totalBytes - dataStart;
+        }
+    }
+
+    if (onProgress) onProgress(0.3);
+
+    // 轉成 Float32Array
+    const floatCount = Math.floor(dataBytes / 4);
+    let float32;
+    if ((dataStart % 4) === 0) {
+        float32 = new Float32Array(buffer, dataStart, floatCount);
+    } else {
+        // 若位址未對齊，需要 copy 一份
+        const aligned = buffer.slice(dataStart, dataStart + floatCount * 4);
+        float32 = new Float32Array(aligned);
+    }
+
+    if (onProgress) onProgress(0.7);
+
+    // 若長度不足，補 0；若多餘，截斷
+    const expectedCount = xPixels * yPixels;
+    let data;
+    if (float32.length === expectedCount) {
+        data = float32;
+    } else if (float32.length > expectedCount) {
+        data = float32.subarray(float32.length - expectedCount);
+    } else {
+        data = new Float32Array(expectedCount);
+        data.set(float32);
+    }
+
+    if (onProgress) onProgress(1.0);
+
+    return { header: headerDict, data, width: xPixels, height: yPixels };
+}
+
+
+/** 解析 ASC 格式：# 開頭為 header，其餘為數值資料 */
+async function readAsc(file, onProgress) {
+    const text = await file.text();
+    const lines = text.split(/\r?\n/);
+    const total = lines.length;
+
+    const headerDict = {};
+    const dataLines = [];
+
+    // 第一輪：處理 header
+    for (let i = 0; i < total; i++) {
+        const line = lines[i];
+        if (line.includes('=') && line.includes('#')) {
+            const idx = line.indexOf('=');
+            const key = line.slice(0, idx).replace(/#/g, '').trim();
+            const value = line.slice(idx + 1).trim();
+            if (key) headerDict[key] = value;
+        }
+        if (onProgress && (i & 1023) === 0) onProgress((i + 1) / (2 * total));
+    }
+
+    // 第二輪：取出資料行
+    for (let i = 0; i < total; i++) {
+        const line = lines[i];
+        if (!line.includes('#')) {
+            const trimmed = line.trim();
+            if (trimmed === '') continue;
+            dataLines.push(trimmed.split(/\s+/));
+        }
+        if (onProgress && (i & 1023) === 0) onProgress(0.5 + (i + 1) / (2 * total));
+    }
+
+    // 去除單位欄位的方括號
+    for (const k of ['z-unit', 'x-unit', 'y-unit']) {
+        if (headerDict[k]) headerDict[k] = headerDict[k].replace(/[\[\]]/g, '');
+    }
+
+    // 決定形狀：依 x-pixels / y-pixels 或自動推算
+    let width, height;
+    const xp = parseInt(headerDict['x-pixels']);
+    const yp = parseInt(headerDict['y-pixels']);
+
+    let data;
+    // 特殊情形：整個資料擠在一行(或兩行)裡
+    if (dataLines.length === 2 && !isNaN(xp) && !isNaN(yp) &&
+        dataLines[0].length === xp * yp) {
+        width = xp;
+        height = yp;
+        data = new Float32Array(width * height);
+        for (let i = 0; i < data.length; i++) data[i] = parseFloat(dataLines[0][i]);
+    } else if (dataLines.length >= 1) {
+        height = dataLines.length;
+        width = dataLines[0].length;
+        // 若 header 有明確的 xpixels/ypixels 而且能對上，則優先採用
+        if (!isNaN(xp) && !isNaN(yp) && width * height === xp * yp) {
+            width = xp; height = yp;
+        }
+        data = new Float32Array(width * height);
+        let idx = 0;
+        for (const row of dataLines) {
+            for (const v of row) {
+                data[idx++] = parseFloat(v);
+                if (idx >= data.length) break;
+            }
+            if (idx >= data.length) break;
+        }
+    } else {
+        throw new Error(t('errAscNoData'));
+    }
+
+    if (onProgress) onProgress(1.0);
+    return { header: headerDict, data, width, height };
+}
+
+
+/* -------------------------------------------------------------------------
+ *  PNG / JPG / BMP 解析：透過瀏覽器原生解碼，再轉為灰階 (對應 PIL .convert('L'))
+ * ------------------------------------------------------------------------- */
+
+function makeImageHeader(format, w, h, minVal) {
+    return {
+        fileformat: format,
+        headersize: '0',
+        xpixels: String(w),
+        ypixels: String(h),
+        xlength: String(w),
+        ylength: String(h),
+        scanspeed: '0',
+        intelmode: '1',
+        bit2nm: '1',
+        xoffset: '0',
+        yoffset: '0',
+        voidpixels: '0',
+        zmin: String(minVal),
+        xunit: 'mm',
+        yunit: 'mm',
+        zunit: 'um',
+        forcecurve: '0'
+    };
+}
+
+async function decodeImageToGray(file) {
+    // 優先使用 createImageBitmap (較快，能直接處理 Blob/File)
+    let w, h, rgba;
+    try {
+        const bitmap = await createImageBitmap(file);
+        w = bitmap.width; h = bitmap.height;
+        const tmp = document.createElement('canvas');
+        tmp.width = w; tmp.height = h;
+        const tctx = tmp.getContext('2d');
+        tctx.drawImage(bitmap, 0, 0);
+        if (bitmap.close) bitmap.close();
+        rgba = tctx.getImageData(0, 0, w, h).data;
+    } catch (e) {
+        // Fallback: 使用 <img>
+        const url = URL.createObjectURL(file);
+        try {
+            const img = await new Promise((resolve, reject) => {
+                const im = new Image();
+                im.onload = () => resolve(im);
+                im.onerror = () => reject(new Error(t('errImgDecodeFailed')));
+                im.src = url;
+            });
+            w = img.naturalWidth; h = img.naturalHeight;
+            const tmp = document.createElement('canvas');
+            tmp.width = w; tmp.height = h;
+            const tctx = tmp.getContext('2d');
+            tctx.drawImage(img, 0, 0);
+            rgba = tctx.getImageData(0, 0, w, h).data;
+        } finally {
+            URL.revokeObjectURL(url);
+        }
+    }
+
+    // RGBA -> 灰階 (PIL 'L' 公式：L = R*299/1000 + G*587/1000 + B*114/1000)
+    const data = new Float32Array(w * h);
+    let vmin = Infinity;
+    for (let i = 0; i < data.length; i++) {
+        const r = rgba[i * 4];
+        const g = rgba[i * 4 + 1];
+        const b = rgba[i * 4 + 2];
+        const v = Math.round(r * 299 / 1000 + g * 587 / 1000 + b * 114 / 1000);
+        data[i] = v;
+        if (v < vmin) vmin = v;
+    }
+    return { data, width: w, height: h, vmin };
+}
+
+async function readPng(file, onProgress) {
+    if (onProgress) onProgress(0.1);
+    const { data, width, height, vmin } = await decodeImageToGray(file);
+    if (onProgress) onProgress(0.8);
+    const header = makeImageHeader('png', width, height, vmin);
+    header.original_format = 'PNG';
+    if (onProgress) onProgress(1.0);
+    return { header, data, width, height };
+}
+
+async function readJpg(file, onProgress) {
+    if (onProgress) onProgress(0.1);
+    const { data, width, height, vmin } = await decodeImageToGray(file);
+    if (onProgress) onProgress(0.8);
+    const header = makeImageHeader('jpg', width, height, vmin);
+    header.original_format = 'JPEG';
+    if (onProgress) onProgress(1.0);
+    return { header, data, width, height };
+}
+
+async function readBmp(file, onProgress) {
+    if (onProgress) onProgress(0.1);
+    const { data, width, height, vmin } = await decodeImageToGray(file);
+    if (onProgress) onProgress(0.6);
+
+    const header = makeImageHeader('bmp', width, height, vmin);
+    header.original_format = 'BMP';
+
+    // 從 BMP 檔頭讀取 biXPelsPerMeter / biYPelsPerMeter 計算實際長度
+    try {
+        const buffer = await file.arrayBuffer();
+        if (buffer.byteLength >= 46) {
+            const view = new DataView(buffer);
+            // 檢查 BMP magic: 0x42, 0x4D = 'BM'
+            if (view.getUint8(0) === 0x42 && view.getUint8(1) === 0x4D) {
+                const xpels = view.getUint32(38, true);
+                const ypels = view.getUint32(42, true);
+                if (xpels > 0 && ypels > 0) {
+                    header.xlength = String(width / xpels * 1000); // m -> mm
+                    header.ylength = String(height / ypels * 1000);
+                }
+            }
+        }
+    } catch (e) { /* 忽略，使用預設值 */ }
+
+    if (onProgress) onProgress(1.0);
+    return { header, data, width, height };
+}
+
+
+/* -------------------------------------------------------------------------
+ *  TIFF 解析：支援 uncompressed 的 float32 / uint8 / uint16 / int16 單通道或 RGB
+ *  對應 wr_file.py 的 read_tiff_file_thread，能讀取 tifffile 寫入的 float32 TIFF。
+ * ------------------------------------------------------------------------- */
+
+const TIFF_TYPE_SIZE = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8 };
+
+async function readTiff(file, onProgress) {
+    if (onProgress) onProgress(0.05);
+    const buffer = await file.arrayBuffer();
+    const view = new DataView(buffer);
+
+    if (buffer.byteLength < 8) throw new Error(t('errTiffSmall'));
+
+    // Byte order
+    const b0 = view.getUint8(0), b1 = view.getUint8(1);
+    let le;
+    if (b0 === 0x49 && b1 === 0x49) le = true;          // 'II'
+    else if (b0 === 0x4D && b1 === 0x4D) le = false;     // 'MM'
+    else throw new Error(t('errTiffInvalid'));
+
+    const magic = view.getUint16(2, le);
+    if (magic !== 42) throw new Error(t('errTiffBigTiff', magic));
+
+    const ifdOffset = view.getUint32(4, le);
+    if (ifdOffset + 2 > buffer.byteLength) throw new Error(t('errTiffBadIfd'));
+
+    // 解析 IFD entries
+    const numEntries = view.getUint16(ifdOffset, le);
+    const tags = {};
+    for (let i = 0; i < numEntries; i++) {
+        const entryOffset = ifdOffset + 2 + i * 12;
+        const tag = view.getUint16(entryOffset, le);
+        const type = view.getUint16(entryOffset + 2, le);
+        const count = view.getUint32(entryOffset + 4, le);
+        const typeSize = TIFF_TYPE_SIZE[type] || 0;
+        const totalSize = typeSize * count;
+        const valueOffset = totalSize > 4
+            ? view.getUint32(entryOffset + 8, le)
+            : entryOffset + 8;
+        tags[tag] = { type, count, valueOffset };
+    }
+
+    const readTagValue = (info, index = 0) => {
+        if (!info) return undefined;
+        const { type, valueOffset } = info;
+        const size = TIFF_TYPE_SIZE[type] || 0;
+        const off = valueOffset + index * size;
+        switch (type) {
+            case 1: case 7: case 6: return view.getUint8(off);
+            case 3: return view.getUint16(off, le);
+            case 4: return view.getUint32(off, le);
+            case 8: return view.getInt16(off, le);
+            case 9: return view.getInt32(off, le);
+            case 11: return view.getFloat32(off, le);
+            case 12: return view.getFloat64(off, le);
+            default: return view.getUint32(off, le);
+        }
+    };
+
+    const readTagString = (info) => {
+        if (!info) return '';
+        const bytes = new Uint8Array(buffer, info.valueOffset, info.count);
+        let end = bytes.length;
+        while (end > 0 && bytes[end - 1] === 0) end--;
+        return new TextDecoder('utf-8', { fatal: false }).decode(bytes.subarray(0, end));
+    };
+
+    // 必要標籤
+    const width  = readTagValue(tags[256]);
+    const height = readTagValue(tags[257]);
+    if (!width || !height) throw new Error(t('errTiffMissingDim'));
+
+    const bitsPerSample  = tags[258] ? readTagValue(tags[258]) : 1;
+    const compression    = tags[259] ? readTagValue(tags[259]) : 1;
+    const samplesPerPixel = tags[277] ? readTagValue(tags[277]) : 1;
+    const sampleFormat    = tags[339] ? readTagValue(tags[339]) : 1;
+    // 1=unsigned int, 2=signed int, 3=IEEE float
+
+    if (compression !== 1) {
+        throw new Error(t('errTiffCompressed', compression));
+    }
+
+    const stripOffsetsInfo = tags[273];
+    const stripByteCountsInfo = tags[279];
+    if (!stripOffsetsInfo || !stripByteCountsInfo) {
+        throw new Error(t('errTiffTiled'));
+    }
+
+    if (onProgress) onProgress(0.25);
+
+    // 讀取所有 strip 並拼成一塊連續 bytes
+    const numStrips = stripOffsetsInfo.count;
+    let totalStripBytes = 0;
+    const offsets = [], counts = [];
+    for (let i = 0; i < numStrips; i++) {
+        offsets.push(readTagValue(stripOffsetsInfo, i));
+        const c = readTagValue(stripByteCountsInfo, i);
+        counts.push(c);
+        totalStripBytes += c;
+    }
+    const raw = new Uint8Array(totalStripBytes);
+    let pos = 0;
+    for (let i = 0; i < numStrips; i++) {
+        raw.set(new Uint8Array(buffer, offsets[i], counts[i]), pos);
+        pos += counts[i];
+        if (onProgress && (i & 7) === 0) onProgress(0.25 + 0.5 * (i + 1) / numStrips);
+    }
+    if (onProgress) onProgress(0.8);
+
+    // 依 BitsPerSample / SampleFormat 解析成 Float32
+    const rawView = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+    const pixelCount = width * height;
+    const data = new Float32Array(pixelCount);
+
+    const spp = samplesPerPixel;
+    const bps = bitsPerSample;
+    const bytesPerSample = bps / 8;
+
+    const readSampleAt = (byteOff) => {
+        if (bps === 32 && sampleFormat === 3) return rawView.getFloat32(byteOff, le);
+        if (bps === 64 && sampleFormat === 3) return rawView.getFloat64(byteOff, le);
+        if (bps === 32 && sampleFormat === 2) return rawView.getInt32(byteOff, le);
+        if (bps === 32) return rawView.getUint32(byteOff, le);
+        if (bps === 16 && sampleFormat === 2) return rawView.getInt16(byteOff, le);
+        if (bps === 16) return rawView.getUint16(byteOff, le);
+        if (bps === 8 && sampleFormat === 2) return rawView.getInt8(byteOff);
+        if (bps === 8) return raw[byteOff];
+        throw new Error(t('errTiffSampleFmt', bps, sampleFormat));
+    };
+
+    if (spp === 1) {
+        for (let i = 0; i < pixelCount; i++) {
+            data[i] = readSampleAt(i * bytesPerSample);
+        }
+    } else {
+        // 多通道：對應 Python 中 data[:, :, 0] 的行為，取第一個通道
+        const stride = spp * bytesPerSample;
+        for (let i = 0; i < pixelCount; i++) {
+            data[i] = readSampleAt(i * stride);
+        }
+    }
+
+    // ImageDescription -> header dict (嘗試解析 JSON)
+    let headerDict = {};
+    if (tags[270]) {
+        const desc = readTagString(tags[270]);
+        if (desc) {
+            try {
+                headerDict = JSON.parse(desc);
+            } catch (e) {
+                headerDict = { ImageDescription: desc };
+            }
+        }
+    }
+
+    // 若 header 空或不足，建立預設
+    if (!headerDict || Object.keys(headerDict).length <= 1) {
+        headerDict = {
+            fileformat: 'bcrf_unicode',
+            headersize: '2048',
+            xpixels: width,
+            ypixels: height,
+            xlength: width,
+            ylength: height,
+            scanspeed: '0',
+            intelmode: '1',
+            bit2nm: '1',
+            xoffset: '',
+            yoffset: '',
+            voidpixels: 0,
+            zmin: '0',
+            xunit: 'mm',
+            yunit: 'mm',
+            zunit: 'um',
+            forcecurve: '0'
+        };
+    }
+
+    if (onProgress) onProgress(1.0);
+    return { header: headerDict, data, width, height };
+}
+
+
+/* =========================================================================
+ *  1b. 檔案輸出 (對應 wr_file.py 中的 write_*_file_thread)
+ * ========================================================================= */
+
+/** 將 header dict 的 key 由 ASC 風格轉回 BCRF 風格 */
+function headerAscToBcrf(h) {
+    const map = {
+        'x-pixels': 'xpixels', 'y-pixels': 'ypixels',
+        'x-length': 'xlength', 'y-length': 'ylength',
+        'z-unit': 'zunit', 'x-unit': 'xunit', 'y-unit': 'yunit'
+    };
+    const out = {};
+    for (const [k, v] of Object.entries(h || {})) {
+        out[map[k] || k] = v;
+    }
+    if (out.zunit && !out.xunit && !out.yunit) {
+        out.xunit = 'nm';
+        out.yunit = 'nm';
+    }
+    delete out['File Format'];
+    out.fileformat = out.fileformat || 'bcrf';
+    return out;
+}
+
+/** 將 header dict 的 key 由 BCRF 風格轉為 ASC 風格 */
+function headerBcrfToAsc(h) {
+    const map = {
+        xpixels: 'x-pixels', ypixels: 'y-pixels',
+        xlength: 'x-length', ylength: 'y-length',
+        zunit: 'z-unit', xunit: 'x-unit', yunit: 'y-unit'
+    };
+    const out = {};
+    for (const [k, v] of Object.entries(h || {})) {
+        out[map[k] || k] = v;
+    }
+    delete out.fileformat;
+    out['File Format'] = 'ASCII';
+    return out;
+}
+
+/** 建立一份「標準 BCRF header」，以目前資料補上遺漏的欄位 */
+function buildCanonicalBcrfHeader(dataset) {
+    const base = headerAscToBcrf(dataset.header);
+    const defaults = {
+        fileformat: 'bcrf_unicode',
+        headersize: '2048',
+        xpixels: dataset.width,
+        ypixels: dataset.height,
+        xlength: dataset.width,
+        ylength: dataset.height,
+        scanspeed: '0',
+        intelmode: '1',
+        bit2nm: '1',
+        xoffset: '0',
+        yoffset: '0',
+        voidpixels: '0',
+        zmin: '0',
+        xunit: 'mm',
+        yunit: 'mm',
+        zunit: 'um',
+        forcecurve: '0'
+    };
+    const out = { ...defaults, ...base };
+    // 影像實際大小為最終依據
+    out.xpixels = dataset.width;
+    out.ypixels = dataset.height;
+    return out;
+}
+
+/** 下載 Blob */
+function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function stripExt(name) {
+    if (!name) return 'image';
+    return name.replace(/\.[^.\\/]+$/, '') || name;
+}
+
+
+/* ---------- BCRF ---------- */
+function writeBcrf(dataset, onProgress) {
+    const HEADER_SIZE = 2048;
+    const h = buildCanonicalBcrfHeader(dataset);
+
+    let headerStr = '';
+    for (const [k, v] of Object.entries(h)) headerStr += `${k} = ${v}\n`;
+    // 補 '%' 直到 2048 bytes (ASCII → 1 byte/char)
+    if (headerStr.length < HEADER_SIZE) headerStr = headerStr.padEnd(HEADER_SIZE, '%');
+
+    const encoder = new TextEncoder();
+    const rawHeader = encoder.encode(headerStr);
+    const headerBuf = new Uint8Array(HEADER_SIZE);
+    headerBuf.set(rawHeader.subarray(0, HEADER_SIZE));
+    if (onProgress) onProgress(0.2);
+
+    // data 轉 float32 little-endian (Float32Array 本身就是 LE)
+    // 保留 NaN / ±Inf 原始值 (IEEE 754 在 float32 中有對應的 bit pattern)
+    let f32;
+    if (dataset.data instanceof Float32Array) {
+        f32 = dataset.data;
+    } else {
+        f32 = new Float32Array(dataset.data.length);
+        for (let i = 0; i < dataset.data.length; i++) f32[i] = dataset.data[i];
+    }
+    const dataBuf = new Uint8Array(f32.buffer, f32.byteOffset, f32.byteLength);
+    if (onProgress) onProgress(0.9);
+
+    const blob = new Blob([headerBuf, dataBuf], { type: 'application/octet-stream' });
+    if (onProgress) onProgress(1.0);
+    return blob;
+}
+
+
+/* ---------- ASC ---------- */
+function writeAsc(dataset, onProgress) {
+    const { data, width, height } = dataset;
+    const h = headerBcrfToAsc(buildCanonicalBcrfHeader(dataset));
+    h['x-pixels'] = width;
+    h['y-pixels'] = height;
+
+    let text = '';
+    for (const [k, v] of Object.entries(h)) text += `# ${k} = ${v}\n`;
+    text += '\n# Start of Data:\n';
+
+    if (onProgress) onProgress(0.1);
+
+    const parts = [text];
+    // 一次處理一列，避免單一字串過大
+    for (let y = 0; y < height; y++) {
+        const rowParts = new Array(width);
+        for (let x = 0; x < width; x++) {
+            const v = data[y * width + x];
+            // 保留 NaN / Inf（對應 Python 不做 nan_to_zero，np.round(NaN)=NaN → str 為 'nan'）
+            if (Number.isNaN(v)) {
+                rowParts[x] = 'nan';
+            } else if (v === Infinity) {
+                rowParts[x] = 'inf';
+            } else if (v === -Infinity) {
+                rowParts[x] = '-inf';
+            } else {
+                // 對應 Python np.round(data, 3)
+                rowParts[x] = (Math.round(v * 1000) / 1000).toString();
+            }
+        }
+        parts.push(rowParts.join(' ') + '\n');
+        if (onProgress && (y & 31) === 0) onProgress(0.1 + 0.9 * (y + 1) / height);
+    }
+
+    const blob = new Blob(parts, { type: 'text/plain;charset=utf-8' });
+    if (onProgress) onProgress(1.0);
+    return blob;
+}
+
+
+/* ---------- TIFF (float32，ImageDescription = JSON header) ---------- */
+function writeTiff(dataset, onProgress) {
+    const { width, height, data } = dataset;
+    const h = buildCanonicalBcrfHeader(dataset);
+    const descStr = JSON.stringify(h) + '\0'; // 以 NUL 結尾
+    const descBytes = new TextEncoder().encode(descStr);
+
+    if (onProgress) onProgress(0.1);
+
+    // 保留 NaN / ±Inf 原始值 (IEEE 754 float32 bit pattern)
+    let f32;
+    if (data instanceof Float32Array && data.length === width * height) {
+        f32 = data;
+    } else {
+        f32 = new Float32Array(width * height);
+        for (let i = 0; i < data.length; i++) f32[i] = data[i];
+    }
+    const pixelBytes = new Uint8Array(f32.buffer, f32.byteOffset, f32.byteLength);
+
+    // 檔案配置
+    const numEntries = 11;
+    const ifdSize = 2 + numEntries * 12 + 4;
+    const tiffHeaderSize = 8;
+    const ifdOffset = tiffHeaderSize;
+    const descOffset = ifdOffset + ifdSize;
+    const rawDescEnd = descOffset + descBytes.length;
+    const padAfterDesc = (4 - (rawDescEnd % 4)) % 4;
+    const pixelOffset = rawDescEnd + padAfterDesc;
+    const totalSize = pixelOffset + pixelBytes.length;
+
+    const buffer = new ArrayBuffer(totalSize);
+    const view = new DataView(buffer);
+    const u8 = new Uint8Array(buffer);
+
+    // TIFF header
+    view.setUint16(0, 0x4949, true); // 'II'
+    view.setUint16(2, 42, true);
+    view.setUint32(4, ifdOffset, true);
+
+    // IFD
+    view.setUint16(ifdOffset, numEntries, true);
+
+    let off = ifdOffset + 2;
+    const entryLong = (tag, count, value) => {
+        view.setUint16(off, tag, true);
+        view.setUint16(off + 2, 4, true); // LONG
+        view.setUint32(off + 4, count, true);
+        view.setUint32(off + 8, value, true);
+        off += 12;
+    };
+    const entryShort = (tag, count, value) => {
+        view.setUint16(off, tag, true);
+        view.setUint16(off + 2, 3, true); // SHORT
+        view.setUint32(off + 4, count, true);
+        view.setUint16(off + 8, value, true);
+        view.setUint16(off + 10, 0, true);
+        off += 12;
+    };
+    const entryAscii = (tag, count, valueOffset) => {
+        view.setUint16(off, tag, true);
+        view.setUint16(off + 2, 2, true); // ASCII
+        view.setUint32(off + 4, count, true);
+        view.setUint32(off + 8, valueOffset, true);
+        off += 12;
+    };
+
+    // 標籤需依 tag 數值升序排列
+    entryLong(256, 1, width);                   // ImageWidth
+    entryLong(257, 1, height);                  // ImageLength
+    entryShort(258, 1, 32);                     // BitsPerSample
+    entryShort(259, 1, 1);                      // Compression = none
+    entryShort(262, 1, 1);                      // Photometric = BlackIsZero
+    entryAscii(270, descBytes.length, descOffset); // ImageDescription
+    entryLong(273, 1, pixelOffset);             // StripOffsets
+    entryShort(277, 1, 1);                      // SamplesPerPixel
+    entryLong(278, 1, height);                  // RowsPerStrip
+    entryLong(279, 1, pixelBytes.length);       // StripByteCounts
+    entryShort(339, 1, 3);                      // SampleFormat = IEEE float
+
+    view.setUint32(off, 0, true); // next IFD = 0
+
+    u8.set(descBytes, descOffset);
+    if (onProgress) onProgress(0.5);
+
+    u8.set(pixelBytes, pixelOffset);
+    if (onProgress) onProgress(1.0);
+
+    return new Blob([buffer], { type: 'image/tiff' });
+}
+
+
+/* ---------- 資料 → 正規化灰階 (給 BMP / JPG 使用) ---------- */
+function normalizeToGray(dataset) {
+    const { data, vmin, vmax, width, height } = dataset;
+    const range = (vmax > vmin) ? (vmax - vmin) : 1;
+    const gray = new Uint8Array(width * height);
+    for (let i = 0; i < data.length; i++) {
+        let v = data[i];
+        if (!Number.isFinite(v)) v = vmin;
+        let t = (v - vmin) / range;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        gray[i] = (t * 255) | 0;
+    }
+    return gray;
+}
+
+
+/* ---------- BMP (24-bit 灰階) ---------- */
+function writeBmp(dataset, onProgress) {
+    const { width, height, header } = dataset;
+    const gray = normalizeToGray(dataset);
+    if (onProgress) onProgress(0.3);
+
+    // 依 header 中的 xlength/ylength 與單位計算 biXPelsPerMeter
+    const unitToMeter = (u) => {
+        const key = String(u || 'mm').toLowerCase();
+        const table = { m: 1, cm: 1e-2, mm: 1e-3, um: 1e-6, 'µm': 1e-6, nm: 1e-9 };
+        return table[key] ?? 1e-3;
+    };
+    const xlength = parseFloat(header?.xlength ?? header?.['x-length'] ?? 0);
+    const ylength = parseFloat(header?.ylength ?? header?.['y-length'] ?? 0);
+    const xunit = header?.xunit ?? header?.['x-unit'] ?? 'mm';
+    const yunit = header?.yunit ?? header?.['y-unit'] ?? 'mm';
+    let xpelsPerMeter = 0, ypelsPerMeter = 0;
+    if (xlength > 0) xpelsPerMeter = Math.floor(width / (xlength * unitToMeter(xunit)));
+    if (ylength > 0) ypelsPerMeter = Math.floor(height / (ylength * unitToMeter(yunit)));
+    if (!Number.isFinite(xpelsPerMeter) || xpelsPerMeter < 0) xpelsPerMeter = 0;
+    if (!Number.isFinite(ypelsPerMeter) || ypelsPerMeter < 0) ypelsPerMeter = 0;
+
+    // 24-bit BMP：每列 4-byte 對齊、bottom-up、BGR
+    const rowSize = ((24 * width + 31) >> 5) * 4;
+    const imageSize = rowSize * height;
+    const fileSize = 54 + imageSize;
+
+    const buf = new ArrayBuffer(fileSize);
+    const view = new DataView(buf);
+    const u8 = new Uint8Array(buf);
+
+    // BITMAPFILEHEADER
+    u8[0] = 0x42; u8[1] = 0x4D;              // 'BM'
+    view.setUint32(2, fileSize, true);
+    view.setUint32(6, 0, true);
+    view.setUint32(10, 54, true);            // bfOffBits
+
+    // BITMAPINFOHEADER
+    view.setUint32(14, 40, true);            // biSize
+    view.setInt32(18, width, true);
+    view.setInt32(22, height, true);         // 正數 = bottom-up
+    view.setUint16(26, 1, true);             // biPlanes
+    view.setUint16(28, 24, true);            // biBitCount
+    view.setUint32(30, 0, true);             // biCompression = BI_RGB
+    view.setUint32(34, imageSize, true);
+    view.setUint32(38, xpelsPerMeter, true);
+    view.setUint32(42, ypelsPerMeter, true);
+    view.setUint32(46, 0, true);
+    view.setUint32(50, 0, true);
+
+    // 像素資料 (bottom-up)
+    for (let y = 0; y < height; y++) {
+        const srcY = height - 1 - y;
+        const dstRow = 54 + y * rowSize;
+        for (let x = 0; x < width; x++) {
+            const g = gray[srcY * width + x];
+            const p = dstRow + x * 3;
+            u8[p] = g; u8[p + 1] = g; u8[p + 2] = g; // BGR
+        }
+        // 末尾 padding 預設為 0
+        if (onProgress && (y & 63) === 0) onProgress(0.3 + 0.7 * (y + 1) / height);
+    }
+
+    if (onProgress) onProgress(1.0);
+    return new Blob([buf], { type: 'image/bmp' });
+}
+
+
+/* ---------- PNG (對應 write_png_file_thread：輸出目前彩色畫面) ---------- */
+function writePng(dataset, onProgress) {
+    const canvas = document.getElementById('canvas');
+    if (onProgress) onProgress(0.5);
+    return new Promise((resolve) => {
+        canvas.toBlob((blob) => {
+            if (onProgress) onProgress(1.0);
+            resolve(blob);
+        }, 'image/png');
+    });
+}
+
+
+/* ---------- JPG (灰階正規化) ---------- */
+function writeJpg(dataset, onProgress) {
+    const { width, height } = dataset;
+    const gray = normalizeToGray(dataset);
+    if (onProgress) onProgress(0.3);
+
+    const tmp = document.createElement('canvas');
+    tmp.width = width;
+    tmp.height = height;
+    const ctx = tmp.getContext('2d');
+    const img = ctx.createImageData(width, height);
+    for (let i = 0; i < gray.length; i++) {
+        const g = gray[i];
+        const p = i * 4;
+        img.data[p] = g;
+        img.data[p + 1] = g;
+        img.data[p + 2] = g;
+        img.data[p + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    if (onProgress) onProgress(0.7);
+
+    return new Promise((resolve) => {
+        tmp.toBlob((blob) => {
+            if (onProgress) onProgress(1.0);
+            resolve(blob);
+        }, 'image/jpeg', 0.95);
+    });
+}
+
+
+/** 統一的存檔派送：依格式呼叫對應 writer，產生 Blob 後觸發下載 */
+async function saveAs(dataset, format, onProgress) {
+    let blob;
+    switch (format) {
+        case 'bcrf': blob = writeBcrf(dataset, onProgress); break;
+        case 'asc':  blob = writeAsc(dataset, onProgress); break;
+        case 'tiff': blob = writeTiff(dataset, onProgress); break;
+        case 'bmp':  blob = writeBmp(dataset, onProgress); break;
+        case 'png':  blob = await writePng(dataset, onProgress); break;
+        case 'jpg':  blob = await writeJpg(dataset, onProgress); break;
+        default:     throw new Error(t('errSaveFmt', format));
+    }
+    const ext = (format === 'tiff') ? 'tif' : format;
+    const base = stripExt(dataset.filename);
+    triggerDownload(blob, `${base}.${ext}`);
+}
+
+
+/* =========================================================================
+ *  2. 彩色映射 (Colormap)
+ * ========================================================================= */
+
+// 常用 colormap (簡化版)：每個色階是 [r, g, b] (0~1)
+const COLORMAPS = {
+    viridis: [
+        [0.267, 0.005, 0.329], [0.283, 0.141, 0.458], [0.254, 0.265, 0.530],
+        [0.207, 0.372, 0.553], [0.164, 0.471, 0.558], [0.128, 0.567, 0.551],
+        [0.135, 0.659, 0.518], [0.267, 0.749, 0.441], [0.478, 0.821, 0.318],
+        [0.741, 0.873, 0.150], [0.993, 0.906, 0.144]
+    ],
+    jet: [
+        [0, 0, 0.5], [0, 0, 1], [0, 0.5, 1], [0, 1, 1],
+        [0.5, 1, 0.5], [1, 1, 0], [1, 0.5, 0], [1, 0, 0], [0.5, 0, 0]
+    ],
+    hot: [
+        [0, 0, 0], [0.3, 0, 0], [0.6, 0, 0], [1, 0, 0],
+        [1, 0.3, 0], [1, 0.6, 0], [1, 1, 0], [1, 1, 0.5], [1, 1, 1]
+    ],
+    gray: [[0, 0, 0], [1, 1, 1]],
+    inferno: [
+        [0.001, 0.000, 0.014], [0.112, 0.065, 0.302], [0.317, 0.072, 0.405],
+        [0.510, 0.121, 0.408], [0.705, 0.182, 0.350], [0.866, 0.290, 0.217],
+        [0.964, 0.493, 0.076], [0.993, 0.720, 0.128], [0.961, 0.936, 0.488],
+        [0.988, 0.998, 0.645]
+    ]
+};
+
+/**
+ * 依 t (0~1) 在 stops 中線性內插得到 [r, g, b]
+ */
+function sampleColormap(cmapName, t) {
+    const stops = COLORMAPS[cmapName] || COLORMAPS.viridis;
+    if (t <= 0) return stops[0];
+    if (t >= 1) return stops[stops.length - 1];
+    const scaled = t * (stops.length - 1);
+    const i = Math.floor(scaled);
+    const f = scaled - i;
+    const a = stops[i], b = stops[i + 1];
+    return [
+        a[0] + (b[0] - a[0]) * f,
+        a[1] + (b[1] - a[1]) * f,
+        a[2] + (b[2] - a[2]) * f
+    ];
+}
+
+
+/* =========================================================================
+ *  3. 繪製
+ * ========================================================================= */
+
+let currentDataset = null;   // { data, width, height, vmin, vmax, header }
+
+function computeRange(data) {
+    let vmin = Infinity, vmax = -Infinity;
+    for (let i = 0; i < data.length; i++) {
+        const v = data[i];
+        if (!Number.isFinite(v)) continue;
+        if (v < vmin) vmin = v;
+        if (v > vmax) vmax = v;
+    }
+    if (!Number.isFinite(vmin) || !Number.isFinite(vmax)) { vmin = 0; vmax = 1; }
+    if (vmin === vmax) { vmax = vmin + 1; }
+    return { vmin, vmax };
+}
+
+/* 畫面狀態：scale = CSS 顯示像素 / 影像像素；tx/ty 為左上角的位移(CSS px) */
+const view = { scale: 1, tx: 0, ty: 0, minScale: 0.02, maxScale: 64 };
+
+function applyTransform() {
+    const canvas = document.getElementById('canvas');
+    canvas.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
+    const ind = document.getElementById('zoomIndicator');
+    ind.textContent = (view.scale * 100).toFixed(view.scale >= 1 ? 0 : 1) + '%';
+}
+
+function fitImageToViewer() {
+    if (!currentDataset) return;
+    const viewer = document.getElementById('viewer');
+    const vw = viewer.clientWidth;
+    const vh = viewer.clientHeight;
+    const w = currentDataset.width;
+    const h = currentDataset.height;
+    const padding = 24;
+    const s = Math.min((vw - padding * 2) / w, (vh - padding * 2) / h, 8);
+    view.scale = s > 0 ? s : 1;
+    view.tx = (vw - w * view.scale) / 2;
+    view.ty = (vh - h * view.scale) / 2;
+    applyTransform();
+}
+
+/* 只重繪像素，不改變顯示 transform */
+function renderPixels(dataset, cmap) {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const { data, width, height, vmin, vmax } = dataset;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const img = ctx.createImageData(width, height);
+    const range = vmax - vmin;
+
+    const lut = new Uint8ClampedArray(256 * 3);
+    for (let i = 0; i < 256; i++) {
+        const [r, g, b] = sampleColormap(cmap, i / 255);
+        lut[i * 3]     = Math.round(r * 255);
+        lut[i * 3 + 1] = Math.round(g * 255);
+        lut[i * 3 + 2] = Math.round(b * 255);
+    }
+
+    const px = img.data;
+    for (let i = 0; i < data.length; i++) {
+        let v = data[i];
+        if (!Number.isFinite(v)) v = vmin;
+        let t = (v - vmin) / range;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        const idx = (t * 255) | 0;
+        const lo = idx * 3;
+        const po = i * 4;
+        px[po]     = lut[lo];
+        px[po + 1] = lut[lo + 1];
+        px[po + 2] = lut[lo + 2];
+        px[po + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+}
+
+/**
+ * 完整渲染：畫像素、(視需要)重設縮放與平移、同步色階資訊
+ * @param {boolean} resetView 是否重新 fit 到檢視區（載入新檔 / 視窗改變時為 true）
+ */
+function render(dataset, cmap, resetView = false) {
+    renderPixels(dataset, cmap);
+
+    const canvas = document.getElementById('canvas');
+    canvas.style.display = 'block';
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('zoomIndicator').classList.add('show');
+    document.getElementById('zoomHint').classList.add('show');
+
+    if (resetView) fitImageToViewer(); else applyTransform();
+
+    renderColorbar(cmap);
+    document.getElementById('zMin').textContent = dataset.vmin.toFixed(4);
+    document.getElementById('zMax').textContent = dataset.vmax.toFixed(4);
+}
+
+function renderColorbar(cmap) {
+    const cb = document.getElementById('colorbarCanvas');
+    const ctx = cb.getContext('2d');
+    const w = cb.width, h = cb.height;
+    const img = ctx.createImageData(w, h);
+    for (let x = 0; x < w; x++) {
+        const [r, g, b] = sampleColormap(cmap, x / (w - 1));
+        for (let y = 0; y < h; y++) {
+            const p = (y * w + x) * 4;
+            img.data[p]     = Math.round(r * 255);
+            img.data[p + 1] = Math.round(g * 255);
+            img.data[p + 2] = Math.round(b * 255);
+            img.data[p + 3] = 255;
+        }
+    }
+    ctx.putImageData(img, 0, 0);
+}
+
+function renderInfo(header, width, height) {
+    const list = document.getElementById('infoList');
+    list.innerHTML = '';
+
+    const addRow = (k, v) => {
+        const row = document.createElement('div');
+        row.className = 'info-row';
+        row.innerHTML = `<span class="k">${k}</span><span class="v">${v}</span>`;
+        list.appendChild(row);
+    };
+
+    addRow(t('infoSize'), `${width} × ${height}`);
+    for (const [k, v] of Object.entries(header)) {
+        if (v === '' || v == null) continue;
+        addRow(k, String(v).length > 30 ? String(v).slice(0, 30) + '…' : v);
+    }
+}
+
+
+/* =========================================================================
+ *  4. UI 綁定
+ * ========================================================================= */
+
+const fileInput = document.getElementById('fileInput');
+const progressEl = document.getElementById('progress');
+const progressBar = document.getElementById('progressBar');
+const statusEl = document.getElementById('status');
+const cmapSelect = document.getElementById('colormap');
+const viewerEl = document.getElementById('viewer');
+const dropIcon = document.getElementById('dropIcon');
+const dropText = document.getElementById('dropText');
+const toastEl = document.getElementById('toast');
+const valueIndicator = document.getElementById('valueIndicator');
+
+/* 鼠標模式：'pan' = 拖曳平移；'inspect' = 顯示鼠標位置數值 */
+let cursorMode = 'pan';
+
+const SUPPORTED_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'bmp', 'png', 'jpg', 'jpeg'];
+const SUPPORTED_TEXT = '.bcrf / .asc / .tif / .bmp / .png / .jpg';
+
+function setProgress(p) {
+    progressEl.classList.add('show');
+    progressBar.style.width = (p * 100).toFixed(1) + '%';
+}
+function hideProgress() {
+    setTimeout(() => progressEl.classList.remove('show'), 300);
+}
+
+let toastTimer = null;
+function showToast(message, type = 'error') {
+    toastEl.textContent = message;
+    toastEl.classList.remove('info', 'error');
+    toastEl.classList.add(type);
+    toastEl.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2500);
+}
+
+function getExt(name) {
+    const i = name.lastIndexOf('.');
+    return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
+}
+
+async function loadFile(file) {
+    if (!file) return;
+    const ext = getExt(file.name);
+    if (!SUPPORTED_EXTS.includes(ext)) {
+        const msg = t('statusUnsupported', file.name, SUPPORTED_TEXT);
+        statusEl.textContent = msg;
+        showToast(msg, 'error');
+        return;
+    }
+
+    statusEl.textContent = t('statusReading', file.name);
+    setProgress(0);
+
+    try {
+        let result;
+        switch (ext) {
+            case 'bcrf':          result = await readBcrf(file, setProgress); break;
+            case 'asc':           result = await readAsc(file, setProgress); break;
+            case 'tif':
+            case 'tiff':          result = await readTiff(file, setProgress); break;
+            case 'bmp':           result = await readBmp(file, setProgress); break;
+            case 'png':           result = await readPng(file, setProgress); break;
+            case 'jpg':
+            case 'jpeg':          result = await readJpg(file, setProgress); break;
+            default:              throw new Error(t('errUnknownExt', ext));
+        }
+
+        const { vmin, vmax } = computeRange(result.data);
+        currentDataset = { ...result, vmin, vmax, filename: file.name };
+
+        render(currentDataset, cmapSelect.value, true);
+        renderInfo(result.header, result.width, result.height);
+
+        statusEl.textContent = t('statusLoaded', file.name, result.width, result.height);
+    } catch (err) {
+        console.error(err);
+        statusEl.textContent = t('statusReadFailed', err.message);
+        showToast(t('statusReadFailed', err.message), 'error');
+    } finally {
+        hideProgress();
+    }
+}
+
+fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    await loadFile(file);
+    fileInput.value = '';
+});
+
+
+/* ---------- 拖放支援 ---------- */
+
+// 以計數器避免子元素 dragenter/dragleave 反覆觸發
+let dragDepth = 0;
+
+function dragHasFiles(e) {
+    if (!e.dataTransfer) return false;
+    const types = e.dataTransfer.types;
+    if (!types) return false;
+    for (let i = 0; i < types.length; i++) {
+        if (types[i] === 'Files') return true;
+    }
+    return false;
+}
+
+// dragenter 時檢查第一個 item 的副檔名（若有提供）以切換樣式
+function checkDragSupported(e) {
+    if (!e.dataTransfer || !e.dataTransfer.items) return true;
+    for (let i = 0; i < e.dataTransfer.items.length; i++) {
+        const item = e.dataTransfer.items[i];
+        if (item.kind !== 'file') continue;
+        // 瀏覽器通常不提供檔名，只能看 MIME type。
+        // 多數情況 .bcrf / .asc 的 MIME 為空，所以一律先視為可接收，由 drop 時再判斷。
+        return true;
+    }
+    return true;
+}
+
+viewerEl.addEventListener('dragenter', (e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    const supported = checkDragSupported(e);
+    viewerEl.classList.remove('drag-reject', 'drag-over');
+    viewerEl.classList.add(supported ? 'drag-over' : 'drag-reject');
+    dropIcon.innerHTML = supported ? '&#x2B07;' : '&#x2715;';
+    dropText.textContent = supported ? t('dropSupported') : t('dropReject');
+});
+
+viewerEl.addEventListener('dragover', (e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+});
+
+viewerEl.addEventListener('dragleave', (e) => {
+    if (!dragHasFiles(e)) return;
+    dragDepth--;
+    if (dragDepth <= 0) {
+        dragDepth = 0;
+        viewerEl.classList.remove('drag-over', 'drag-reject');
+    }
+});
+
+viewerEl.addEventListener('drop', async (e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    viewerEl.classList.remove('drag-over', 'drag-reject');
+
+    const files = e.dataTransfer && e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    if (files.length > 1) {
+        showToast(t('toastMultiFile'), 'info');
+    }
+
+    const file = files[0];
+    const ext = getExt(file.name);
+    if (!SUPPORTED_EXTS.includes(ext)) {
+        const msg = t('statusUnsupported', file.name, SUPPORTED_TEXT);
+        statusEl.textContent = msg;
+        showToast(msg, 'error');
+        return;
+    }
+    await loadFile(file);
+});
+
+// 避免瀏覽器在其他位置接住檔案後直接開啟，導致離開應用
+['dragover', 'drop'].forEach(evt => {
+    window.addEventListener(evt, (e) => {
+        if (dragHasFiles(e)) e.preventDefault();
+    });
+});
+
+cmapSelect.addEventListener('change', () => {
+    // 切換色彩時保留目前的縮放與平移狀態
+    if (currentDataset) renderPixels(currentDataset, cmapSelect.value);
+});
+
+const saveFormatSelect = document.getElementById('saveFormat');
+const btnSave = document.getElementById('btnSave');
+
+btnSave.addEventListener('click', async () => {
+    if (!currentDataset) {
+        showToast(t('toastNoData'), 'error');
+        return;
+    }
+    const format = saveFormatSelect.value;
+    const base = stripExt(currentDataset.filename || 'image');
+    const ext = (format === 'tiff') ? 'tif' : format;
+    const fullName = `${base}.${ext}`;
+
+    btnSave.disabled = true;
+    btnSave.textContent = t('btnSaving');
+    setProgress(0);
+    statusEl.textContent = t('statusSaving', fullName);
+
+    try {
+        await saveAs(currentDataset, format, setProgress);
+        statusEl.textContent = t('statusSaved', fullName);
+        showToast(t('toastSaved', fullName), 'info');
+    } catch (err) {
+        console.error(err);
+        statusEl.textContent = t('statusSaveFailed', err.message);
+        showToast(t('statusSaveFailed', err.message), 'error');
+    } finally {
+        hideProgress();
+        btnSave.disabled = false;
+        btnSave.textContent = t('btnSave');
+    }
+});
+
+window.addEventListener('resize', () => {
+    if (currentDataset) fitImageToViewer();
+});
+
+
+/* ---------- 滑鼠滾輪縮放 / 拖曳平移 / 雙擊還原 ---------- */
+
+viewerEl.addEventListener('wheel', (e) => {
+    if (!currentDataset) return;
+    e.preventDefault();
+
+    const rect = viewerEl.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    // deltaMode 0=px, 1=line, 2=page；統一成 pixel-ish 單位
+    let dy = e.deltaY;
+    if (e.deltaMode === 1) dy *= 16;
+    else if (e.deltaMode === 2) dy *= viewerEl.clientHeight;
+
+    // 每 100 單位 deltaY 對應 10% 縮放速率；負 deltaY = 放大
+    const zoomFactor = Math.pow(1.0015, -dy);
+    let newScale = view.scale * zoomFactor;
+    if (newScale < view.minScale) newScale = view.minScale;
+    if (newScale > view.maxScale) newScale = view.maxScale;
+
+    const k = newScale / view.scale;
+    // 以滑鼠位置為錨點進行縮放
+    view.tx = mx - (mx - view.tx) * k;
+    view.ty = my - (my - view.ty) * k;
+    view.scale = newScale;
+
+    applyTransform();
+}, { passive: false });
+
+const canvasEl = document.getElementById('canvas');
+let panning = false;
+let panStart = null;
+
+canvasEl.addEventListener('mousedown', (e) => {
+    if (!currentDataset) return;
+    if (e.button !== 0) return; // 只處理左鍵
+    if (cursorMode !== 'pan') return;   // 數值模式下不啟動平移
+    panning = true;
+    panStart = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
+    canvasEl.classList.add('grabbing');
+    try { canvasEl.setPointerCapture && canvasEl.setPointerCapture(e.pointerId); } catch (_) {}
+    e.preventDefault();
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (!panning) return;
+    view.tx = panStart.tx + (e.clientX - panStart.x);
+    view.ty = panStart.ty + (e.clientY - panStart.y);
+    applyTransform();
+});
+
+window.addEventListener('mouseup', () => {
+    if (!panning) return;
+    panning = false;
+    canvasEl.classList.remove('grabbing');
+});
+
+
+/* ---------- 數值顯示模式 ---------- */
+
+/** 將數值格式化為簡潔可讀字串 */
+function formatValue(v) {
+    if (!Number.isFinite(v)) return String(v); // NaN / Infinity
+    const a = Math.abs(v);
+    if (a !== 0 && (a < 0.001 || a >= 1e6)) return v.toExponential(4);
+    return (Math.round(v * 10000) / 10000).toString();
+}
+
+/** 依滑鼠位置更新數值顯示器 */
+function updateValueIndicator(clientX, clientY) {
+    if (!currentDataset || cursorMode !== 'inspect') {
+        valueIndicator.classList.remove('show');
+        return;
+    }
+    const viewerRect = viewerEl.getBoundingClientRect();
+    const mx = clientX - viewerRect.left;
+    const my = clientY - viewerRect.top;
+
+    // 檢查鼠標是否在 viewer 範圍內
+    if (mx < 0 || my < 0 || mx > viewerRect.width || my > viewerRect.height) {
+        valueIndicator.classList.remove('show');
+        return;
+    }
+
+    // 反推回影像像素座標 (對應 applyTransform 中的 translate + scale)
+    const px = Math.floor((mx - view.tx) / view.scale);
+    const py = Math.floor((my - view.ty) / view.scale);
+
+    const { width, height, data } = currentDataset;
+    if (px < 0 || py < 0 || px >= width || py >= height) {
+        valueIndicator.classList.remove('show');
+        return;
+    }
+
+    const v = data[py * width + px];
+    valueIndicator.innerHTML =
+        `<div><span class="k">${t('valuePos')}:</span>(${px}, ${py})</div>` +
+        `<div><span class="k">${t('valueLabel')}:</span>${formatValue(v)}</div>`;
+
+    // 顯示位置：跟隨鼠標 (相對於 viewer)，但避免溢出邊界
+    valueIndicator.classList.add('show');
+    const pad = 14;
+    const iw = valueIndicator.offsetWidth;
+    const ih = valueIndicator.offsetHeight;
+    let left = mx + pad;
+    let top  = my + pad;
+    if (left + iw > viewerRect.width - 4)  left = mx - iw - pad;
+    if (top  + ih > viewerRect.height - 4) top  = my - ih - pad;
+    if (left < 4) left = 4;
+    if (top  < 4) top  = 4;
+    valueIndicator.style.left = left + 'px';
+    valueIndicator.style.top  = top + 'px';
+}
+
+// 在 viewer 內移動時更新數值 (包含 canvas、placeholder 空白處等)
+viewerEl.addEventListener('mousemove', (e) => {
+    if (cursorMode !== 'inspect') return;
+    updateValueIndicator(e.clientX, e.clientY);
+});
+
+viewerEl.addEventListener('mouseleave', () => {
+    valueIndicator.classList.remove('show');
+});
+
+
+/** 切換鼠標模式 */
+function applyCursorMode(mode) {
+    if (mode !== 'pan' && mode !== 'inspect') mode = 'pan';
+    cursorMode = mode;
+
+    // 更新按鈕 active 狀態
+    document.querySelectorAll('#cursorToggle button').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-cursor') === mode);
+    });
+
+    // Canvas 鼠標樣式：pan → grab (CSS 預設)；inspect → 原始箭頭
+    canvasEl.classList.toggle('inspect-mode', mode === 'inspect');
+
+    // 切離 inspect 模式時隱藏數值顯示器
+    if (mode !== 'inspect') {
+        valueIndicator.classList.remove('show');
+    }
+
+    // 若切到 pan，結束任何尚未結束的拖曳狀態
+    if (mode === 'pan' && panning) {
+        panning = false;
+        canvasEl.classList.remove('grabbing');
+    }
+}
+
+// 鼠標模式切換按鈕事件
+document.querySelectorAll('#cursorToggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        applyCursorMode(btn.getAttribute('data-cursor'));
+    });
+});
+
+// 雙擊還原 fit
+viewerEl.addEventListener('dblclick', (e) => {
+    if (!currentDataset) return;
+    e.preventDefault();
+    fitImageToViewer();
+});
+
+// 初始繪製 colorbar
+renderColorbar(cmapSelect.value);
+
+// 語言切換
+document.querySelectorAll('#langToggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        applyLanguage(btn.getAttribute('data-lang'));
+    });
+});
+
+// 套用初始語言
+applyLanguage(currentLang);
+</script>
+
+</body>
+</html>
