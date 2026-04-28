@@ -319,6 +319,132 @@
     .value-indicator.show { display: block; }
     .value-indicator .k { color: var(--muted); margin-right: 4px; }
 
+    /* 計算機 modal */
+    .calc-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        backdrop-filter: blur(2px);
+    }
+    .calc-overlay.show { display: flex; }
+
+    .calc-panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        width: min(380px, 92vw);
+        max-width: 92vw;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        animation: calcPop 0.18s ease-out;
+    }
+    @keyframes calcPop {
+        from { transform: translateY(8px); opacity: 0; }
+        to   { transform: translateY(0);   opacity: 1; }
+    }
+
+    .calc-header {
+        display: flex;
+        align-items: center;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+    }
+    .calc-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
+    .calc-header .calc-close {
+        margin-left: auto;
+        background: transparent;
+        color: var(--muted);
+        font-size: 20px;
+        padding: 0 6px;
+        line-height: 1;
+        border-radius: 4px;
+    }
+    .calc-header .calc-close:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+
+    .calc-body { padding: 16px 18px 18px; }
+    .calc-desc { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+
+    .calc-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+    }
+
+    .calc-ops {
+        display: inline-flex;
+        gap: 6px;
+        flex-shrink: 0;
+    }
+    .calc-ops button {
+        background: #3a3a4a;
+        color: var(--text);
+        width: 38px;
+        height: 38px;
+        font-size: 18px;
+        font-weight: 600;
+        padding: 0;
+        border-radius: 6px;
+        font-family: Consolas, monospace;
+    }
+    .calc-ops button:hover { background: #4a4a5c; }
+    .calc-ops button.active {
+        background: var(--accent);
+        color: #fff;
+    }
+
+    .calc-operand {
+        flex: 1 1 120px;
+        min-width: 0;
+        background: #1e1e28;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 0 10px;
+        height: 38px;
+        font-size: 14px;
+        font-family: Consolas, monospace;
+        outline: none;
+    }
+    .calc-operand:focus { border-color: var(--accent); }
+
+    .calc-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    /* 「還原」靠左，其餘按鈕靠右；自動換行時也不會被截到容器外 */
+    .calc-actions #calcResetBtn { margin-right: auto; }
+    .calc-actions button {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+    .calc-actions .btn-secondary {
+        background: #3a3a4a;
+        color: var(--text);
+    }
+    .calc-actions .btn-secondary:hover { background: #4a4a5c; }
+    .calc-actions .btn-secondary:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+
+    .calc-status {
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--muted);
+        min-height: 16px;
+    }
+    .calc-status.error { color: #ff7a7a; }
+    .calc-status.ok    { color: #6ec27a; }
+
     @media (max-width: 900px) {
         main { grid-template-columns: 1fr; }
         .side { max-height: none; }
@@ -361,6 +487,7 @@
             </select>
         </label>
         <button id="btnSave" data-i18n="btnSave">儲存</button>
+        <button id="btnCalc" data-i18n="btnCalc">計算機</button>
 
         <div class="cursor-toggle" id="cursorToggle">
             <button type="button" data-cursor="pan" class="active" data-i18n="cursorPan" title="拖曳模式">拖曳</button>
@@ -412,6 +539,37 @@
     </aside>
 </main>
 
+<!-- 計算機 modal -->
+<div class="calc-overlay" id="calcOverlay" role="dialog" aria-modal="true" aria-labelledby="calcTitle">
+    <div class="calc-panel">
+        <div class="calc-header">
+            <h3 id="calcTitle" data-i18n="calcTitle">數值運算</h3>
+            <button type="button" class="calc-close" id="calcCloseBtn" aria-label="Close">&times;</button>
+        </div>
+        <div class="calc-body">
+            <p class="calc-desc" data-i18n="calcDesc">對影像中所有像素值套用 +、−、×、÷ 運算，並更新畫面。</p>
+
+            <div class="calc-row">
+                <div class="calc-ops" id="calcOps">
+                    <button type="button" data-op="+" class="active">+</button>
+                    <button type="button" data-op="-">−</button>
+                    <button type="button" data-op="*">×</button>
+                    <button type="button" data-op="/">÷</button>
+                </div>
+                <input type="number" id="calcOperand" class="calc-operand" step="any" placeholder="0" />
+            </div>
+
+            <div class="calc-actions">
+                <button type="button" id="calcResetBtn" class="btn-secondary" data-i18n="calcReset" disabled>還原</button>
+                <button type="button" id="calcCancelBtn" class="btn-secondary" data-i18n="calcCancel">關閉</button>
+                <button type="button" id="calcApplyBtn" data-i18n="calcApply">套用</button>
+            </div>
+
+            <div class="calc-status" id="calcStatus"></div>
+        </div>
+    </div>
+</div>
+
 <script>
 /* =========================================================================
  *  0. 多語系 (i18n)
@@ -425,6 +583,18 @@ const I18N = {
         labelSaveFormat: '儲存格式：',
         btnSave: '儲存',
         btnSaving: '儲存中…',
+        btnCalc: '計算機',
+        calcTitle: '數值運算',
+        calcDesc: '對影像中所有像素值套用 +、−、×、÷ 運算，並更新畫面。',
+        calcOperandPlaceholder: '輸入數值',
+        calcApply: '套用',
+        calcCancel: '關閉',
+        calcReset: '還原',
+        calcInvalidOperand: '請輸入有效的數值',
+        calcDivByZero: '不能除以零',
+        calcNoData: '尚未載入資料',
+        calcApplied: '已套用：所有像素 {0} {1}',
+        calcResetDone: '已還原為原始資料',
         'saveFormat.bcrf': 'BCRF (原始資料)',
         'saveFormat.asc':  'ASC (文字資料)',
         'saveFormat.tiff': 'TIFF (float32 原始資料)',
@@ -477,6 +647,18 @@ const I18N = {
         labelSaveFormat: 'Save as:',
         btnSave: 'Save',
         btnSaving: 'Saving…',
+        btnCalc: 'Calculator',
+        calcTitle: 'Value Calculator',
+        calcDesc: 'Apply +, −, ×, ÷ with a number to all pixel values and update the view.',
+        calcOperandPlaceholder: 'Enter a number',
+        calcApply: 'Apply',
+        calcCancel: 'Close',
+        calcReset: 'Reset',
+        calcInvalidOperand: 'Please enter a valid number',
+        calcDivByZero: 'Cannot divide by zero',
+        calcNoData: 'No data loaded',
+        calcApplied: 'Applied: all pixels {0} {1}',
+        calcResetDone: 'Reset to original data',
         'saveFormat.bcrf': 'BCRF (raw data)',
         'saveFormat.asc':  'ASC (text data)',
         'saveFormat.tiff': 'TIFF (float32 raw data)',
@@ -598,6 +780,10 @@ function applyLanguage(lang) {
     const cursorInspectBtn = document.querySelector('#cursorToggle button[data-cursor="inspect"]');
     if (cursorPanBtn) cursorPanBtn.title = t('cursorPanTitle');
     if (cursorInspectBtn) cursorInspectBtn.title = t('cursorInspectTitle');
+
+    // 計算機輸入框 placeholder
+    const calcOperandInput = document.getElementById('calcOperand');
+    if (calcOperandInput) calcOperandInput.placeholder = t('calcOperandPlaceholder');
 
     // 狀態列依情境更新：已載入則重新翻譯，否則為 idle
     if (typeof statusEl !== 'undefined' && statusEl) {
@@ -2088,6 +2274,160 @@ document.querySelectorAll('#langToggle button').forEach(btn => {
         applyLanguage(btn.getAttribute('data-lang'));
     });
 });
+
+
+/* =========================================================================
+ *  5. 計算機 (對所有像素值套用 +、-、*、/ 運算)
+ * ========================================================================= */
+
+const btnCalc        = document.getElementById('btnCalc');
+const calcOverlay    = document.getElementById('calcOverlay');
+const calcCloseBtn   = document.getElementById('calcCloseBtn');
+const calcCancelBtn  = document.getElementById('calcCancelBtn');
+const calcApplyBtn   = document.getElementById('calcApplyBtn');
+const calcResetBtn   = document.getElementById('calcResetBtn');
+const calcOperandEl  = document.getElementById('calcOperand');
+const calcStatusEl   = document.getElementById('calcStatus');
+const calcOpsEl      = document.getElementById('calcOps');
+
+let calcOp = '+';   // 目前選中的運算子
+
+function setCalcStatus(msg, type) {
+    calcStatusEl.classList.remove('error', 'ok');
+    if (type) calcStatusEl.classList.add(type);
+    calcStatusEl.textContent = msg || '';
+}
+
+function openCalc() {
+    if (!currentDataset) {
+        showToast(t('calcNoData'), 'error');
+        return;
+    }
+    calcOverlay.classList.add('show');
+    setCalcStatus('');
+    // Reset 按鈕只有在已備份過原始資料時才可用
+    calcResetBtn.disabled = !currentDataset.originalData;
+    setTimeout(() => {
+        calcOperandEl.focus();
+        calcOperandEl.select();
+    }, 0);
+}
+
+function closeCalc() {
+    calcOverlay.classList.remove('show');
+    setCalcStatus('');
+}
+
+/** 對 currentDataset.data 全部像素套用 op 與 operand，並更新畫面 */
+function applyCalcOperation(op, operand) {
+    if (!currentDataset) {
+        setCalcStatus(t('calcNoData'), 'error');
+        return false;
+    }
+    if (!Number.isFinite(operand)) {
+        setCalcStatus(t('calcInvalidOperand'), 'error');
+        return false;
+    }
+    if (op === '/' && operand === 0) {
+        setCalcStatus(t('calcDivByZero'), 'error');
+        return false;
+    }
+
+    const src = currentDataset.data;
+
+    // 第一次運算前，備份原始資料供「還原」使用
+    if (!currentDataset.originalData) {
+        currentDataset.originalData = new Float32Array(src);
+    }
+
+    // 不在原 buffer 上修改 (BCRF 的 data 可能是檔案 ArrayBuffer 的 view)
+    const dst = new Float32Array(src.length);
+    switch (op) {
+        case '+': for (let i = 0; i < src.length; i++) dst[i] = src[i] + operand; break;
+        case '-': for (let i = 0; i < src.length; i++) dst[i] = src[i] - operand; break;
+        case '*': for (let i = 0; i < src.length; i++) dst[i] = src[i] * operand; break;
+        case '/': {
+            const inv = 1 / operand;
+            for (let i = 0; i < src.length; i++) dst[i] = src[i] * inv;
+            break;
+        }
+        default:
+            setCalcStatus(t('calcInvalidOperand'), 'error');
+            return false;
+    }
+
+    currentDataset.data = dst;
+    const { vmin, vmax } = computeRange(dst);
+    currentDataset.vmin = vmin;
+    currentDataset.vmax = vmax;
+
+    render(currentDataset, cmapSelect.value, false);
+
+    calcResetBtn.disabled = false;
+    const opSymbol = ({ '+': '+', '-': '−', '*': '×', '/': '÷' })[op] || op;
+    setCalcStatus(t('calcApplied', opSymbol, operand), 'ok');
+    return true;
+}
+
+/** 將資料還原為最初載入時的內容 */
+function resetCalcOperation() {
+    if (!currentDataset || !currentDataset.originalData) return;
+    currentDataset.data = new Float32Array(currentDataset.originalData);
+    const { vmin, vmax } = computeRange(currentDataset.data);
+    currentDataset.vmin = vmin;
+    currentDataset.vmax = vmax;
+    render(currentDataset, cmapSelect.value, false);
+    setCalcStatus(t('calcResetDone'), 'ok');
+}
+
+// --- 事件綁定 ---
+
+btnCalc.addEventListener('click', openCalc);
+calcCloseBtn.addEventListener('click', closeCalc);
+calcCancelBtn.addEventListener('click', closeCalc);
+
+// 點背景關閉
+calcOverlay.addEventListener('click', (e) => {
+    if (e.target === calcOverlay) closeCalc();
+});
+
+// Esc 關閉、Enter 套用
+document.addEventListener('keydown', (e) => {
+    if (!calcOverlay.classList.contains('show')) return;
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        closeCalc();
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        calcApplyBtn.click();
+    }
+});
+
+// 運算子按鈕切換
+calcOpsEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-op]');
+    if (!btn) return;
+    calcOp = btn.getAttribute('data-op');
+    calcOpsEl.querySelectorAll('button').forEach(b => {
+        b.classList.toggle('active', b === btn);
+    });
+    calcOperandEl.focus();
+});
+
+// 套用
+calcApplyBtn.addEventListener('click', () => {
+    const raw = calcOperandEl.value.trim();
+    if (raw === '') {
+        setCalcStatus(t('calcInvalidOperand'), 'error');
+        return;
+    }
+    const operand = parseFloat(raw);
+    applyCalcOperation(calcOp, operand);
+});
+
+// 還原
+calcResetBtn.addEventListener('click', resetCalcOperation);
+
 
 // 套用初始語言
 applyLanguage(currentLang);
