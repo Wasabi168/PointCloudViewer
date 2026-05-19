@@ -157,6 +157,14 @@
         will-change: transform;
     }
     #canvas.grabbing { cursor: grabbing; }
+    #canvas.scatter-view {
+        image-rendering: auto;
+        inset: 0;
+        width: 100% !important;
+        height: 100% !important;
+        transform: none !important;
+        box-shadow: none;
+    }
 
     .placeholder {
         position: absolute;
@@ -456,12 +464,12 @@
 <header>
     <h1>
         <span data-i18n="appTitle">點雲檢視器</span>
-        <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .tiff / .bmp / .png / .jpg / .jpeg)</span>
+        <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg)</span>
     </h1>
     <div class="controls">
         <label class="file-btn">
             <span data-i18n="btnOpen">讀取檔案</span>
-            <input type="file" id="fileInput" accept=".bcrf,.asc,.tif,.tiff,.bmp,.png,.jpg,.jpeg" />
+            <input type="file" id="fileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
         </label>
 
         <label style="color:var(--muted);font-size:13px;">
@@ -506,7 +514,7 @@
 <main>
     <div class="viewer" id="viewer">
         <div class="placeholder" id="placeholder" data-i18n="placeholder">
-            點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .bmp / .png / .jpg 檔案拖曳到此處
+            點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg 檔案拖曳到此處
         </div>
         <canvas id="canvas" style="display:none;"></canvas>
         <div class="zoom-hint" id="zoomHint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
@@ -557,7 +565,7 @@
                     <button type="button" data-op="/">÷</button>
                 </div>
                 <input type="number" id="calcOperand" class="calc-operand" step="any" placeholder="0" />
-            </div>
+            </div> 
 
             <div class="calc-actions">
                 <button type="button" id="calcResetBtn" class="btn-secondary" data-i18n="calcReset" disabled>還原</button>
@@ -601,7 +609,7 @@ const I18N = {
         'saveFormat.bmp':  'BMP (灰階)',
         'saveFormat.png':  'PNG (彩色畫面)',
         'saveFormat.jpg':  'JPG (灰階)',
-        placeholder: '點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .bmp / .png / .jpg 檔案拖曳到此處',
+        placeholder: '點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg 檔案拖曳到此處',
         dropSupported: '放開以載入檔案',
         dropReject: '不支援此檔案',
         zoomHint: '滾輪縮放 · 拖曳平移 · 雙擊還原',
@@ -618,6 +626,7 @@ const I18N = {
         statusIdle: '尚未載入檔案',
         statusReading: '讀取中：{0}',
         statusLoaded: '已載入：{0} ({1}×{2})',
+        statusLoadedPcd: '已載入：{0}（{1} 點，散布圖）',
         statusReadFailed: '讀取失敗：{0}',
         statusUnsupported: '不支援的檔案：{0}（僅支援 {1}）',
         statusSaving: '儲存中：{0}',
@@ -638,7 +647,24 @@ const I18N = {
         errTiffTiled: 'TIFF 缺少 StripOffsets / StripByteCounts (可能為 tiled TIFF)',
         errTiffSampleFmt: '不支援的 TIFF sample 格式: bps={0}, sampleFormat={1}',
         errUnknownExt: '未實作的副檔名: .{0}',
-        errSaveFmt: '不支援的儲存格式：{0}'
+        errSaveFmt: '不支援的儲存格式：{0}',
+        errPcdMalformed: 'PCD 標頭格式錯誤',
+        errPcdFieldMismatch: 'PCD FIELDS/SIZE/TYPE/COUNT 長度不一致',
+        errPcdUnsupportedType: '不支援的 PCD 欄位型別：{0}/{1}',
+        errPcdUnsupportedData: '不支援的 PCD DATA 編碼：{0}',
+        errPcdNoZ: 'PCD 缺少 z 欄位，無法顯示高度圖',
+        errPcdNoXY: 'PCD 缺少 x / y 欄位，無法散布顯示',
+        errPcdPayloadSmall: 'PCD 資料區過小（需要 {0} bytes，實際 {1} bytes）',
+        errPcdAsciiRows: 'ASCII PCD 列數不足（{0} / {1}）',
+        errPcdLzf: 'binary_compressed 解壓縮失敗',
+        errPcdGridTooLarge: '點雲網格過大（{0}×{1}），請降低點數或精度',
+        infoPcdPoints: '點數',
+        infoPcdView: '顯示',
+        infoPcdGridPrec: '網格步長',
+        infoPcdScatter: '散布（實際座標）',
+        valueWorldPos: '座標 (x, y)',
+        calcPcdScatter: '散布點雲不支援像素計算機',
+        savePcdScatter: '散布點雲僅可儲存為 PNG / JPG 畫面'
     },
     'en': {
         appTitle: 'Point Cloud Viewer',
@@ -665,7 +691,7 @@ const I18N = {
         'saveFormat.bmp':  'BMP (grayscale)',
         'saveFormat.png':  'PNG (rendered view)',
         'saveFormat.jpg':  'JPG (grayscale)',
-        placeholder: 'Click "Open File" above, or drag a .bcrf / .asc / .tif / .bmp / .png / .jpg file here',
+        placeholder: 'Click "Open File" above, or drag a .bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg file here',
         dropSupported: 'Release to load file',
         dropReject: 'Unsupported file',
         zoomHint: 'Scroll to zoom · Drag to pan · Double-click to reset',
@@ -682,6 +708,7 @@ const I18N = {
         statusIdle: 'No file loaded',
         statusReading: 'Loading: {0}',
         statusLoaded: 'Loaded: {0} ({1}×{2})',
+        statusLoadedPcd: 'Loaded: {0} ({1} points, scatter)',
         statusReadFailed: 'Load failed: {0}',
         statusUnsupported: 'Unsupported file: {0} (only {1})',
         statusSaving: 'Saving: {0}',
@@ -702,7 +729,24 @@ const I18N = {
         errTiffTiled: 'TIFF missing StripOffsets / StripByteCounts (possibly tiled TIFF)',
         errTiffSampleFmt: 'Unsupported TIFF sample format: bps={0}, sampleFormat={1}',
         errUnknownExt: 'Unsupported extension: .{0}',
-        errSaveFmt: 'Unsupported save format: {0}'
+        errSaveFmt: 'Unsupported save format: {0}',
+        errPcdMalformed: 'Malformed PCD header',
+        errPcdFieldMismatch: 'PCD FIELDS/SIZE/TYPE/COUNT length mismatch',
+        errPcdUnsupportedType: 'Unsupported PCD field type: {0}/{1}',
+        errPcdUnsupportedData: 'Unsupported PCD DATA encoding: {0}',
+        errPcdNoZ: 'PCD has no z field; cannot build height map',
+        errPcdNoXY: 'PCD has no x / y fields; cannot scatter-plot',
+        errPcdPayloadSmall: 'PCD payload too small (need {0} bytes, got {1})',
+        errPcdAsciiRows: 'ASCII PCD has too few rows ({0} / {1})',
+        errPcdLzf: 'binary_compressed decompression failed',
+        errPcdGridTooLarge: 'Point cloud grid too large ({0}×{1})',
+        infoPcdPoints: 'Points',
+        infoPcdView: 'View',
+        infoPcdGridPrec: 'Grid step',
+        infoPcdScatter: 'Scatter (world XY)',
+        valueWorldPos: 'Coord (x, y)',
+        calcPcdScatter: 'Calculator is not available for scatter point clouds',
+        savePcdScatter: 'Scatter point clouds can only be saved as PNG / JPG'
     }
 };
 
@@ -788,10 +832,16 @@ function applyLanguage(lang) {
     // 狀態列依情境更新：已載入則重新翻譯，否則為 idle
     if (typeof statusEl !== 'undefined' && statusEl) {
         if (typeof currentDataset !== 'undefined' && currentDataset) {
-            statusEl.textContent = t('statusLoaded',
-                currentDataset.filename,
-                currentDataset.width,
-                currentDataset.height);
+            if (currentDataset.type === 'pcd-scatter') {
+                statusEl.textContent = t('statusLoadedPcd',
+                    currentDataset.filename,
+                    currentDataset.pointCount);
+            } else {
+                statusEl.textContent = t('statusLoaded',
+                    currentDataset.filename,
+                    currentDataset.width,
+                    currentDataset.height);
+            }
         } else {
             statusEl.textContent = t('statusIdle');
         }
@@ -983,6 +1033,534 @@ async function readAsc(file, onProgress) {
 
     if (onProgress) onProgress(1.0);
     return { header: headerDict, data, width, height };
+}
+
+
+/* -------------------------------------------------------------------------
+ *  PCD 解析 (對應 pcd_bin_to_csv.py)
+ * ------------------------------------------------------------------------- */
+
+const PCD_TYPE_MAP = {
+    'F4': { array: Float32Array, get: (dv, o, le) => dv.getFloat32(o, le) },
+    'F8': { array: Float64Array, get: (dv, o, le) => dv.getFloat64(o, le) },
+    'U1': { array: Uint8Array,   get: (dv, o) => dv.getUint8(o) },
+    'U2': { array: Uint16Array,  get: (dv, o, le) => dv.getUint16(o, le) },
+    'U4': { array: Uint32Array,  get: (dv, o, le) => dv.getUint32(o, le) },
+    'I1': { array: Int8Array,    get: (dv, o) => dv.getInt8(o) },
+    'I2': { array: Int16Array,   get: (dv, o, le) => dv.getInt16(o, le) },
+    'I4': { array: Int32Array,   get: (dv, o, le) => dv.getInt32(o, le) },
+};
+
+function pcdMemberSpec(type, size, count) {
+    const key = type.toUpperCase() + size;
+    const info = PCD_TYPE_MAP[key];
+    if (!info) throw new Error(t('errPcdUnsupportedType', type, size));
+    return { type: type.toUpperCase(), size, count, byteSize: size, ...info };
+}
+
+function pcdBuildRecordSpec(fields, types, sizes, counts) {
+    const members = [];
+    const used = {};
+    let recordSize = 0;
+    for (let i = 0; i < fields.length; i++) {
+        const spec = pcdMemberSpec(types[i], sizes[i], counts[i]);
+        let name = fields[i];
+        used[name] = (used[name] || 0) + 1;
+        if (used[name] > 1) name = `${fields[i]}_${used[name] - 1}`;
+        members.push({ name, ...spec });
+        recordSize += spec.byteSize * spec.count;
+    }
+    return { members, recordSize };
+}
+
+/** 解析 PCD 標頭，回傳 { header, payload } */
+function pcdParseHeader(bytes) {
+    const header = {
+        lines: [],
+        fields: [],
+        size: [],
+        type: [],
+        count: [],
+        width: 0,
+        height: 1,
+        points: 0,
+        data: 'binary',
+        headerSize: 0,
+    };
+
+    let offset = 0;
+    const dec = new TextDecoder('ascii');
+
+    while (true) {
+        let nl = -1;
+        for (let i = offset; i < bytes.length; i++) {
+            if (bytes[i] === 0x0a) { nl = i; break; }
+        }
+        if (nl < 0) throw new Error(t('errPcdMalformed'));
+
+        const line = dec.decode(bytes.subarray(offset, nl)).replace(/\r$/, '');
+        offset = nl + 1;
+
+        const stripped = line.trim();
+        if (!stripped || stripped.startsWith('#')) {
+            header.lines.push(line);
+            continue;
+        }
+
+        header.lines.push(line);
+        const tokens = stripped.split(/\s+/);
+        const key = tokens[0].toUpperCase();
+        const vals = tokens.slice(1);
+
+        if (key === 'FIELDS') header.fields = vals;
+        else if (key === 'SIZE') header.size = vals.map(v => parseInt(v, 10));
+        else if (key === 'TYPE') header.type = vals.map(v => v.toUpperCase());
+        else if (key === 'COUNT') header.count = vals.map(v => parseInt(v, 10));
+        else if (key === 'WIDTH') header.width = parseInt(vals[0], 10);
+        else if (key === 'HEIGHT') header.height = parseInt(vals[0], 10);
+        else if (key === 'POINTS') header.points = parseInt(vals[0], 10);
+        else if (key === 'DATA') {
+            header.data = vals[0].toLowerCase();
+            header.headerSize = offset;
+            break;
+        }
+    }
+
+    if (!header.count.length && header.fields.length) {
+        header.count = header.fields.map(() => 1);
+    }
+
+    const nFields = header.fields.length;
+    if (nFields !== header.size.length || nFields !== header.type.length ||
+        nFields !== header.count.length) {
+        throw new Error(t('errPcdFieldMismatch'));
+    }
+
+    return { header, payload: bytes.subarray(offset) };
+}
+
+function pcdTotalPoints(header) {
+    return header.points > 0 ? header.points : header.width * header.height;
+}
+
+/** LZF 解壓 (PCL binary_compressed 使用) */
+function pcdLzfDecompress(input, outLength) {
+    const out = new Uint8Array(outLength);
+    let inPos = 0;
+    let outPos = 0;
+    const inLen = input.length;
+
+    while (inPos < inLen) {
+        let ctrl = input[inPos++];
+        if (ctrl < 32) {
+            ctrl++;
+            if (outPos + ctrl > outLength) return null;
+            for (let i = 0; i < ctrl; i++) out[outPos++] = input[inPos++];
+        } else {
+            let len = ctrl >> 5;
+            let ref = outPos - ((ctrl & 31) << 8) - 1;
+            if (len === 7) len += input[inPos++];
+            ref -= input[inPos++];
+            len += 2;
+            if (outPos + len > outLength) return null;
+            for (let i = 0; i < len; i++) out[outPos++] = out[ref++];
+        }
+    }
+    return outPos === outLength ? out : null;
+}
+
+function pcdReadMember(dv, offset, le, member, rowArrays, rowIndex) {
+    const key = member.type + member.size;
+    const info = PCD_TYPE_MAP[key];
+    const arr = rowArrays[member.name];
+    const step = member.byteSize;
+    if (member.count === 1) {
+        arr[rowIndex] = info.get(dv, offset, le);
+        return offset + step;
+    }
+    const base = rowIndex * member.count;
+    for (let c = 0; c < member.count; c++) {
+        arr[base + c] = info.get(dv, offset + c * step, le);
+    }
+    return offset + step * member.count;
+}
+
+function pcdDecodeAscii(header, payload, spec, n) {
+    const text = new TextDecoder('ascii').decode(payload);
+    const lines = text.trim().split(/\r?\n/).filter(l => l.trim() !== '');
+    if (lines.length < n) throw new Error(t('errPcdAsciiRows', lines.length, n));
+
+    const rowArrays = {};
+    for (const m of spec.members) {
+        rowArrays[m.name] = new Float64Array(m.count === 1 ? n : n * m.count);
+    }
+
+    let totalCols = 0;
+    for (const m of spec.members) totalCols += m.count;
+
+    for (let i = 0; i < n; i++) {
+        const parts = lines[i].trim().split(/[\s,]+/).map(Number);
+        if (parts.length < totalCols) {
+            throw new Error(t('errPcdAsciiRows', i, n));
+        }
+        let col = 0;
+        for (const m of spec.members) {
+            const arr = rowArrays[m.name];
+            if (m.count === 1) {
+                arr[i] = parts[col++];
+            } else {
+                const base = i * m.count;
+                for (let c = 0; c < m.count; c++) arr[base + c] = parts[col++];
+            }
+        }
+    }
+    return rowArrays;
+}
+
+function pcdDecodeBinary(header, payload, spec, n) {
+    const expected = spec.recordSize * n;
+    if (payload.byteLength < expected) {
+        throw new Error(t('errPcdPayloadSmall', expected, payload.byteLength));
+    }
+
+    const rowArrays = {};
+    for (const m of spec.members) {
+        rowArrays[m.name] = new Float64Array(m.count === 1 ? n : n * m.count);
+    }
+
+    const dv = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+    const le = true;
+    let offset = 0;
+    for (let i = 0; i < n; i++) {
+        for (const m of spec.members) {
+            offset = pcdReadMember(dv, offset, le, m, rowArrays, i);
+        }
+    }
+    return rowArrays;
+}
+
+function pcdDecodeBinaryCompressed(header, payload, spec, n) {
+    if (payload.byteLength < 8) throw new Error(t('errPcdPayloadSmall', 8, payload.byteLength));
+
+    const dv = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+    const compressedSize = dv.getUint32(0, true);
+    const uncompressedSize = dv.getUint32(4, true);
+    const body = payload.subarray(8, 8 + compressedSize);
+    const raw = pcdLzfDecompress(body, uncompressedSize);
+    if (!raw) throw new Error(t('errPcdLzf'));
+
+    const rowArrays = {};
+    for (const m of spec.members) {
+        rowArrays[m.name] = new Float64Array(m.count === 1 ? n : n * m.count);
+    }
+
+    let offset = 0;
+    for (const m of spec.members) {
+        const key = m.type + m.size;
+        const info = PCD_TYPE_MAP[key];
+        const total = m.count * n;
+        const nbytes = m.byteSize * total;
+        const col = new info.array(raw.buffer, raw.byteOffset + offset, total);
+        offset += nbytes;
+        const arr = rowArrays[m.name];
+        if (m.count === 1) {
+            for (let i = 0; i < n; i++) arr[i] = col[i];
+        } else {
+            // binary_compressed：同一欄位內各分量以 column-major 存放
+            for (let c = 0; c < m.count; c++) {
+                const base = c * n;
+                for (let i = 0; i < n; i++) arr[i * m.count + c] = col[base + i];
+            }
+        }
+    }
+    return rowArrays;
+}
+
+function pcdDecodePoints(header, payload) {
+    const spec = pcdBuildRecordSpec(header.fields, header.type, header.size, header.count);
+    const n = pcdTotalPoints(header);
+
+    if (header.data === 'ascii') return pcdDecodeAscii(header, payload, spec, n);
+    if (header.data === 'binary') return pcdDecodeBinary(header, payload, spec, n);
+    if (header.data === 'binary_compressed') return pcdDecodeBinaryCompressed(header, payload, spec, n);
+    throw new Error(t('errPcdUnsupportedData', header.data));
+}
+
+function pcdFindField(columns, names) {
+    const keys = Object.keys(columns);
+    for (const name of names) {
+        const hit = keys.find(k => k.toLowerCase() === name);
+        if (hit) return columns[hit];
+    }
+    return null;
+}
+
+function pcdQuantKey(v) {
+    return Math.round(v * 1e6);
+}
+
+/** 是否為真正的 2D 有序點雲 (非 PCL 慣用的 WIDTH=N, HEIGHT=1 無序格式) */
+function pcdIsOrganized2D(header, n) {
+    const width = header.width || 0;
+    const height = header.height || 1;
+    return width > 1 && height > 1 && n === width * height;
+}
+
+const PCD_MAX_GRID_CELLS = 8 * 1024 * 1024;
+
+/** 依點距估計座標量化步長 */
+function pcdEstimatePrec(xCol, yCol, n) {
+    const step = Math.min(n, 12000);
+    const diffs = [];
+    for (let i = 1; i < step; i++) {
+        const dx = Math.abs(xCol[i] - xCol[i - 1]);
+        const dy = Math.abs(yCol[i] - yCol[i - 1]);
+        if (dx > 1e-6 && dx < 1e7) diffs.push(dx);
+        if (dy > 1e-6 && dy < 1e7) diffs.push(dy);
+    }
+    if (!diffs.length) return 1;
+    diffs.sort((a, b) => a - b);
+    const idx = Math.min(diffs.length - 1, Math.floor(diffs.length * 0.2));
+    return Math.max(diffs[idx], 1e-6);
+}
+
+/**
+ * 依實際 x/y 座標建立壓縮索引網格：每個出現過的 (x,y) 對應一個像素，
+ * 避免均勻分箱造成整欄/整列 NaN 長條。
+ */
+function pcdRasterizeIndexed(xCol, yCol, zCol, n) {
+    let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+    for (let i = 0; i < n; i++) {
+        if (xCol[i] < xmin) xmin = xCol[i];
+        if (xCol[i] > xmax) xmax = xCol[i];
+        if (yCol[i] < ymin) ymin = yCol[i];
+        if (yCol[i] > ymax) ymax = yCol[i];
+    }
+    const span = Math.max(xmax - xmin, ymax - ymin, 1);
+    let prec = Math.max(pcdEstimatePrec(xCol, yCol, n), span / Math.sqrt(n));
+
+    let nx = 0;
+    let ny = 0;
+    for (let attempt = 0; attempt < 28; attempt++) {
+        const xMap = new Map();
+        const yMap = new Map();
+        for (let i = 0; i < n; i++) {
+            const xk = Math.round(xCol[i] / prec);
+            const yk = Math.round(yCol[i] / prec);
+            if (!xMap.has(xk)) xMap.set(xk, xCol[i]);
+            if (!yMap.has(yk)) yMap.set(yk, yCol[i]);
+        }
+        nx = xMap.size;
+        ny = yMap.size;
+        if (nx * ny <= PCD_MAX_GRID_CELLS) {
+            const xEntries = [...xMap.entries()].sort((a, b) => a[1] - b[1]);
+            const yEntries = [...yMap.entries()].sort((a, b) => a[1] - b[1]);
+            const xIndex = new Map(xEntries.map(([k], i) => [k, i]));
+            const yIndex = new Map(yEntries.map(([k], i) => [k, i]));
+            nx = xEntries.length;
+            ny = yEntries.length;
+
+            const data = new Float32Array(nx * ny);
+            data.fill(NaN);
+            for (let i = 0; i < n; i++) {
+                const xk = Math.round(xCol[i] / prec);
+                const yk = Math.round(yCol[i] / prec);
+                const idx = yIndex.get(yk) * nx + xIndex.get(xk);
+                const z = zCol[i];
+                if (!Number.isFinite(data[idx]) || z > data[idx]) data[idx] = z;
+            }
+            return {
+                data, width: nx, height: ny,
+                viewMode: 'sparse',
+                pointCount: n,
+                gridPrec: prec,
+            };
+        }
+        prec *= 1.5;
+    }
+
+    throw new Error(t('errPcdGridTooLarge', nx, ny));
+}
+
+/** 將點雲 z 值轉成 2D 高度圖 (與既有 render 管線相容) */
+function pcdToHeightMap(header, columns) {
+    const n = pcdTotalPoints(header);
+    const zCol = pcdFindField(columns, ['z']);
+    if (!zCol) throw new Error(t('errPcdNoZ'));
+
+    const xCol = pcdFindField(columns, ['x']);
+    const yCol = pcdFindField(columns, ['y']);
+    const width = header.width || 0;
+    const height = header.height || 1;
+
+    // 有序 2D 點雲：依 WIDTH×HEIGHT 直接排列 z
+    if (pcdIsOrganized2D(header, n)) {
+        const data = new Float32Array(n);
+        for (let i = 0; i < n; i++) data[i] = zCol[i];
+        return {
+            data, width, height,
+            viewMode: 'organized',
+            pointCount: n,
+        };
+    }
+
+    // 嘗試由 x/y 座標還原規則網格
+    if (xCol && yCol) {
+        const xKeys = new Map();
+        const yKeys = new Map();
+        for (let i = 0; i < n; i++) {
+            xKeys.set(pcdQuantKey(xCol[i]), xCol[i]);
+            yKeys.set(pcdQuantKey(yCol[i]), yCol[i]);
+        }
+        const nx = xKeys.size;
+        const ny = yKeys.size;
+        if (nx * ny === n && nx > 1 && ny > 1) {
+            const xs = [...xKeys.entries()].sort((a, b) => a[1] - b[1]).map(e => e[0]);
+            const ys = [...yKeys.entries()].sort((a, b) => a[1] - b[1]).map(e => e[0]);
+            const xi = new Map(xs.map((k, i) => [k, i]));
+            const yi = new Map(ys.map((k, i) => [k, i]));
+            const data = new Float32Array(n);
+            data.fill(NaN);
+            for (let i = 0; i < n; i++) {
+                const ix = xi.get(pcdQuantKey(xCol[i]));
+                const iy = yi.get(pcdQuantKey(yCol[i]));
+                data[iy * nx + ix] = zCol[i];
+            }
+            return {
+                data, width: nx, height: ny,
+                viewMode: 'grid',
+                pointCount: n,
+            };
+        }
+    }
+
+    // 無序點雲應使用散布模式（readPcd → pcdPrepareScatter），不應進入此路徑
+    if (xCol && yCol) return pcdRasterizeIndexed(xCol, yCol, zCol, n);
+
+    // 僅有 z：依點序排成近似方形
+    const side = Math.max(1, Math.round(Math.sqrt(n)));
+    const data = new Float32Array(side * side);
+    data.fill(NaN);
+    for (let i = 0; i < n; i++) {
+        const x = i % side;
+        const y = (i / side) | 0;
+        data[y * side + x] = zCol[i];
+    }
+    return {
+        data, width: side, height: side,
+        viewMode: 'index',
+        pointCount: n,
+    };
+}
+
+function pcdHeaderToDict(header) {
+    const dict = {
+        fileformat: 'pcd',
+        FIELDS: header.fields.join(' '),
+        SIZE: header.size.join(' '),
+        TYPE: header.type.join(' '),
+        COUNT: header.count.join(' '),
+        WIDTH: String(header.width),
+        HEIGHT: String(header.height),
+        POINTS: String(pcdTotalPoints(header)),
+        DATA: header.data,
+    };
+    return dict;
+}
+
+function pcdCopyColumn(col, n) {
+    if (col instanceof Float32Array && col.length === n) return col;
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) out[i] = col[i];
+    return out;
+}
+
+/** 依資料範圍長寬比決定散布畫布像素尺寸 */
+function pcdScatterCanvasSize(bounds, maxSide = 2048) {
+    const spanX = bounds.xmax - bounds.xmin || 1;
+    const spanY = bounds.ymax - bounds.ymin || 1;
+    const aspect = spanX / spanY;
+    if (aspect >= 1) {
+        return {
+            width: maxSide,
+            height: Math.max(256, Math.round(maxSide / aspect)),
+        };
+    }
+    return {
+        width: Math.max(256, Math.round(maxSide * aspect)),
+        height: maxSide,
+    };
+}
+
+/** 無序 PCD → 散布資料集（保留原始 x/y/z，不網格化） */
+function pcdPrepareScatter(header, columns) {
+    const n = pcdTotalPoints(header);
+    const xCol = pcdFindField(columns, ['x']);
+    const yCol = pcdFindField(columns, ['y']);
+    const zCol = pcdFindField(columns, ['z']);
+    if (!zCol) throw new Error(t('errPcdNoZ'));
+    if (!xCol || !yCol) throw new Error(t('errPcdNoXY'));
+
+    const x = pcdCopyColumn(xCol, n);
+    const y = pcdCopyColumn(yCol, n);
+    const z = pcdCopyColumn(zCol, n);
+
+    const bounds = { xmin: Infinity, xmax: -Infinity, ymin: Infinity, ymax: -Infinity };
+    for (let i = 0; i < n; i++) {
+        if (x[i] < bounds.xmin) bounds.xmin = x[i];
+        if (x[i] > bounds.xmax) bounds.xmax = x[i];
+        if (y[i] < bounds.ymin) bounds.ymin = y[i];
+        if (y[i] > bounds.ymax) bounds.ymax = y[i];
+    }
+
+    const { width, height } = pcdScatterCanvasSize(bounds);
+    const headerDict = pcdHeaderToDict(header);
+    headerDict[t('infoPcdPoints')] = String(n);
+    headerDict[t('infoPcdView')] = t('infoPcdScatter');
+
+    return {
+        type: 'pcd-scatter',
+        x, y, z,
+        pointCount: n,
+        bounds,
+        width,
+        height,
+        header: headerDict,
+        pointRadius: 0,
+    };
+}
+
+async function readPcd(file, onProgress) {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    if (onProgress) onProgress(0.1);
+
+    const { header, payload } = pcdParseHeader(bytes);
+    if (onProgress) onProgress(0.35);
+
+    const columns = pcdDecodePoints(header, payload);
+    if (onProgress) onProgress(0.75);
+
+    const n = pcdTotalPoints(header);
+    let result;
+    if (pcdIsOrganized2D(header, n)) {
+        const raster = pcdToHeightMap(header, columns);
+        const headerDict = pcdHeaderToDict(header);
+        headerDict[t('infoPcdPoints')] = String(raster.pointCount);
+        headerDict[t('infoPcdView')] = raster.viewMode;
+        result = {
+            type: 'grid',
+            header: headerDict,
+            data: raster.data,
+            width: raster.width,
+            height: raster.height,
+        };
+    } else {
+        result = pcdPrepareScatter(header, columns);
+    }
+
+    if (onProgress) onProgress(1.0);
+    return result;
 }
 
 
@@ -1739,6 +2317,162 @@ function sampleColormap(cmapName, t) {
     ];
 }
 
+/** 建立 256 階 RGB 查表 (0~255) */
+function buildColormapLut(cmapName) {
+    const lut = new Uint8ClampedArray(256 * 3);
+    for (let i = 0; i < 256; i++) {
+        const [r, g, b] = sampleColormap(cmapName, i / 255);
+        lut[i * 3]     = Math.round(r * 255);
+        lut[i * 3 + 1] = Math.round(g * 255);
+        lut[i * 3 + 2] = Math.round(b * 255);
+    }
+    return lut;
+}
+
+/** 世界座標 → 畫布像素（Y 軸向上，畫布 Y 向下） */
+function pcdWorldToCanvasPx(dataset, wx, wy) {
+    const { bounds, width, height } = dataset;
+    const spanX = bounds.xmax - bounds.xmin || 1;
+    const spanY = bounds.ymax - bounds.ymin || 1;
+    return {
+        px: ((wx - bounds.xmin) / spanX) * (width - 1),
+        py: ((bounds.ymax - wy) / spanY) * (height - 1),
+    };
+}
+
+/** 在 ImageData 上畫單像素點 */
+function stampPixel(px, width, height, ix, iy, r, g, b) {
+    if (ix < 0 || iy < 0 || ix >= width || iy >= height) return;
+    const po = (iy * width + ix) * 4;
+    px[po] = r;
+    px[po + 1] = g;
+    px[po + 2] = b;
+    px[po + 3] = 255;
+}
+
+/** 在 ImageData 上戳印實心圓點 */
+function stampDisk(px, width, height, cx, cy, radius, r, g, b) {
+    if (radius <= 0) {
+        stampPixel(px, width, height, Math.round(cx), Math.round(cy), r, g, b);
+        return;
+    }
+    const r2 = radius * radius;
+    const x0 = Math.max(0, Math.ceil(cx - radius));
+    const x1 = Math.min(width - 1, Math.floor(cx + radius));
+    const y0 = Math.max(0, Math.ceil(cy - radius));
+    const y1 = Math.min(height - 1, Math.floor(cy + radius));
+    for (let y = y0; y <= y1; y++) {
+        const dy = y - cy;
+        for (let x = x0; x <= x1; x++) {
+            const dx = x - cx;
+            if (dx * dx + dy * dy > r2) continue;
+            const po = (y * width + x) * 4;
+            px[po] = r;
+            px[po + 1] = g;
+            px[po + 2] = b;
+            px[po + 3] = 255;
+        }
+    }
+}
+
+/** 散布繪製：世界座標 → 螢幕座標，點大小固定為螢幕像素 */
+function renderPcdScatter(dataset, cmap) {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const { x, y, z, vmin, vmax } = dataset;
+    const n = z.length;
+    const R = SCATTER_POINT_SCREEN_RADIUS;
+
+    const { w: sw, h: sh } = getScatterViewerSize();
+    scatterView.screenW = sw;
+    scatterView.screenH = sh;
+
+    // putImageData 不受 ctx 變換影響，緩衝區須用實際 device 像素（含 HiDPI）
+    const dpr = window.devicePixelRatio || 1;
+    const bw = Math.max(1, Math.round(sw * dpr));
+    const bh = Math.max(1, Math.round(sh * dpr));
+    canvas.width = bw;
+    canvas.height = bh;
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const img = ctx.createImageData(bw, bh);
+    const px = img.data;
+    const lut = buildColormapLut(cmap);
+    const range = vmax - vmin;
+    const rBuf = R > 0 ? R * dpr : 0;
+
+    const screenX = new Int16Array(n);
+    const screenY = new Int16Array(n);
+
+    for (let i = 0; i < n; i++) {
+        const { sx, sy } = scatterWorldToScreen(x[i], y[i]);
+        const ix = Math.round(sx);
+        const iy = Math.round(sy);
+        screenX[i] = ix;
+        screenY[i] = iy;
+
+        if (ix < -R || iy < -R || ix > sw + R || iy > sh + R) continue;
+
+        const bx = Math.round(sx * dpr);
+        const by = Math.round(sy * dpr);
+
+        let t = (z[i] - vmin) / range;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        const li = (t * 255) | 0;
+        const lo = li * 3;
+        const cr = lut[lo], cg = lut[lo + 1], cb = lut[lo + 2];
+        if (R <= 0) stampPixel(px, bw, bh, bx, by, cr, cg, cb);
+        else stampDisk(px, bw, bh, sx * dpr, sy * dpr, rBuf, cr, cg, cb);
+    }
+
+    ctx.putImageData(img, 0, 0);
+
+    const pickCell = 24;
+    const buckets = new Map();
+    for (let i = 0; i < n; i++) {
+        const bx = (screenX[i] / pickCell) | 0;
+        const by = (screenY[i] / pickCell) | 0;
+        const key = bx + ',' + by;
+        let list = buckets.get(key);
+        if (!list) { list = []; buckets.set(key, list); }
+        list.push(i);
+    }
+    dataset._pick = { buckets, screenX, screenY, pickCell, pickRadius: Math.max(6, R + 4) };
+}
+
+/** 散布模式：找游標附近最近的點 */
+function findNearestPcdPoint(dataset, canvasPx, canvasPy) {
+    const pick = dataset._pick;
+    if (!pick) return null;
+
+    const { buckets, screenX, screenY, pickCell, pickRadius } = pick;
+    const bx = (canvasPx / pickCell) | 0;
+    const by = (canvasPy / pickCell) | 0;
+    const r2max = pickRadius * pickRadius;
+    let best = null;
+    let bestD2 = r2max;
+
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            const list = buckets.get((bx + dx) + ',' + (by + dy));
+            if (!list) continue;
+            for (let k = 0; k < list.length; k++) {
+                const i = list[k];
+                const ddx = screenX[i] - canvasPx;
+                const ddy = screenY[i] - canvasPy;
+                const d2 = ddx * ddx + ddy * ddy;
+                if (d2 < bestD2) {
+                    bestD2 = d2;
+                    best = i;
+                }
+            }
+        }
+    }
+    return best;
+}
+
 
 /* =========================================================================
  *  3. 繪製
@@ -1762,15 +2496,112 @@ function computeRange(data) {
 /* 畫面狀態：scale = CSS 顯示像素 / 影像像素；tx/ty 為左上角的位移(CSS px) */
 const view = { scale: 1, tx: 0, ty: 0, minScale: 0.02, maxScale: 64 };
 
+/** 散布點雲視埠：縮放只改變可見世界範圍，點在螢幕上維持固定像素大小 */
+const scatterView = {
+    centerX: 0,
+    centerY: 0,
+    worldPerPx: 1,
+    baseWorldPerPx: 1,
+    screenW: 1,
+    screenH: 1,
+    minWorldPerPx: 1e-6,
+    maxWorldPerPx: 1e9,
+};
+const SCATTER_POINT_SCREEN_RADIUS = 1;
+let scatterRedrawQueued = false;
+
+function isPcdScatterDataset(ds) {
+    return ds && ds.type === 'pcd-scatter';
+}
+
+function getScatterViewerSize() {
+    const viewer = document.getElementById('viewer');
+    return {
+        w: Math.max(1, viewer.clientWidth),
+        h: Math.max(1, viewer.clientHeight),
+    };
+}
+
+function fitScatterToViewer(dataset) {
+    const { w, h } = getScatterViewerSize();
+    const pad = 24;
+    const b = dataset.bounds;
+    const spanX = (b.xmax - b.xmin) || 1;
+    const spanY = (b.ymax - b.ymin) || 1;
+    const wpp = Math.max(spanX / Math.max(1, w - pad * 2), spanY / Math.max(1, h - pad * 2));
+
+    scatterView.screenW = w;
+    scatterView.screenH = h;
+    scatterView.centerX = (b.xmin + b.xmax) * 0.5;
+    scatterView.centerY = (b.ymin + b.ymax) * 0.5;
+    scatterView.worldPerPx = wpp;
+    scatterView.baseWorldPerPx = wpp;
+    scatterView.minWorldPerPx = wpp / 64;
+    scatterView.maxWorldPerPx = wpp * 64;
+}
+
+function scatterWorldToScreen(wx, wy) {
+    const halfW = scatterView.screenW * 0.5;
+    const halfH = scatterView.screenH * 0.5;
+    return {
+        sx: (wx - scatterView.centerX) / scatterView.worldPerPx + halfW,
+        sy: (scatterView.centerY - wy) / scatterView.worldPerPx + halfH,
+    };
+}
+
+function scatterZoomAt(screenX, screenY, zoomFactor) {
+    const worldX = scatterView.centerX + (screenX - scatterView.screenW * 0.5) * scatterView.worldPerPx;
+    const worldY = scatterView.centerY - (screenY - scatterView.screenH * 0.5) * scatterView.worldPerPx;
+
+    let wpp = scatterView.worldPerPx / zoomFactor;
+    if (wpp < scatterView.minWorldPerPx) wpp = scatterView.minWorldPerPx;
+    if (wpp > scatterView.maxWorldPerPx) wpp = scatterView.maxWorldPerPx;
+
+    scatterView.worldPerPx = wpp;
+    scatterView.centerX = worldX - (screenX - scatterView.screenW * 0.5) * wpp;
+    scatterView.centerY = worldY + (screenY - scatterView.screenH * 0.5) * wpp;
+}
+
+function scatterPanBy(dScreenX, dScreenY) {
+    scatterView.centerX -= dScreenX * scatterView.worldPerPx;
+    scatterView.centerY += dScreenY * scatterView.worldPerPx;
+}
+
+function requestScatterRedraw() {
+    if (!isPcdScatterDataset(currentDataset)) return;
+    if (scatterRedrawQueued) return;
+    scatterRedrawQueued = true;
+    requestAnimationFrame(() => {
+        scatterRedrawQueued = false;
+        if (!isPcdScatterDataset(currentDataset)) return;
+        renderPcdScatter(currentDataset, cmapSelect.value);
+        applyTransform();
+    });
+}
+
 function applyTransform() {
     const canvas = document.getElementById('canvas');
-    canvas.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
     const ind = document.getElementById('zoomIndicator');
+
+    if (isPcdScatterDataset(currentDataset)) {
+        canvas.style.transform = 'none';
+        const pct = (scatterView.baseWorldPerPx / scatterView.worldPerPx) * 100;
+        ind.textContent = (pct >= 100 ? pct.toFixed(0) : pct.toFixed(1)) + '%';
+        return;
+    }
+
+    canvas.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
     ind.textContent = (view.scale * 100).toFixed(view.scale >= 1 ? 0 : 1) + '%';
 }
 
 function fitImageToViewer() {
     if (!currentDataset) return;
+    if (isPcdScatterDataset(currentDataset)) {
+        fitScatterToViewer(currentDataset);
+        renderPcdScatter(currentDataset, cmapSelect.value);
+        applyTransform();
+        return;
+    }
     const viewer = document.getElementById('viewer');
     const vw = viewer.clientWidth;
     const vh = viewer.clientHeight;
@@ -1796,23 +2627,20 @@ function renderPixels(dataset, cmap) {
     const img = ctx.createImageData(width, height);
     const range = vmax - vmin;
 
-    const lut = new Uint8ClampedArray(256 * 3);
-    for (let i = 0; i < 256; i++) {
-        const [r, g, b] = sampleColormap(cmap, i / 255);
-        lut[i * 3]     = Math.round(r * 255);
-        lut[i * 3 + 1] = Math.round(g * 255);
-        lut[i * 3 + 2] = Math.round(b * 255);
-    }
-
+    const lut = buildColormapLut(cmap);
     const px = img.data;
     for (let i = 0; i < data.length; i++) {
-        let v = data[i];
-        if (!Number.isFinite(v)) v = vmin;
+        const po = i * 4;
+        const v = data[i];
+        if (!Number.isFinite(v)) {
+            px[po] = px[po + 1] = px[po + 2] = 0;
+            px[po + 3] = 255;
+            continue;
+        }
         let t = (v - vmin) / range;
         if (t < 0) t = 0; else if (t > 1) t = 1;
         const idx = (t * 255) | 0;
         const lo = idx * 3;
-        const po = i * 4;
         px[po]     = lut[lo];
         px[po + 1] = lut[lo + 1];
         px[po + 2] = lut[lo + 2];
@@ -1826,15 +2654,22 @@ function renderPixels(dataset, cmap) {
  * @param {boolean} resetView 是否重新 fit 到檢視區（載入新檔 / 視窗改變時為 true）
  */
 function render(dataset, cmap, resetView = false) {
-    renderPixels(dataset, cmap);
-
     const canvas = document.getElementById('canvas');
+    if (dataset.type === 'pcd-scatter') {
+        canvas.classList.add('scatter-view');
+        renderPcdScatter(dataset, cmap);
+    } else {
+        canvas.classList.remove('scatter-view');
+        renderPixels(dataset, cmap);
+    }
+
     canvas.style.display = 'block';
     document.getElementById('placeholder').style.display = 'none';
     document.getElementById('zoomIndicator').classList.add('show');
     document.getElementById('zoomHint').classList.add('show');
 
-    if (resetView) fitImageToViewer(); else applyTransform();
+    if (resetView) fitImageToViewer();
+    else applyTransform();
 
     renderColorbar(cmap);
     document.getElementById('zMin').textContent = dataset.vmin.toFixed(4);
@@ -1859,7 +2694,7 @@ function renderColorbar(cmap) {
     ctx.putImageData(img, 0, 0);
 }
 
-function renderInfo(header, width, height) {
+function renderInfo(header, width, height, extra) {
     const list = document.getElementById('infoList');
     list.innerHTML = '';
 
@@ -1870,7 +2705,12 @@ function renderInfo(header, width, height) {
         list.appendChild(row);
     };
 
-    addRow(t('infoSize'), `${width} × ${height}`);
+    if (extra && extra.pointCount != null) {
+        addRow(t('infoPcdPoints'), String(extra.pointCount));
+        addRow(t('infoSize'), `${width} × ${height} (${t('infoPcdScatter')})`);
+    } else {
+        addRow(t('infoSize'), `${width} × ${height}`);
+    }
     for (const [k, v] of Object.entries(header)) {
         if (v === '' || v == null) continue;
         addRow(k, String(v).length > 30 ? String(v).slice(0, 30) + '…' : v);
@@ -1896,8 +2736,8 @@ const valueIndicator = document.getElementById('valueIndicator');
 /* 鼠標模式：'pan' = 拖曳平移；'inspect' = 顯示鼠標位置數值 */
 let cursorMode = 'pan';
 
-const SUPPORTED_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'bmp', 'png', 'jpg', 'jpeg'];
-const SUPPORTED_TEXT = '.bcrf / .asc / .tif / .bmp / .png / .jpg';
+const SUPPORTED_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'pcd', 'bmp', 'png', 'jpg', 'jpeg'];
+const SUPPORTED_TEXT = '.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg';
 
 function setProgress(p) {
     progressEl.classList.add('show');
@@ -1942,6 +2782,7 @@ async function loadFile(file) {
             case 'asc':           result = await readAsc(file, setProgress); break;
             case 'tif':
             case 'tiff':          result = await readTiff(file, setProgress); break;
+            case 'pcd':           result = await readPcd(file, setProgress); break;
             case 'bmp':           result = await readBmp(file, setProgress); break;
             case 'png':           result = await readPng(file, setProgress); break;
             case 'jpg':
@@ -1949,13 +2790,20 @@ async function loadFile(file) {
             default:              throw new Error(t('errUnknownExt', ext));
         }
 
-        const { vmin, vmax } = computeRange(result.data);
+        const rangeSrc = result.type === 'pcd-scatter' ? result.z : result.data;
+        const { vmin, vmax } = computeRange(rangeSrc);
         currentDataset = { ...result, vmin, vmax, filename: file.name };
 
         render(currentDataset, cmapSelect.value, true);
-        renderInfo(result.header, result.width, result.height);
+        const infoExtra = result.type === 'pcd-scatter'
+            ? { pointCount: result.pointCount } : null;
+        renderInfo(result.header, result.width, result.height, infoExtra);
 
-        statusEl.textContent = t('statusLoaded', file.name, result.width, result.height);
+        if (result.type === 'pcd-scatter') {
+            statusEl.textContent = t('statusLoadedPcd', file.name, result.pointCount);
+        } else {
+            statusEl.textContent = t('statusLoaded', file.name, result.width, result.height);
+        }
     } catch (err) {
         console.error(err);
         statusEl.textContent = t('statusReadFailed', err.message);
@@ -2059,7 +2907,7 @@ viewerEl.addEventListener('drop', async (e) => {
 
 cmapSelect.addEventListener('change', () => {
     // 切換色彩時保留目前的縮放與平移狀態
-    if (currentDataset) renderPixels(currentDataset, cmapSelect.value);
+    if (currentDataset) render(currentDataset, cmapSelect.value, false);
 });
 
 const saveFormatSelect = document.getElementById('saveFormat');
@@ -2071,6 +2919,10 @@ btnSave.addEventListener('click', async () => {
         return;
     }
     const format = saveFormatSelect.value;
+    if (currentDataset.type === 'pcd-scatter' && format !== 'png' && format !== 'jpg') {
+        showToast(t('savePcdScatter'), 'info');
+        return;
+    }
     const base = stripExt(currentDataset.filename || 'image');
     const ext = (format === 'tiff') ? 'tif' : format;
     const fullName = `${base}.${ext}`;
@@ -2096,8 +2948,29 @@ btnSave.addEventListener('click', async () => {
 });
 
 window.addEventListener('resize', () => {
-    if (currentDataset) fitImageToViewer();
+    if (!currentDataset) return;
+    if (isPcdScatterDataset(currentDataset)) {
+        const { w, h } = getScatterViewerSize();
+        scatterView.screenW = w;
+        scatterView.screenH = h;
+        requestScatterRedraw();
+    } else {
+        fitImageToViewer();
+    }
 });
+
+/* 視窗／版面變化時更新散布畫布（筆電高 DPI、側欄縮放等） */
+if (typeof ResizeObserver !== 'undefined') {
+    const scatterViewerObs = new ResizeObserver(() => {
+        if (!isPcdScatterDataset(currentDataset)) return;
+        const { w, h } = getScatterViewerSize();
+        if (w === scatterView.screenW && h === scatterView.screenH) return;
+        scatterView.screenW = w;
+        scatterView.screenH = h;
+        requestScatterRedraw();
+    });
+    scatterViewerObs.observe(document.getElementById('viewer'));
+}
 
 
 /* ---------- 滑鼠滾輪縮放 / 拖曳平移 / 雙擊還原 ---------- */
@@ -2110,19 +2983,23 @@ viewerEl.addEventListener('wheel', (e) => {
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
 
-    // deltaMode 0=px, 1=line, 2=page；統一成 pixel-ish 單位
     let dy = e.deltaY;
     if (e.deltaMode === 1) dy *= 16;
     else if (e.deltaMode === 2) dy *= viewerEl.clientHeight;
 
-    // 每 100 單位 deltaY 對應 10% 縮放速率；負 deltaY = 放大
     const zoomFactor = Math.pow(1.0015, -dy);
+
+    if (isPcdScatterDataset(currentDataset)) {
+        scatterZoomAt(mx, my, zoomFactor);
+        requestScatterRedraw();
+        return;
+    }
+
     let newScale = view.scale * zoomFactor;
     if (newScale < view.minScale) newScale = view.minScale;
     if (newScale > view.maxScale) newScale = view.maxScale;
 
     const k = newScale / view.scale;
-    // 以滑鼠位置為錨點進行縮放
     view.tx = mx - (mx - view.tx) * k;
     view.ty = my - (my - view.ty) * k;
     view.scale = newScale;
@@ -2139,7 +3016,14 @@ canvasEl.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return; // 只處理左鍵
     if (cursorMode !== 'pan') return;   // 數值模式下不啟動平移
     panning = true;
-    panStart = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
+    panStart = {
+        x: e.clientX,
+        y: e.clientY,
+        tx: view.tx,
+        ty: view.ty,
+        centerX: scatterView.centerX,
+        centerY: scatterView.centerY,
+    };
     canvasEl.classList.add('grabbing');
     try { canvasEl.setPointerCapture && canvasEl.setPointerCapture(e.pointerId); } catch (_) {}
     e.preventDefault();
@@ -2147,8 +3031,16 @@ canvasEl.addEventListener('mousedown', (e) => {
 
 window.addEventListener('mousemove', (e) => {
     if (!panning) return;
-    view.tx = panStart.tx + (e.clientX - panStart.x);
-    view.ty = panStart.ty + (e.clientY - panStart.y);
+    const dx = e.clientX - panStart.x;
+    const dy = e.clientY - panStart.y;
+    if (isPcdScatterDataset(currentDataset)) {
+        scatterView.centerX = panStart.centerX - dx * scatterView.worldPerPx;
+        scatterView.centerY = panStart.centerY + dy * scatterView.worldPerPx;
+        requestScatterRedraw();
+        return;
+    }
+    view.tx = panStart.tx + dx;
+    view.ty = panStart.ty + dy;
     applyTransform();
 });
 
@@ -2185,20 +3077,28 @@ function updateValueIndicator(clientX, clientY) {
         return;
     }
 
-    // 反推回影像像素座標 (對應 applyTransform 中的 translate + scale)
-    const px = Math.floor((mx - view.tx) / view.scale);
-    const py = Math.floor((my - view.ty) / view.scale);
-
-    const { width, height, data } = currentDataset;
-    if (px < 0 || py < 0 || px >= width || py >= height) {
-        valueIndicator.classList.remove('show');
-        return;
+    if (currentDataset.type === 'pcd-scatter') {
+        const idx = findNearestPcdPoint(currentDataset, mx, my);
+        if (idx == null) {
+            valueIndicator.classList.remove('show');
+            return;
+        }
+        valueIndicator.innerHTML =
+            `<div><span class="k">${t('valueWorldPos')}:</span>(${formatValue(currentDataset.x[idx])}, ${formatValue(currentDataset.y[idx])})</div>` +
+            `<div><span class="k">${t('valueLabel')} (z):</span>${formatValue(currentDataset.z[idx])}</div>`;
+    } else {
+        const px = Math.floor((mx - view.tx) / view.scale);
+        const py = Math.floor((my - view.ty) / view.scale);
+        const { width, height } = currentDataset;
+        if (px < 0 || py < 0 || px >= width || py >= height) {
+            valueIndicator.classList.remove('show');
+            return;
+        }
+        const v = currentDataset.data[py * width + px];
+        valueIndicator.innerHTML =
+            `<div><span class="k">${t('valuePos')}:</span>(${px}, ${py})</div>` +
+            `<div><span class="k">${t('valueLabel')}:</span>${formatValue(v)}</div>`;
     }
-
-    const v = data[py * width + px];
-    valueIndicator.innerHTML =
-        `<div><span class="k">${t('valuePos')}:</span>(${px}, ${py})</div>` +
-        `<div><span class="k">${t('valueLabel')}:</span>${formatValue(v)}</div>`;
 
     // 顯示位置：跟隨鼠標 (相對於 viewer)，但避免溢出邊界
     valueIndicator.classList.add('show');
@@ -2301,6 +3201,10 @@ function setCalcStatus(msg, type) {
 function openCalc() {
     if (!currentDataset) {
         showToast(t('calcNoData'), 'error');
+        return;
+    }
+    if (currentDataset.type === 'pcd-scatter') {
+        showToast(t('calcPcdScatter'), 'info');
         return;
     }
     calcOverlay.classList.add('show');
