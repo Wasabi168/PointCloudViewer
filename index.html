@@ -2494,7 +2494,7 @@ function computeRange(data) {
 }
 
 /* 畫面狀態：scale = CSS 顯示像素 / 影像像素；tx/ty 為左上角的位移(CSS px) */
-const view = { scale: 1, tx: 0, ty: 0, minScale: 0.02, maxScale: 64 };
+const view = { scale: 1, tx: 0, ty: 0, minScale: 0.02, maxScale: 100 };
 
 /** 散布點雲視埠：縮放只改變可見世界範圍，點在螢幕上維持固定像素大小 */
 const scatterView = {
@@ -2536,8 +2536,8 @@ function fitScatterToViewer(dataset) {
     scatterView.centerY = (b.ymin + b.ymax) * 0.5;
     scatterView.worldPerPx = wpp;
     scatterView.baseWorldPerPx = wpp;
-    scatterView.minWorldPerPx = wpp / 64;
-    scatterView.maxWorldPerPx = wpp * 64;
+    scatterView.minWorldPerPx = wpp / 100;
+    scatterView.maxWorldPerPx = wpp * 100;
 }
 
 function scatterWorldToScreen(wx, wy) {
