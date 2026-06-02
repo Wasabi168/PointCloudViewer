@@ -327,6 +327,114 @@
     .value-indicator.show { display: block; }
     .value-indicator .k { color: var(--muted); margin-right: 4px; }
 
+    /* 剖面 (profile) 疊加層 */
+    .overlay {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        display: none;
+        z-index: 6;
+    }
+    .overlay.show { display: block; }
+
+    /* 剖面模式的鼠標樣式 */
+    #canvas.profile-mode { cursor: crosshair; }
+    .viewer.profile-mode { cursor: crosshair; }
+
+    /* 剖面圖面板 */
+    .profile-panel {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        background: rgba(20, 20, 28, 0.92);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px 8px;
+        z-index: 9;
+        display: none;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(3px);
+    }
+    .profile-panel.show { display: block; }
+
+    .profile-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+    }
+    .profile-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+    }
+    .profile-meta {
+        font-size: 12px;
+        color: var(--muted);
+        font-family: Consolas, monospace;
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .profile-band {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--muted);
+        white-space: nowrap;
+    }
+    .profile-band input {
+        width: 84px;
+        background: #3a3a4a;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 4px 6px;
+        font-size: 12px;
+        font-family: Consolas, monospace;
+    }
+
+    .profile-clear {
+        background: #3a3a4a;
+        color: var(--text);
+        border: 1px solid var(--border);
+        padding: 4px 12px;
+        font-size: 12px;
+        border-radius: 5px;
+    }
+    .profile-clear:hover { background: #4a4a5c; }
+
+    .profile-plot {
+        position: relative;
+        width: 100%;
+    }
+    #profileCanvas {
+        display: block;
+        width: 100%;
+        height: 160px;
+    }
+    .profile-tip {
+        position: absolute;
+        pointer-events: none;
+        background: rgba(0, 0, 0, 0.85);
+        color: #fff;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-family: Consolas, monospace;
+        line-height: 1.4;
+        white-space: nowrap;
+        display: none;
+        z-index: 2;
+    }
+    .profile-tip.show { display: block; }
+    .profile-tip .k { color: var(--muted); margin-right: 4px; }
+
     /* 計算機 modal */
     .calc-overlay {
         position: fixed;
@@ -500,6 +608,7 @@
         <div class="cursor-toggle" id="cursorToggle">
             <button type="button" data-cursor="pan" class="active" data-i18n="cursorPan" title="拖曳模式">拖曳</button>
             <button type="button" data-cursor="inspect" data-i18n="cursorInspect" title="數值顯示模式">數值</button>
+            <button type="button" data-cursor="profile" data-i18n="cursorProfile" title="剖面模式">剖面</button>
         </div>
 
         <div class="lang-toggle" id="langToggle">
@@ -517,9 +626,26 @@
             點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg 檔案拖曳到此處
         </div>
         <canvas id="canvas" style="display:none;"></canvas>
+        <canvas id="overlay" class="overlay"></canvas>
         <div class="zoom-hint" id="zoomHint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
         <div class="zoom-indicator" id="zoomIndicator">100%</div>
         <div class="value-indicator" id="valueIndicator"></div>
+
+        <div class="profile-panel" id="profilePanel">
+            <div class="profile-head">
+                <span class="profile-title" id="profileTitle" data-i18n="profileTitle">剖面</span>
+                <span class="profile-meta" id="profileMeta"></span>
+                <label class="profile-band" id="profileBandWrap" style="display:none;">
+                    <span data-i18n="profileBand">帶寬</span>
+                    <input type="number" id="profileBand" step="any" min="0" />
+                </label>
+                <button type="button" class="profile-clear" id="profileClear" data-i18n="profileClear">清除</button>
+            </div>
+            <div class="profile-plot">
+                <canvas id="profileCanvas"></canvas>
+                <div class="profile-tip" id="profileTip"></div>
+            </div>
+        </div>
         <div class="drop-hint" id="dropHint">
             <div class="icon" id="dropIcon">&#x2B07;</div>
             <div id="dropText" data-i18n="dropSupported">放開以載入檔案</div>
@@ -615,8 +741,25 @@ const I18N = {
         zoomHint: '滾輪縮放 · 拖曳平移 · 雙擊還原',
         cursorPan: '拖曳',
         cursorInspect: '數值',
+        cursorProfile: '剖面',
         cursorPanTitle: '拖曳模式：可平移圖片',
         cursorInspectTitle: '數值模式：顯示鼠標位置的像素數值',
+        cursorProfileTitle: '剖面模式：在圖像上拉一條線，顯示沿線的數值剖面',
+        profileTitle: '剖面',
+        profileClear: '清除',
+        profileHint: '剖面模式：按住左鍵在圖像上拖曳一條線',
+        profileHintScatter: '剖面模式：在點雲上拖曳一條線，帶寬內的點將投影成剖面',
+        profileLength: '長度',
+        profileSamples: '取樣點',
+        profileRange: '值域',
+        profileBand: '帶寬',
+        profilePointsInBand: '帶內點數',
+        profileAxisDist: '距離 (px)',
+        profileAxisDistWorld: '距離',
+        profileAxisValue: '數值',
+        profilePcdUnsupported: '散布點雲不支援剖面，請載入影像（高度圖）',
+        profileNoValid: '所選線段上沒有有效數值',
+        profileNoPoints: '帶寬內沒有任何點，請加大帶寬或重拉線段',
         valueLabel: '數值',
         valuePos: '位置',
         sideProgress: '進度',
@@ -697,8 +840,25 @@ const I18N = {
         zoomHint: 'Scroll to zoom · Drag to pan · Double-click to reset',
         cursorPan: 'Pan',
         cursorInspect: 'Inspect',
+        cursorProfile: 'Profile',
         cursorPanTitle: 'Pan mode: drag to move the image',
         cursorInspectTitle: 'Inspect mode: show pixel value at cursor',
+        cursorProfileTitle: 'Profile mode: drag a line on the image to see the value profile along it',
+        profileTitle: 'Profile',
+        profileClear: 'Clear',
+        profileHint: 'Profile mode: hold the left button and drag a line on the image',
+        profileHintScatter: 'Profile mode: drag a line on the point cloud; points within the band are projected onto it',
+        profileLength: 'Length',
+        profileSamples: 'Samples',
+        profileRange: 'Range',
+        profileBand: 'Band',
+        profilePointsInBand: 'Pts in band',
+        profileAxisDist: 'Distance (px)',
+        profileAxisDistWorld: 'Distance',
+        profileAxisValue: 'Value',
+        profilePcdUnsupported: 'Profile is not available for scatter point clouds; load an image (height map)',
+        profileNoValid: 'No valid values along the selected line',
+        profileNoPoints: 'No points within the band; widen the band or redraw the line',
         valueLabel: 'Value',
         valuePos: 'Pos',
         sideProgress: 'Progress',
@@ -822,8 +982,15 @@ function applyLanguage(lang) {
     // 鼠標模式切換按鈕的 title
     const cursorPanBtn = document.querySelector('#cursorToggle button[data-cursor="pan"]');
     const cursorInspectBtn = document.querySelector('#cursorToggle button[data-cursor="inspect"]');
+    const cursorProfileBtn = document.querySelector('#cursorToggle button[data-cursor="profile"]');
     if (cursorPanBtn) cursorPanBtn.title = t('cursorPanTitle');
     if (cursorInspectBtn) cursorInspectBtn.title = t('cursorInspectTitle');
+    if (cursorProfileBtn) cursorProfileBtn.title = t('cursorProfileTitle');
+
+    // 剖面面板若開啟中則重新繪製（更新語系文字）
+    if (typeof profileState !== 'undefined' && profileState && profileState.data) {
+        renderProfileChart();
+    }
 
     // 計算機輸入框 placeholder
     const calcOperandInput = document.getElementById('calcOperand');
@@ -2549,6 +2716,16 @@ function scatterWorldToScreen(wx, wy) {
     };
 }
 
+/** 螢幕(viewer CSS) 座標 → 世界座標（scatterWorldToScreen 的逆運算） */
+function scatterScreenToWorld(sx, sy) {
+    const halfW = scatterView.screenW * 0.5;
+    const halfH = scatterView.screenH * 0.5;
+    return {
+        wx: scatterView.centerX + (sx - halfW) * scatterView.worldPerPx,
+        wy: scatterView.centerY - (sy - halfH) * scatterView.worldPerPx,
+    };
+}
+
 function scatterZoomAt(screenX, screenY, zoomFactor) {
     const worldX = scatterView.centerX + (screenX - scatterView.screenW * 0.5) * scatterView.worldPerPx;
     const worldY = scatterView.centerY - (screenY - scatterView.screenH * 0.5) * scatterView.worldPerPx;
@@ -2587,11 +2764,13 @@ function applyTransform() {
         canvas.style.transform = 'none';
         const pct = (scatterView.baseWorldPerPx / scatterView.worldPerPx) * 100;
         ind.textContent = (pct >= 100 ? pct.toFixed(0) : pct.toFixed(1)) + '%';
+        drawProfileOverlay();
         return;
     }
 
     canvas.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
     ind.textContent = (view.scale * 100).toFixed(view.scale >= 1 ? 0 : 1) + '%';
+    drawProfileOverlay();
 }
 
 function fitImageToViewer() {
@@ -2660,6 +2839,9 @@ function render(dataset, cmap, resetView = false) {
         renderPcdScatter(dataset, cmap);
     } else {
         canvas.classList.remove('scatter-view');
+        // 清除散布模式遺留的行內尺寸，讓影像 canvas 依點陣大小 + transform 縮放顯示
+        canvas.style.width = '';
+        canvas.style.height = '';
         renderPixels(dataset, cmap);
     }
 
@@ -2794,6 +2976,7 @@ async function loadFile(file) {
         const { vmin, vmax } = computeRange(rangeSrc);
         currentDataset = { ...result, vmin, vmax, filename: file.name };
 
+        if (typeof clearProfile === 'function') clearProfile();
         render(currentDataset, cmapSelect.value, true);
         const infoExtra = result.type === 'pcd-scatter'
             ? { pointCount: result.pointCount } : null;
@@ -2957,6 +3140,8 @@ window.addEventListener('resize', () => {
     } else {
         fitImageToViewer();
     }
+    if (typeof drawProfileOverlay === 'function') drawProfileOverlay();
+    if (typeof profileState !== 'undefined' && profileState.data) renderProfileChart();
 });
 
 /* 視窗／版面變化時更新散布畫布（筆電高 DPI、側欄縮放等） */
@@ -3126,9 +3311,508 @@ viewerEl.addEventListener('mouseleave', () => {
 });
 
 
+/* ---------- 剖面 (profile) 模式 ---------- */
+
+const overlayEl     = document.getElementById('overlay');
+const profilePanel  = document.getElementById('profilePanel');
+const profileCanvas = document.getElementById('profileCanvas');
+const profileTip    = document.getElementById('profileTip');
+const profileMeta   = document.getElementById('profileMeta');
+const profileClearBtn = document.getElementById('profileClear');
+const profileBandWrap = document.getElementById('profileBandWrap');
+const profileBandInput = document.getElementById('profileBand');
+
+/** 剖面狀態
+ *  space : 'image' → line 以影像像素座標記錄；'world' → 以點雲世界座標記錄
+ *  line  : { x0,y0,x1,y1 } 端點（隨縮放/平移保持貼合）
+ *  data  : 取樣結果
+ *          影像： { dist, vals, vmin, vmax, distPx, N, anyValid, scatter:false }
+ *          點雲： { dist, vals, wx, wy, vmin, vmax, distPx, N, anyValid, scatter:true, halfW }
+ *  halfW : 點雲緩衝帶半寬（世界單位）
+ *  geom  : 圖表繪製幾何，供 hover 換算
+ */
+const profileState = {
+    drawing: false,
+    space: 'image',
+    line: null,
+    data: null,
+    geom: null,
+    hoverIndex: null,
+    halfW: 0,
+};
+
+/** 在已排序(遞增)的 dist 陣列中找最接近 target 的索引 */
+function nearestDistIndex(dist, target) {
+    const n = dist.length;
+    if (n === 0) return 0;
+    if (target <= dist[0]) return 0;
+    if (target >= dist[n - 1]) return n - 1;
+    let lo = 0, hi = n - 1;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (dist[mid] < target) lo = mid + 1; else hi = mid - 1;
+    }
+    const a = hi < 0 ? 0 : hi;
+    const b = lo >= n ? n - 1 : lo;
+    return (target - dist[a] <= dist[b] - target) ? a : b;
+}
+
+/** 影像像素座標 → viewer CSS 座標 */
+function imgToViewerPx(px, py) {
+    return { x: px * view.scale + view.tx, y: py * view.scale + view.ty };
+}
+/** viewer CSS 座標 → 影像像素座標 */
+function viewerToImgPx(mx, my) {
+    return { x: (mx - view.tx) / view.scale, y: (my - view.ty) / view.scale };
+}
+/** 限制座標於影像範圍內 */
+function clampToImage(p) {
+    if (!currentDataset) return p;
+    const w = currentDataset.width, h = currentDataset.height;
+    return {
+        x: Math.max(0, Math.min(w - 1, p.x)),
+        y: Math.max(0, Math.min(h - 1, p.y)),
+    };
+}
+
+/** 線端點座標 → viewer CSS 座標（依目前 space 換算） */
+function profilePtToScreen(px, py) {
+    if (profileState.space === 'world') {
+        const s = scatterWorldToScreen(px, py);
+        return { x: s.sx, y: s.sy };
+    }
+    return imgToViewerPx(px, py);
+}
+
+/** 在疊加層上重畫剖面線（端點、線段、緩衝帶、hover 標記） */
+function drawProfileOverlay() {
+    if (!overlayEl) return;
+    const ctx = overlayEl.getContext('2d');
+    const rect = viewerEl.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const bw = Math.max(1, Math.round(rect.width * dpr));
+    const bh = Math.max(1, Math.round(rect.height * dpr));
+    if (overlayEl.width !== bw) overlayEl.width = bw;
+    if (overlayEl.height !== bh) overlayEl.height = bh;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    if (!profileState.line || !currentDataset) {
+        overlayEl.classList.remove('show');
+        return;
+    }
+    overlayEl.classList.add('show');
+
+    const L = profileState.line;
+    const a = profilePtToScreen(L.x0, L.y0);
+    const b = profilePtToScreen(L.x1, L.y1);
+
+    // 點雲：先畫緩衝帶（半透明走廊）
+    if (profileState.space === 'world' && profileState.halfW > 0) {
+        const dx = L.x1 - L.x0, dy = L.y1 - L.y0;
+        const len = Math.hypot(dx, dy);
+        if (len > 0) {
+            const nx = -dy / len, ny = dx / len; // 單位法向量（世界座標）
+            const hw = profileState.halfW;
+            const c0 = profilePtToScreen(L.x0 + nx * hw, L.y0 + ny * hw);
+            const c1 = profilePtToScreen(L.x1 + nx * hw, L.y1 + ny * hw);
+            const c2 = profilePtToScreen(L.x1 - nx * hw, L.y1 - ny * hw);
+            const c3 = profilePtToScreen(L.x0 - nx * hw, L.y0 - ny * hw);
+            ctx.beginPath();
+            ctx.moveTo(c0.x, c0.y); ctx.lineTo(c1.x, c1.y);
+            ctx.lineTo(c2.x, c2.y); ctx.lineTo(c3.x, c3.y); ctx.closePath();
+            ctx.fillStyle = 'rgba(79,140,255,0.15)';
+            ctx.fill();
+            ctx.setLineDash([5, 4]);
+            ctx.strokeStyle = 'rgba(79,140,255,0.7)'; ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+    }
+
+    // 線段：先描黑底再描藍線，確保各種背景下都清晰
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 4; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = '#4f8cff'; ctx.lineWidth = 2; ctx.stroke();
+
+    // 端點
+    for (const p of [a, b]) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#4f8cff'; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+    }
+
+    // hover 標記（與圖表連動）
+    const d = profileState.data;
+    if (profileState.hoverIndex != null && d && d.N > 0) {
+        const i = profileState.hoverIndex;
+        let hx, hy;
+        if (d.scatter) {
+            hx = d.wx[i]; hy = d.wy[i];
+        } else {
+            const tt = d.N > 1 ? i / (d.N - 1) : 0;
+            hx = L.x0 + (L.x1 - L.x0) * tt;
+            hy = L.y0 + (L.y1 - L.y0) * tt;
+        }
+        const hp = profilePtToScreen(hx, hy);
+        ctx.beginPath(); ctx.arc(hp.x, hp.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffd24a'; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#000'; ctx.stroke();
+    }
+}
+
+/** 沿線段取樣影像數值（最近鄰），回傳剖面資料 */
+function sampleProfile(line) {
+    const { width, height, data } = currentDataset;
+    const dx = line.x1 - line.x0, dy = line.y1 - line.y0;
+    const distPx = Math.hypot(dx, dy);
+    const N = Math.max(2, Math.ceil(distPx));
+    const dist = new Float32Array(N);
+    const vals = new Float32Array(N);
+    let vmin = Infinity, vmax = -Infinity, anyValid = false;
+
+    for (let i = 0; i < N; i++) {
+        const tt = N > 1 ? i / (N - 1) : 0;
+        const fx = line.x0 + dx * tt;
+        const fy = line.y0 + dy * tt;
+        const px = Math.round(fx), py = Math.round(fy);
+        let v = NaN;
+        if (px >= 0 && py >= 0 && px < width && py < height) {
+            v = data[py * width + px];
+        }
+        dist[i] = distPx * tt;
+        vals[i] = v;
+        if (Number.isFinite(v)) {
+            anyValid = true;
+            if (v < vmin) vmin = v;
+            if (v > vmax) vmax = v;
+        }
+    }
+    if (!anyValid) { vmin = 0; vmax = 1; }
+    else if (vmin === vmax) { vmin -= 0.5; vmax += 0.5; }
+    return { dist, vals, vmin, vmax, distPx, N, anyValid, scatter: false };
+}
+
+/** 點雲剖面：緩衝帶投影
+ *  把落在「線段 ± halfW」走廊內的點，投影到線上，
+ *  以沿線距離為 X、z 值為 Y。
+ */
+function sampleProfileScatter(line, halfW) {
+    const { x, y, z } = currentDataset;
+    const n = z.length;
+    const dx = line.x1 - line.x0, dy = line.y1 - line.y0;
+    const len = Math.hypot(dx, dy);
+    const ux = len > 0 ? dx / len : 0;
+    const uy = len > 0 ? dy / len : 0;
+
+    const items = [];
+    let vmin = Infinity, vmax = -Infinity;
+    for (let i = 0; i < n; i++) {
+        const rx = x[i] - line.x0, ry = y[i] - line.y0;
+        const tproj = rx * ux + ry * uy;          // 沿線投影距離
+        if (tproj < 0 || tproj > len) continue;
+        const perp = rx * (-uy) + ry * ux;        // 垂直距離（帶符號）
+        if (perp < -halfW || perp > halfW) continue;
+        const v = z[i];
+        items.push({ d: tproj, v, wx: x[i], wy: y[i] });
+        if (Number.isFinite(v)) { if (v < vmin) vmin = v; if (v > vmax) vmax = v; }
+    }
+    items.sort((p, q) => p.d - q.d);
+
+    const N = items.length;
+    const dist = new Float32Array(N);
+    const vals = new Float32Array(N);
+    const wx = new Float32Array(N);
+    const wy = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+        dist[i] = items[i].d; vals[i] = items[i].v;
+        wx[i] = items[i].wx; wy[i] = items[i].wy;
+    }
+    const anyValid = N > 0 && Number.isFinite(vmin);
+    if (!anyValid) { vmin = 0; vmax = 1; }
+    else if (vmin === vmax) { vmin -= 0.5; vmax += 0.5; }
+    return { dist, vals, wx, wy, vmin, vmax, distPx: len, N, anyValid, scatter: true, halfW };
+}
+
+/** 繪製剖面圖（座標軸、格線、折線/散點），並更新面板資訊 */
+function renderProfileChart() {
+    const d = profileState.data;
+    if (!d) { profilePanel.classList.remove('show'); return; }
+    profilePanel.classList.add('show');
+
+    // 點雲模式顯示帶寬輸入框
+    profileBandWrap.style.display = d.scatter ? 'inline-flex' : 'none';
+
+    if (d.scatter) {
+        profileMeta.textContent =
+            `${t('profileLength')}: ${formatValue(d.distPx)} · ` +
+            `${t('profilePointsInBand')}: ${d.N} · ` +
+            `${t('profileRange')}: ${formatValue(d.vmin)} ~ ${formatValue(d.vmax)}`;
+    } else {
+        profileMeta.textContent =
+            `${t('profileLength')}: ${d.distPx.toFixed(1)} px · ` +
+            `${t('profileSamples')}: ${d.N} · ` +
+            `${t('profileRange')}: ${formatValue(d.vmin)} ~ ${formatValue(d.vmax)}`;
+    }
+
+    const canvas = profileCanvas;
+    const dpr = window.devicePixelRatio || 1;
+    const cw = canvas.clientWidth || canvas.parentElement.clientWidth || 600;
+    const ch = canvas.clientHeight || 160;
+    const bw = Math.max(1, Math.round(cw * dpr));
+    const bh = Math.max(1, Math.round(ch * dpr));
+    if (canvas.width !== bw) canvas.width = bw;
+    if (canvas.height !== bh) canvas.height = bh;
+
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cw, ch);
+
+    const padL = 54, padR = 12, padT = 10, padB = 24;
+    const plotW = Math.max(1, cw - padL - padR);
+    const plotH = Math.max(1, ch - padT - padB);
+    const x0 = padL, y0 = padT;
+    profileState.geom = { padL, padT, plotW, plotH, cw, ch };
+
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.fillRect(x0, y0, plotW, plotH);
+
+    ctx.font = '11px Consolas, monospace';
+    ctx.lineWidth = 1;
+
+    // Y 軸格線 + 數值標籤
+    const yticks = 4;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let i = 0; i <= yticks; i++) {
+        const tt = i / yticks;
+        const py = y0 + plotH * tt;
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.beginPath(); ctx.moveTo(x0, py); ctx.lineTo(x0 + plotW, py); ctx.stroke();
+        const val = d.vmax - (d.vmax - d.vmin) * tt;
+        ctx.fillStyle = '#9a9ab0';
+        ctx.fillText(formatValue(val), x0 - 6, py);
+    }
+
+    // X 軸格線 + 距離標籤
+    const xticks = 5;
+    const distPx = d.distPx || 1;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let i = 0; i <= xticks; i++) {
+        const tt = i / xticks;
+        const px = x0 + plotW * tt;
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.beginPath(); ctx.moveTo(px, y0); ctx.lineTo(px, y0 + plotH); ctx.stroke();
+        ctx.fillStyle = '#9a9ab0';
+        const lbl = d.scatter ? formatValue(d.distPx * tt) : (d.distPx * tt).toFixed(0);
+        ctx.fillText(lbl, px, y0 + plotH + 5);
+    }
+
+    const range = (d.vmax - d.vmin) || 1;
+
+    if (d.scatter) {
+        // 散點：每個帶內點畫一個小圓點（X 用沿線距離，故間距不均）
+        ctx.fillStyle = '#4f8cff';
+        for (let i = 0; i < d.N; i++) {
+            const v = d.vals[i];
+            if (!Number.isFinite(v)) continue;
+            const px = x0 + (d.dist[i] / distPx) * plotW;
+            const py = y0 + (1 - (v - d.vmin) / range) * plotH;
+            ctx.beginPath(); ctx.arc(px, py, 1.8, 0, Math.PI * 2); ctx.fill();
+        }
+    } else {
+        // 折線（遇 NaN 斷開）
+        ctx.strokeStyle = '#4f8cff'; ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < d.N; i++) {
+            const v = d.vals[i];
+            if (!Number.isFinite(v)) { started = false; continue; }
+            const px = x0 + (d.dist[i] / distPx) * plotW;
+            const py = y0 + (1 - (v - d.vmin) / range) * plotH;
+            if (!started) { ctx.moveTo(px, py); started = true; }
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+    }
+
+    if (profileState.hoverIndex != null) drawProfileChartCrosshair();
+}
+
+/** 在剖面圖上畫 hover 垂直線與點 */
+function drawProfileChartCrosshair() {
+    const d = profileState.data, g = profileState.geom;
+    if (!d || !g || profileState.hoverIndex == null) return;
+    const ctx = profileCanvas.getContext('2d');
+    const i = profileState.hoverIndex;
+    const frac = (d.distPx > 0) ? (d.dist[i] / d.distPx) : 0;
+    const px = g.padL + frac * g.plotW;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,210,74,0.85)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, g.padT); ctx.lineTo(px, g.padT + g.plotH); ctx.stroke();
+    const v = d.vals[i];
+    if (Number.isFinite(v)) {
+        const range = (d.vmax - d.vmin) || 1;
+        const py = g.padT + (1 - (v - d.vmin) / range) * g.plotH;
+        ctx.fillStyle = '#ffd24a';
+        ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+}
+
+/** 清除剖面線與圖表 */
+function clearProfile() {
+    profileState.drawing = false;
+    profileState.line = null;
+    profileState.data = null;
+    profileState.geom = null;
+    profileState.hoverIndex = null;
+    profileTip.classList.remove('show');
+    profilePanel.classList.remove('show');
+    if (profileBandWrap) profileBandWrap.style.display = 'none';
+    drawProfileOverlay();
+}
+
+// 在圖表上 hover：顯示對應距離/數值，並連動影像上的標記
+profileCanvas.addEventListener('mousemove', (e) => {
+    const d = profileState.data, g = profileState.geom;
+    if (!d || !g) return;
+    if (d.N === 0) return;
+    const rect = profileCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    let frac = (mx - g.padL) / g.plotW;
+    if (frac < 0) frac = 0; else if (frac > 1) frac = 1;
+    const idx = nearestDistIndex(d.dist, frac * d.distPx);
+    profileState.hoverIndex = idx;
+    renderProfileChart();
+    drawProfileOverlay();
+
+    const v = d.vals[idx];
+    const distLabel = d.scatter ? t('profileAxisDistWorld') : t('profileAxisDist');
+    profileTip.innerHTML =
+        `<div><span class="k">${distLabel}:</span>${formatValue(d.dist[idx])}</div>` +
+        `<div><span class="k">${t('valueLabel')}:</span>${formatValue(v)}</div>`;
+    profileTip.classList.add('show');
+
+    const plotRect = profileCanvas.parentElement.getBoundingClientRect();
+    const tw = profileTip.offsetWidth, th = profileTip.offsetHeight;
+    let left = (e.clientX - plotRect.left) + 12;
+    let top  = (e.clientY - plotRect.top) + 12;
+    if (left + tw > plotRect.width - 4)  left = (e.clientX - plotRect.left) - tw - 12;
+    if (top  + th > plotRect.height - 4) top  = (e.clientY - plotRect.top) - th - 12;
+    if (left < 2) left = 2;
+    if (top  < 2) top  = 2;
+    profileTip.style.left = left + 'px';
+    profileTip.style.top  = top + 'px';
+});
+
+profileCanvas.addEventListener('mouseleave', () => {
+    profileState.hoverIndex = null;
+    profileTip.classList.remove('show');
+    renderProfileChart();
+    drawProfileOverlay();
+});
+
+profileClearBtn.addEventListener('click', clearProfile);
+
+/** 把滑鼠位置換成目前 space 的線端點座標 */
+function profileMouseToPt(clientX, clientY) {
+    const rect = viewerEl.getBoundingClientRect();
+    const mx = clientX - rect.left, my = clientY - rect.top;
+    if (isPcdScatterDataset(currentDataset)) {
+        const w = scatterScreenToWorld(mx, my);
+        return { x: w.wx, y: w.wy };
+    }
+    return clampToImage(viewerToImgPx(mx, my));
+}
+
+/** 依目前線段重新取樣並繪製 */
+function recomputeProfile() {
+    const L = profileState.line;
+    if (!L || !currentDataset) return;
+    if (profileState.space === 'world') {
+        profileState.data = sampleProfileScatter(L, profileState.halfW);
+        if (profileState.data.N === 0) showToast(t('profileNoPoints'), 'info');
+    } else {
+        profileState.data = sampleProfile(L);
+        if (!profileState.data.anyValid) showToast(t('profileNoValid'), 'info');
+    }
+    if (profileState.hoverIndex != null && profileState.hoverIndex >= profileState.data.N) {
+        profileState.hoverIndex = null;
+    }
+    renderProfileChart();
+    drawProfileOverlay();
+}
+
+// 在影像/點雲上拉線
+viewerEl.addEventListener('mousedown', (e) => {
+    if (cursorMode !== 'profile') return;
+    if (e.button !== 0) return;
+    if (!currentDataset) return;
+    if (e.target.closest && e.target.closest('.profile-panel')) return;
+
+    const scatter = isPcdScatterDataset(currentDataset);
+    profileState.space = scatter ? 'world' : 'image';
+    // 點雲：若尚未設定帶寬，預設為約 8 螢幕像素對應的世界寬度
+    if (scatter && !(profileState.halfW > 0)) {
+        profileState.halfW = 8 * scatterView.worldPerPx;
+    }
+
+    const p = profileMouseToPt(e.clientX, e.clientY);
+    profileState.drawing = true;
+    profileState.line = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+    profileState.data = null;
+    profileState.geom = null;
+    profileState.hoverIndex = null;
+    profileTip.classList.remove('show');
+    drawProfileOverlay();
+    e.preventDefault();
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (!profileState.drawing) return;
+    const p = profileMouseToPt(e.clientX, e.clientY);
+    profileState.line.x1 = p.x;
+    profileState.line.y1 = p.y;
+    drawProfileOverlay();
+});
+
+window.addEventListener('mouseup', () => {
+    if (!profileState.drawing) return;
+    profileState.drawing = false;
+    const L = profileState.line;
+    const lineLen = Math.hypot(L.x1 - L.x0, L.y1 - L.y0);
+    // 影像以 1 像素為門檻；點雲以「對應 3 螢幕像素的世界長度」為門檻
+    const minLen = profileState.space === 'world' ? 3 * scatterView.worldPerPx : 1;
+    if (lineLen < minLen) {
+        // 太短視為取消
+        profileState.line = null;
+        profilePanel.classList.remove('show');
+        if (profileBandWrap) profileBandWrap.style.display = 'none';
+        drawProfileOverlay();
+        return;
+    }
+    if (profileState.space === 'world') {
+        profileBandInput.value = formatValue(profileState.halfW * 2);
+    }
+    recomputeProfile();
+});
+
+// 調整帶寬 → 重新取樣（僅點雲）
+profileBandInput.addEventListener('input', () => {
+    if (profileState.space !== 'world' || !profileState.line) return;
+    const full = parseFloat(profileBandInput.value);
+    if (!Number.isFinite(full) || full < 0) return;
+    profileState.halfW = full / 2;
+    recomputeProfile();
+});
+
+
 /** 切換鼠標模式 */
 function applyCursorMode(mode) {
-    if (mode !== 'pan' && mode !== 'inspect') mode = 'pan';
+    if (mode !== 'pan' && mode !== 'inspect' && mode !== 'profile') mode = 'pan';
+
     cursorMode = mode;
 
     // 更新按鈕 active 狀態
@@ -3136,8 +3820,10 @@ function applyCursorMode(mode) {
         b.classList.toggle('active', b.getAttribute('data-cursor') === mode);
     });
 
-    // Canvas 鼠標樣式：pan → grab (CSS 預設)；inspect → 原始箭頭
+    // Canvas 鼠標樣式：pan → grab (CSS 預設)；inspect → 原始箭頭；profile → 十字
     canvasEl.classList.toggle('inspect-mode', mode === 'inspect');
+    canvasEl.classList.toggle('profile-mode', mode === 'profile');
+    viewerEl.classList.toggle('profile-mode', mode === 'profile');
 
     // 切離 inspect 模式時隱藏數值顯示器
     if (mode !== 'inspect') {
@@ -3148,6 +3834,14 @@ function applyCursorMode(mode) {
     if (mode === 'pan' && panning) {
         panning = false;
         canvasEl.classList.remove('grabbing');
+    }
+
+    // 進入剖面模式時顯示提示；離開時取消任何進行中的拉線
+    if (mode === 'profile') {
+        const hint = isPcdScatterDataset(currentDataset) ? 'profileHintScatter' : 'profileHint';
+        showToast(t(hint), 'info');
+    } else if (profileState.drawing) {
+        profileState.drawing = false;
     }
 }
 
