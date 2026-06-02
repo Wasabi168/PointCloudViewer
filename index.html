@@ -272,6 +272,83 @@
         margin-top: 2px;
     }
 
+    /* 可調整色階範圍 */
+    .colorbar-adjust {
+        margin-top: 12px;
+    }
+    .colorbar-track {
+        position: relative;
+        height: 14px;
+        margin: 24px 8px 16px;
+    }
+    .colorbar-track canvas {
+        display: block;
+        width: 100%;
+        height: 14px;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+    }
+    .cb-handle {
+        position: absolute;
+        top: -4px;
+        left: 0;
+        width: 3px;
+        height: 22px;
+        background: #fff;
+        border-radius: 2px;
+        box-shadow: 0 0 3px rgba(0, 0, 0, .85);
+        transform: translateX(-50%);
+        cursor: ew-resize;
+        touch-action: none;
+        z-index: 2;
+    }
+    .cb-handle::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: -7px;
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: #fff;
+        border: 1px solid var(--border);
+        transform: translateX(-50%);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, .6);
+    }
+    .cb-handle:hover::after,
+    .cb-handle.dragging::after {
+        background: var(--accent);
+    }
+    .cb-handle-val {
+        position: absolute;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 11px;
+        line-height: 1;
+        color: var(--fg);
+        background: #2a2a38;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 2px 4px;
+        white-space: nowrap;
+        pointer-events: none;
+    }
+    .cb-reset {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 3px 8px;
+        cursor: pointer;
+    }
+    .cb-reset:hover {
+        color: var(--fg);
+        border-color: var(--accent);
+    }
+
     .status {
         font-size: 13px;
         color: var(--muted);
@@ -658,14 +735,21 @@
         <div class="status" id="status">尚未載入檔案</div>
 
         <h2 style="margin-top:20px;" data-i18n="sideColorbar">色階 (Z 值)</h2>
-        <div class="colorbar">
-            <canvas id="colorbarCanvas" width="240" height="14"></canvas>
-        </div>
-        <div class="colorbar">
-            <div class="minmax" style="flex:1;">
+        <div class="colorbar-adjust">
+            <div class="colorbar-track" id="colorbarTrack">
+                <canvas id="colorbarCanvas" width="240" height="14"></canvas>
+                <div class="cb-handle" id="cbHandleLo" data-which="lo">
+                    <span class="cb-handle-val" id="cbValLo"></span>
+                </div>
+                <div class="cb-handle" id="cbHandleHi" data-which="hi">
+                    <span class="cb-handle-val" id="cbValHi"></span>
+                </div>
+            </div>
+            <div class="minmax">
                 <span id="zMin">-</span>
                 <span id="zMax">-</span>
             </div>
+            <button type="button" class="cb-reset" id="cbReset" data-i18n="colorbarReset">重設色階範圍</button>
         </div>
 
         <h2 style="margin-top:20px;" data-i18n="sideInfo">檔案資訊</h2>
@@ -764,6 +848,7 @@ const I18N = {
         valuePos: '位置',
         sideProgress: '進度',
         sideColorbar: '色階 (Z 值)',
+        colorbarReset: '重設色階範圍',
         sideInfo: '檔案資訊',
         infoSize: '影像尺寸',
         statusIdle: '尚未載入檔案',
@@ -863,6 +948,7 @@ const I18N = {
         valuePos: 'Pos',
         sideProgress: 'Progress',
         sideColorbar: 'Color scale (Z)',
+        colorbarReset: 'Reset color range',
         sideInfo: 'File Info',
         infoSize: 'Image size',
         statusIdle: 'No file loaded',
@@ -2567,7 +2653,7 @@ function renderPcdScatter(dataset, cmap) {
     const img = ctx.createImageData(bw, bh);
     const px = img.data;
     const lut = buildColormapLut(cmap);
-    const range = vmax - vmin;
+    const { cmin, crange } = effectiveColorRange(dataset);
     const rBuf = R > 0 ? R * dpr : 0;
 
     const screenX = new Int16Array(n);
@@ -2585,7 +2671,7 @@ function renderPcdScatter(dataset, cmap) {
         const bx = Math.round(sx * dpr);
         const by = Math.round(sy * dpr);
 
-        let t = (z[i] - vmin) / range;
+        let t = (z[i] - cmin) / crange;
         if (t < 0) t = 0; else if (t > 1) t = 1;
         const li = (t * 255) | 0;
         const lo = li * 3;
@@ -2646,6 +2732,18 @@ function findNearestPcdPoint(dataset, canvasPx, canvasPy) {
  * ========================================================================= */
 
 let currentDataset = null;   // { data, width, height, vmin, vmax, header }
+
+/* 色階顯示範圍：以資料 [vmin, vmax] 的比例表示（0~1）。
+ * 拖曳 colorbar 上的兩個標籤即可調整哪段數值對應整條色帶。*/
+const colorClip = { lo: 0, hi: 1 };
+
+/** 依目前 colorClip 換算實際的色階上下界與區間 */
+function effectiveColorRange(dataset) {
+    const span = (dataset.vmax - dataset.vmin) || 1;
+    const cmin = dataset.vmin + colorClip.lo * span;
+    const cmax = dataset.vmin + colorClip.hi * span;
+    return { cmin, cmax, crange: (cmax > cmin) ? (cmax - cmin) : 1e-12 };
+}
 
 function computeRange(data) {
     let vmin = Infinity, vmax = -Infinity;
@@ -2804,7 +2902,7 @@ function renderPixels(dataset, cmap) {
     canvas.height = height;
 
     const img = ctx.createImageData(width, height);
-    const range = vmax - vmin;
+    const { cmin, crange } = effectiveColorRange(dataset);
 
     const lut = buildColormapLut(cmap);
     const px = img.data;
@@ -2816,7 +2914,7 @@ function renderPixels(dataset, cmap) {
             px[po + 3] = 255;
             continue;
         }
-        let t = (v - vmin) / range;
+        let t = (v - cmin) / crange;
         if (t < 0) t = 0; else if (t > 1) t = 1;
         const idx = (t * 255) | 0;
         const lo = idx * 3;
@@ -2856,6 +2954,7 @@ function render(dataset, cmap, resetView = false) {
     renderColorbar(cmap);
     document.getElementById('zMin').textContent = dataset.vmin.toFixed(4);
     document.getElementById('zMax').textContent = dataset.vmax.toFixed(4);
+    syncColorbarHandles();
 }
 
 function renderColorbar(cmap) {
@@ -2863,8 +2962,15 @@ function renderColorbar(cmap) {
     const ctx = cb.getContext('2d');
     const w = cb.width, h = cb.height;
     const img = ctx.createImageData(w, h);
+    // 色帶橫軸代表完整資料範圍；漸層只壓縮在 [lo, hi] 之間，
+    // 兩游標越靠近，整條色彩被擠進越小的數值區間 = 對比越高。
+    const lo = colorClip.lo, hi = colorClip.hi;
+    const span = (hi > lo) ? (hi - lo) : 1e-12;
     for (let x = 0; x < w; x++) {
-        const [r, g, b] = sampleColormap(cmap, x / (w - 1));
+        const f = x / (w - 1);              // 0~1 對應 vmin~vmax
+        let t = (f - lo) / span;            // 映射到色彩漸層位置
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        const [r, g, b] = sampleColormap(cmap, t);
         for (let y = 0; y < h; y++) {
             const p = (y * w + x) * 4;
             img.data[p]     = Math.round(r * 255);
@@ -2874,6 +2980,106 @@ function renderColorbar(cmap) {
         }
     }
     ctx.putImageData(img, 0, 0);
+}
+
+/** 依 colorClip 更新兩個標籤的位置與數值文字 */
+function syncColorbarHandles() {
+    const hLo = document.getElementById('cbHandleLo');
+    const hHi = document.getElementById('cbHandleHi');
+    const valLo = document.getElementById('cbValLo');
+    const valHi = document.getElementById('cbValHi');
+    if (!hLo || !hHi) return;
+
+    hLo.style.left = (colorClip.lo * 100) + '%';
+    hHi.style.left = (colorClip.hi * 100) + '%';
+
+    if (currentDataset) {
+        const span = currentDataset.vmax - currentDataset.vmin;
+        const lo = currentDataset.vmin + colorClip.lo * span;
+        const hi = currentDataset.vmin + colorClip.hi * span;
+        valLo.textContent = lo.toFixed(3);
+        valHi.textContent = hi.toFixed(3);
+    } else {
+        valLo.textContent = '';
+        valHi.textContent = '';
+    }
+}
+
+/** 重設色階顯示範圍為完整資料範圍 */
+function resetColorClip(rerender = true) {
+    colorClip.lo = 0;
+    colorClip.hi = 1;
+    if (rerender && currentDataset) {
+        render(currentDataset, cmapSelect.value, false);
+    } else {
+        syncColorbarHandles();
+    }
+}
+
+/** 綁定 colorbar 兩個標籤的拖曳行為 */
+function setupColorbarHandles() {
+    const track = document.getElementById('colorbarTrack');
+    const hLo = document.getElementById('cbHandleLo');
+    const hHi = document.getElementById('cbHandleHi');
+    const resetBtn = document.getElementById('cbReset');
+    if (!track || !hLo || !hHi) return;
+
+    const MIN_GAP = 0.01;
+    let dragging = null;
+    let rafPending = false;
+
+    function fracFromClientX(clientX) {
+        const r = track.getBoundingClientRect();
+        if (r.width <= 0) return 0;
+        let f = (clientX - r.left) / r.width;
+        return Math.min(1, Math.max(0, f));
+    }
+
+    function scheduleRender() {
+        if (rafPending) return;
+        rafPending = true;
+        requestAnimationFrame(() => {
+            rafPending = false;
+            if (currentDataset) render(currentDataset, cmapSelect.value, false);
+            else syncColorbarHandles();
+        });
+    }
+
+    function onMove(e) {
+        if (!dragging) return;
+        const f = fracFromClientX(e.clientX);
+        if (dragging === 'lo') {
+            colorClip.lo = Math.min(f, colorClip.hi - MIN_GAP);
+            if (colorClip.lo < 0) colorClip.lo = 0;
+        } else {
+            colorClip.hi = Math.max(f, colorClip.lo + MIN_GAP);
+            if (colorClip.hi > 1) colorClip.hi = 1;
+        }
+        scheduleRender();
+    }
+
+    function endDrag() {
+        if (!dragging) return;
+        (dragging === 'lo' ? hLo : hHi).classList.remove('dragging');
+        dragging = null;
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', endDrag);
+    }
+
+    function startDrag(which, handle, e) {
+        dragging = which;
+        handle.classList.add('dragging');
+        e.preventDefault();
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', endDrag);
+    }
+
+    hLo.addEventListener('pointerdown', (e) => startDrag('lo', hLo, e));
+    hHi.addEventListener('pointerdown', (e) => startDrag('hi', hHi, e));
+
+    if (resetBtn) resetBtn.addEventListener('click', () => resetColorClip(true));
+
+    syncColorbarHandles();
 }
 
 function renderInfo(header, width, height, extra) {
@@ -2977,6 +3183,7 @@ async function loadFile(file) {
         currentDataset = { ...result, vmin, vmax, filename: file.name };
 
         if (typeof clearProfile === 'function') clearProfile();
+        resetColorClip(false);
         render(currentDataset, cmapSelect.value, true);
         const infoExtra = result.type === 'pcd-scatter'
             ? { pointCount: result.pointCount } : null;
@@ -3861,6 +4068,7 @@ viewerEl.addEventListener('dblclick', (e) => {
 
 // 初始繪製 colorbar
 renderColorbar(cmapSelect.value);
+setupColorbarHandles();
 
 // 語言切換
 document.querySelectorAll('#langToggle button').forEach(btn => {
