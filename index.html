@@ -50,6 +50,80 @@
         margin-left: auto;
     }
 
+    /* 工具列分群：群組內元件間距較小，群組之間以分隔線區隔 */
+    .ctrl-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .ctrl-sep {
+        width: 1px;
+        align-self: stretch;
+        min-height: 24px;
+        background: var(--border);
+        margin: 0 2px;
+    }
+
+    /* 帶標籤的下拉選單欄位（例如：色彩） */
+    .ctrl-field {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 13px;
+    }
+
+    /* 「更多」下拉 */
+    .more-wrap { position: relative; }
+    .more-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #3a3a4a;
+        color: var(--text);
+        border: 1px solid var(--border);
+    }
+    .more-btn:hover { background: #4a4a5c; }
+    .more-btn .more-caret {
+        font-size: 11px;
+        transition: transform 0.15s ease;
+    }
+    .more-wrap.open .more-btn {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+    }
+    .more-wrap.open .more-btn .more-caret { transform: rotate(180deg); }
+
+    .more-menu {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        min-width: 220px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+        padding: 12px;
+        display: none;
+        flex-direction: column;
+        gap: 12px;
+        z-index: 1500;
+    }
+    .more-wrap.open .more-menu { display: flex; }
+
+    .more-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        color: var(--muted);
+        font-size: 13px;
+    }
+    .more-item select { flex: 1; min-width: 0; }
+
     button, select, label.file-btn {
         background: var(--accent);
         color: #fff;
@@ -695,51 +769,79 @@
         <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg)</span>
     </h1>
     <div class="controls">
-        <label class="file-btn">
-            <span data-i18n="btnOpen">讀取檔案</span>
-            <input type="file" id="fileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
-        </label>
-
-        <label style="color:var(--muted);font-size:13px;">
-            <span data-i18n="labelColormap">色彩：</span>
-            <select id="colormap">
-                <option value="viridis">Viridis</option>
-                <option value="jet" selected>Jet</option>
-                <option value="hot">Hot</option>
-                <option value="gray">Gray</option>
-                <option value="inferno">Inferno</option>
-            </select>
-        </label>
-
-        <label style="color:var(--muted);font-size:13px;">
-            <span data-i18n="labelSaveFormat">儲存格式：</span>
-            <select id="saveFormat">
-                <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
-                <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
-                <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
-                <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
-                <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
-                <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
-            </select>
-        </label>
-        <button id="btnSave" data-i18n="btnSave">儲存</button>
-        <button id="btnCalc" data-i18n="btnCalc">計算機</button>
-
-        <div class="cursor-toggle" id="cursorToggle">
-            <button type="button" data-cursor="pan" class="active" data-i18n="cursorPan" title="拖曳模式">拖曳</button>
-            <button type="button" data-cursor="inspect" data-i18n="cursorInspect" title="數值顯示模式">數值</button>
-            <button type="button" data-cursor="profile" data-i18n="cursorProfile" title="剖面模式">剖面</button>
+        <!-- 群組：檔案 -->
+        <div class="ctrl-group">
+            <label class="file-btn">
+                <span data-i18n="btnOpen">讀取檔案</span>
+                <input type="file" id="fileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
+            </label>
+            <button id="btnSave" data-i18n="btnSave">儲存</button>
         </div>
 
-        <div class="cursor-toggle" id="minmaxToggle">
-            <button type="button" id="btnMinMax" data-i18n="btnMinMax" title="顯示 / 隱藏 Max 與 Min 數值點標記">Max/Min</button>
+        <span class="ctrl-sep" aria-hidden="true"></span>
+
+        <!-- 群組：顯示 -->
+        <div class="ctrl-group">
+            <label class="ctrl-field">
+                <span data-i18n="labelColormap">色彩：</span>
+                <select id="colormap">
+                    <option value="viridis">Viridis</option>
+                    <option value="jet" selected>Jet</option>
+                    <option value="hot">Hot</option>
+                    <option value="gray">Gray</option>
+                    <option value="inferno">Inferno</option>
+                </select>
+            </label>
+
+            <div class="cursor-toggle" id="viewModeToggle">
+                <button type="button" data-viewmode="2d" class="active" data-i18n="view2d" title="平面顯示">2D</button>
+                <button type="button" data-viewmode="3d" data-i18n="view3d" title="3D 立體顯示">3D</button>
+            </div>
         </div>
 
-        <div class="cursor-toggle" id="viewModeToggle">
-            <button type="button" data-viewmode="2d" class="active" data-i18n="view2d" title="平面顯示">2D</button>
-            <button type="button" data-viewmode="3d" data-i18n="view3d" title="3D 立體顯示">3D</button>
+        <span class="ctrl-sep" aria-hidden="true"></span>
+
+        <!-- 群組：工具 -->
+        <div class="ctrl-group">
+            <div class="cursor-toggle" id="cursorToggle">
+                <button type="button" data-cursor="pan" class="active" data-i18n="cursorPan" title="拖曳模式">拖曳</button>
+                <button type="button" data-cursor="inspect" data-i18n="cursorInspect" title="數值顯示模式">數值</button>
+                <button type="button" data-cursor="profile" data-i18n="cursorProfile" title="剖面模式">剖面</button>
+            </div>
+            <div class="cursor-toggle" id="minmaxToggle">
+                <button type="button" id="btnMinMax" data-i18n="btnMinMax" title="顯示 / 隱藏 Max 與 Min 數值點標記">Max/Min</button>
+            </div>
         </div>
 
+        <span class="ctrl-sep" aria-hidden="true"></span>
+
+        <!-- 群組：更多（收納次要選項） -->
+        <div class="ctrl-group more-wrap">
+            <button type="button" id="btnMore" class="more-btn" aria-haspopup="true" aria-expanded="false" data-i18n-title="btnMoreTitle" title="更多選項">
+                <span data-i18n="btnMore">更多</span>
+                <span class="more-caret" aria-hidden="true">▾</span>
+            </button>
+            <div class="more-menu" id="moreMenu" role="menu">
+                <label class="more-item" id="saveFormatItem">
+                    <span data-i18n="labelSaveFormat">儲存格式：</span>
+                    <select id="saveFormat">
+                        <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
+                        <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
+                        <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
+                        <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
+                        <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
+                        <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
+                    </select>
+                </label>
+                <div class="more-item">
+                    <button id="btnCalc" data-i18n="btnCalc">計算機</button>
+                </div>
+            </div>
+        </div>
+
+        <span class="ctrl-sep" aria-hidden="true"></span>
+
+        <!-- 群組：系統 -->
         <div class="lang-toggle" id="langToggle">
             <button type="button" data-lang="zh-Hant" class="active">繁中</button>
             <button type="button" data-lang="en">EN</button>
@@ -856,6 +958,8 @@ const I18N = {
         btnSave: '儲存',
         btnSaving: '儲存中…',
         btnCalc: '計算機',
+        btnMore: '更多',
+        btnMoreTitle: '更多選項（儲存格式、計算機）',
         calcTitle: '數值運算',
         calcDesc: '對影像中所有像素值套用 +、−、×、÷ 運算，並更新畫面。',
         calcOperandPlaceholder: '輸入數值',
@@ -965,6 +1069,8 @@ const I18N = {
         btnSave: 'Save',
         btnSaving: 'Saving…',
         btnCalc: 'Calculator',
+        btnMore: 'More',
+        btnMoreTitle: 'More options (save format, calculator)',
         calcTitle: 'Value Calculator',
         calcDesc: 'Apply +, −, ×, ÷ with a number to all pixel values and update the view.',
         calcOperandPlaceholder: 'Enter a number',
@@ -1131,6 +1237,12 @@ function applyLanguage(lang) {
     // 標題
     const titleEl = document.querySelector('title[data-i18n-title]');
     if (titleEl) titleEl.textContent = t('appTitle');
+
+    // 通用 tooltip 翻譯（data-i18n-title="key" 會更新該節點的 title 屬性）
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const key = el.getAttribute('data-i18n-title');
+        if (key) el.title = t(key);
+    });
 
     // 語言切換按鈕的 active 狀態
     document.querySelectorAll('#langToggle button').forEach(b => {
@@ -2558,6 +2670,26 @@ function writePng(dataset, onProgress) {
 
 /* ---------- JPG (灰階正規化) ---------- */
 function writeJpg(dataset, onProgress) {
+    // 散布點雲沒有高度網格 (dataset.data)，無法做灰階正規化；改為擷取目前畫面，
+    // 並補上不透明背景（JPG 不支援透明，否則透明區會變黑）。
+    if (isPcdScatterDataset(dataset)) {
+        const src = document.getElementById('canvas');
+        const tmp = document.createElement('canvas');
+        tmp.width = src.width;
+        tmp.height = src.height;
+        const ctx = tmp.getContext('2d');
+        ctx.fillStyle = '#2a2a38';
+        ctx.fillRect(0, 0, tmp.width, tmp.height);
+        ctx.drawImage(src, 0, 0);
+        if (onProgress) onProgress(0.7);
+        return new Promise((resolve) => {
+            tmp.toBlob((blob) => {
+                if (onProgress) onProgress(1.0);
+                resolve(blob);
+            }, 'image/jpeg', 0.95);
+        });
+    }
+
     const { width, height } = dataset;
     const gray = normalizeToGray(dataset);
     if (onProgress) onProgress(0.3);
@@ -2588,20 +2720,72 @@ function writeJpg(dataset, onProgress) {
 
 
 /** 統一的存檔派送：依格式呼叫對應 writer，產生 Blob 後觸發下載 */
-async function saveAs(dataset, format, onProgress) {
-    let blob;
+/** 依格式產生對應的檔案 Blob（不下載） */
+async function buildSaveBlob(dataset, format, onProgress) {
     switch (format) {
-        case 'bcrf': blob = writeBcrf(dataset, onProgress); break;
-        case 'asc':  blob = writeAsc(dataset, onProgress); break;
-        case 'tiff': blob = writeTiff(dataset, onProgress); break;
-        case 'bmp':  blob = writeBmp(dataset, onProgress); break;
-        case 'png':  blob = await writePng(dataset, onProgress); break;
-        case 'jpg':  blob = await writeJpg(dataset, onProgress); break;
+        case 'bcrf': return writeBcrf(dataset, onProgress);
+        case 'asc':  return writeAsc(dataset, onProgress);
+        case 'tiff': return writeTiff(dataset, onProgress);
+        case 'bmp':  return writeBmp(dataset, onProgress);
+        case 'png':  return await writePng(dataset, onProgress);
+        case 'jpg':  return await writeJpg(dataset, onProgress);
         default:     throw new Error(t('errSaveFmt', format));
     }
-    const ext = (format === 'tiff') ? 'tif' : format;
+}
+
+/** 格式 → 副檔名 */
+function formatToExt(format) {
+    return (format === 'tiff') ? 'tif' : format;
+}
+
+/** 各儲存格式的中繼資料（MIME 與接受的副檔名），供原生「另存新檔」視窗使用 */
+const SAVE_FORMAT_META = {
+    bcrf: { mime: 'application/octet-stream', exts: ['.bcrf'], descKey: 'saveFormat.bcrf' },
+    asc:  { mime: 'text/plain',               exts: ['.asc'],  descKey: 'saveFormat.asc'  },
+    tiff: { mime: 'image/tiff',               exts: ['.tif', '.tiff'], descKey: 'saveFormat.tiff' },
+    bmp:  { mime: 'image/bmp',                exts: ['.bmp'],  descKey: 'saveFormat.bmp'  },
+    png:  { mime: 'image/png',                exts: ['.png'],  descKey: 'saveFormat.png'  },
+    jpg:  { mime: 'image/jpeg',               exts: ['.jpg', '.jpeg'], descKey: 'saveFormat.jpg' },
+};
+
+/** 副檔名（不含點，小寫）→ 內部格式代碼 */
+function extToFormat(ext) {
+    switch ((ext || '').toLowerCase()) {
+        case 'bcrf': return 'bcrf';
+        case 'asc':  return 'asc';
+        case 'tif':
+        case 'tiff': return 'tiff';
+        case 'bmp':  return 'bmp';
+        case 'png':  return 'png';
+        case 'jpg':
+        case 'jpeg': return 'jpg';
+        default:     return null;
+    }
+}
+
+/** 此資料集允許儲存的格式（散布點雲僅支援 png / jpg） */
+function getAllowedSaveFormats(dataset) {
+    if (dataset && dataset.type === 'pcd-scatter') return ['png', 'jpg'];
+    return ['bcrf', 'asc', 'tiff', 'bmp', 'png', 'jpg'];
+}
+
+/** 建立 showSaveFilePicker 的 types 清單，preferred 格式排在最前面（成為視窗預設選項） */
+function buildPickerTypes(formats, preferred) {
+    const ordered = formats.slice();
+    if (preferred && ordered.includes(preferred)) {
+        ordered.splice(ordered.indexOf(preferred), 1);
+        ordered.unshift(preferred);
+    }
+    return ordered.map(fmt => {
+        const meta = SAVE_FORMAT_META[fmt];
+        return { description: t(meta.descKey), accept: { [meta.mime]: meta.exts } };
+    });
+}
+
+async function saveAs(dataset, format, onProgress) {
+    const blob = await buildSaveBlob(dataset, format, onProgress);
     const base = stripExt(dataset.filename);
-    triggerDownload(blob, `${base}.${ext}`);
+    triggerDownload(blob, `${base}.${formatToExt(format)}`);
 }
 
 
@@ -3396,27 +3580,23 @@ cmapSelect.addEventListener('change', () => {
 const saveFormatSelect = document.getElementById('saveFormat');
 const btnSave = document.getElementById('btnSave');
 
-btnSave.addEventListener('click', async () => {
-    if (!currentDataset) {
-        showToast(t('toastNoData'), 'error');
-        return;
-    }
-    const format = saveFormatSelect.value;
-    if (currentDataset.type === 'pcd-scatter' && format !== 'png' && format !== 'jpg') {
-        showToast(t('savePcdScatter'), 'info');
-        return;
-    }
-    const base = stripExt(currentDataset.filename || 'image');
-    const ext = (format === 'tiff') ? 'tif' : format;
-    const fullName = `${base}.${ext}`;
+const supportsSavePicker = (typeof window.showSaveFilePicker === 'function');
 
+// 支援原生「另存新檔」視窗時，格式直接在視窗裡選，工具列不需重複的格式選單；
+// 不支援的瀏覽器 (Firefox / Safari) 則保留它作為格式選擇的 fallback。
+if (supportsSavePicker) {
+    const saveFormatItem = document.getElementById('saveFormatItem');
+    if (saveFormatItem) saveFormatItem.style.display = 'none';
+}
+
+/** 實際產生檔案並更新 UI（picker 與 fallback 兩條路徑共用） */
+async function runSaveJob(format, writeFn, fullName) {
     btnSave.disabled = true;
     btnSave.textContent = t('btnSaving');
     setProgress(0);
     statusEl.textContent = t('statusSaving', fullName);
-
     try {
-        await saveAs(currentDataset, format, setProgress);
+        await writeFn();
         statusEl.textContent = t('statusSaved', fullName);
         showToast(t('toastSaved', fullName), 'info');
     } catch (err) {
@@ -3428,7 +3608,67 @@ btnSave.addEventListener('click', async () => {
         btnSave.disabled = false;
         btnSave.textContent = t('btnSave');
     }
+}
+
+btnSave.addEventListener('click', async () => {
+    if (!currentDataset) {
+        showToast(t('toastNoData'), 'error');
+        return;
+    }
+
+    const preferred = saveFormatSelect.value;
+    const allowed = getAllowedSaveFormats(currentDataset);
+    const base = stripExt(currentDataset.filename || 'image');
+
+    // ---- 支援 File System Access API：用原生「另存新檔」視窗，格式在視窗下方選 ----
+    if (supportsSavePicker) {
+        // 預設選中的格式：使用者偏好；若該格式不適用此資料集則退回第一個可用格式
+        const defaultFormat = allowed.includes(preferred) ? preferred : allowed[0];
+        let handle;
+        try {
+            handle = await window.showSaveFilePicker({
+                suggestedName: `${base}.${formatToExt(defaultFormat)}`,
+                types: buildPickerTypes(allowed, defaultFormat),
+            });
+        } catch (err) {
+            if (err && err.name === 'AbortError') return;   // 使用者取消
+            // 其他錯誤（例如非安全環境）→ 退回傳統下載
+            console.warn('showSaveFilePicker 失敗，改用下載方式：', err);
+            return fallbackSave(defaultFormat, base);
+        }
+
+        // 依使用者在視窗中實際選定的副檔名決定輸出格式
+        const chosenExt = getExt(handle.name);
+        const format = extToFormat(chosenExt) || defaultFormat;
+        if (!allowed.includes(format)) {
+            showToast(t('savePcdScatter'), 'info');
+            return;
+        }
+        const fullName = handle.name || `${base}.${formatToExt(format)}`;
+
+        await runSaveJob(format, async () => {
+            const blob = await buildSaveBlob(currentDataset, format, setProgress);
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+        }, fullName);
+        return;
+    }
+
+    // ---- 不支援時的 fallback：沿用工具列選單的格式直接下載 ----
+    fallbackSave(preferred, base);
 });
+
+/** 傳統下載（不支援 showSaveFilePicker 的瀏覽器） */
+function fallbackSave(format, base) {
+    const allowed = getAllowedSaveFormats(currentDataset);
+    if (!allowed.includes(format)) {
+        showToast(t('savePcdScatter'), 'info');
+        return;
+    }
+    const fullName = `${base}.${formatToExt(format)}`;
+    return runSaveJob(format, () => saveAs(currentDataset, format, setProgress), fullName);
+}
 
 window.addEventListener('resize', () => {
     if (typeof Viewer3D !== 'undefined' && Viewer3D.isActive()) Viewer3D.onResize();
@@ -4308,6 +4548,29 @@ document.querySelectorAll('#langToggle button').forEach(btn => {
     });
 });
 
+// 「更多」下拉選單：開關、點外面 / Esc 關閉
+const moreWrap = document.getElementById('btnMore').closest('.more-wrap');
+const btnMore  = document.getElementById('btnMore');
+function closeMoreMenu() {
+    moreWrap.classList.remove('open');
+    btnMore.setAttribute('aria-expanded', 'false');
+}
+function toggleMoreMenu() {
+    const open = !moreWrap.classList.contains('open');
+    moreWrap.classList.toggle('open', open);
+    btnMore.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+btnMore.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleMoreMenu();
+});
+// 點擊選單內部不關閉（方便操作下拉與切換）
+moreWrap.querySelector('.more-menu').addEventListener('click', (e) => e.stopPropagation());
+document.addEventListener('click', () => closeMoreMenu());
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && moreWrap.classList.contains('open')) closeMoreMenu();
+});
+
 
 /* =========================================================================
  *  5. 計算機 (對所有像素值套用 +、-、*、/ 運算)
@@ -4332,6 +4595,7 @@ function setCalcStatus(msg, type) {
 }
 
 function openCalc() {
+    closeMoreMenu();
     if (!currentDataset) {
         showToast(t('calcNoData'), 'error');
         return;
