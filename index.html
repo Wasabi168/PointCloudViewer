@@ -1817,7 +1817,7 @@ const I18N = {
         cursorProfile: '剖面',
         cursorPanTitle: '拖曳模式：可平移圖片',
         cursorInspectTitle: '數值模式：顯示鼠標位置的像素數值',
-        cursorProfileTitle: '剖面模式：在圖像上拉一條線，顯示沿線的數值剖面',
+        cursorProfileTitle: '剖面模式：拉一條剖面線，可拖曳端點或線段調整位置',
         modeBadgePan: '拖曳模式',
         modeBadgeInspect: '數值模式',
         modeBadgeProfile: '剖面模式',
@@ -1832,8 +1832,8 @@ const I18N = {
         toast3dNoWebgl: '此瀏覽器不支援 WebGL，無法使用 3D 顯示',
         profileTitle: '剖面',
         profileClear: '清除',
-        profileHint: '剖面模式：按住左鍵在圖像上拖曳一條線',
-        profileHintScatter: '剖面模式：在點雲上拖曳一條線，帶寬內的點將投影成剖面',
+        profileHint: '剖面模式：按住左鍵在圖像上拖曳一條線；可拖曳端點調整，或拖曳線段平移',
+        profileHintScatter: '剖面模式：在點雲上拖曳一條線，帶寬內的點將投影成剖面；可拖曳端點或線段調整',
         profileLength: '長度',
         profileSamples: '取樣點',
         profileRange: '值域',
@@ -1990,7 +1990,7 @@ const I18N = {
         cursorProfile: 'Profile',
         cursorPanTitle: 'Pan mode: drag to move the image',
         cursorInspectTitle: 'Inspect mode: show pixel value at cursor',
-        cursorProfileTitle: 'Profile mode: drag a line on the image to see the value profile along it',
+        cursorProfileTitle: 'Profile mode: draw a profile line; drag endpoints or the line to adjust',
         modeBadgePan: 'Pan mode',
         modeBadgeInspect: 'Inspect mode',
         modeBadgeProfile: 'Profile mode',
@@ -2005,8 +2005,8 @@ const I18N = {
         toast3dNoWebgl: 'WebGL is not supported in this browser; 3D view unavailable',
         profileTitle: 'Profile',
         profileClear: 'Clear',
-        profileHint: 'Profile mode: hold the left button and drag a line on the image',
-        profileHintScatter: 'Profile mode: drag a line on the point cloud; points within the band are projected onto it',
+        profileHint: 'Profile mode: drag a line on the image; drag endpoints or the line body to adjust',
+        profileHintScatter: 'Profile mode: drag a line on the point cloud; drag endpoints or the line body to adjust',
         profileLength: 'Length',
         profileSamples: 'Samples',
         profileRange: 'Range',
@@ -4993,6 +4993,8 @@ const profileBandInput = document.getElementById('profileBand');
  */
 const profileState = {
     drawing: false,
+    editMode: null,   // 'ep0' | 'ep1' | 'move'
+    editStart: null,  // { pt, line } 編輯起始狀態
     space: 'image',
     line: null,
     data: null,
@@ -5000,6 +5002,8 @@ const profileState = {
     hoverIndex: null,
     halfW: 0,
 };
+
+const PROFILE_HIT_RADIUS = 10;
 
 /** 在已排序(遞增)的 dist 陣列中找最接近 target 的索引 */
 function nearestDistIndex(dist, target) {
@@ -5033,6 +5037,37 @@ function clampToImage(p) {
         x: Math.max(0, Math.min(w - 1, p.x)),
         y: Math.max(0, Math.min(h - 1, p.y)),
     };
+}
+
+/** 偵測滑鼠是否落在剖面線的端點或線段上（螢幕座標） */
+function profileHitTest(clientX, clientY) {
+    const L = profileState.line;
+    if (!L) return null;
+    const rect = viewerEl.getBoundingClientRect();
+    const mx = clientX - rect.left, my = clientY - rect.top;
+    const a = profilePtToScreen(L.x0, L.y0);
+    const b = profilePtToScreen(L.x1, L.y1);
+    const r = PROFILE_HIT_RADIUS;
+
+    if (Math.hypot(mx - a.x, my - a.y) <= r) return 'ep0';
+    if (Math.hypot(mx - b.x, my - b.y) <= r) return 'ep1';
+
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    if (len2 > 0) {
+        let t = ((mx - a.x) * dx + (my - a.y) * dy) / len2;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        const dist = Math.hypot(mx - (a.x + t * dx), my - (a.y + t * dy));
+        if (dist <= r) return 'move';
+    }
+    return null;
+}
+
+/** 影像模式下將剖面線端點限制在影像範圍內 */
+function clampProfileLine(L) {
+    const p0 = clampToImage({ x: L.x0, y: L.y0 });
+    const p1 = clampToImage({ x: L.x1, y: L.y1 });
+    return { x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y };
 }
 
 /** 線端點座標 → viewer CSS 座標（依目前 space 換算） */
@@ -5443,6 +5478,8 @@ function drawProfileChartCrosshair() {
 /** 清除剖面線與圖表 */
 function clearProfile() {
     profileState.drawing = false;
+    profileState.editMode = null;
+    profileState.editStart = null;
     profileState.line = null;
     profileState.data = null;
     profileState.geom = null;
@@ -5524,7 +5561,12 @@ function recomputeProfile() {
     drawProfileOverlay();
 }
 
-// 在影像/點雲上拉線
+/** 剖面線最短有效長度（影像：1 px；點雲：約 3 螢幕像素的世界長度） */
+function profileMinLineLen() {
+    return profileState.space === 'world' ? 3 * scatterView.worldPerPx : 1;
+}
+
+// 在影像/點雲上拉線，或拖曳既有剖面線
 viewerEl.addEventListener('mousedown', (e) => {
     if (view3dActive) return;
     if (cursorMode !== 'profile') return;
@@ -5539,8 +5581,25 @@ viewerEl.addEventListener('mousedown', (e) => {
         profileState.halfW = 8 * scatterView.worldPerPx;
     }
 
+    // 已有剖面線：優先進入編輯（拖端點或平移整線）
+    if (profileState.line && profileState.data) {
+        const hit = profileHitTest(e.clientX, e.clientY);
+        if (hit) {
+            profileState.editMode = hit;
+            profileState.editStart = {
+                pt: profileMouseToPt(e.clientX, e.clientY),
+                line: { ...profileState.line },
+            };
+            viewerEl.style.cursor = hit === 'move' ? 'grabbing' : 'crosshair';
+            e.preventDefault();
+            return;
+        }
+    }
+
     const p = profileMouseToPt(e.clientX, e.clientY);
     profileState.drawing = true;
+    profileState.editMode = null;
+    profileState.editStart = null;
     profileState.line = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
     profileState.data = null;
     profileState.geom = null;
@@ -5550,7 +5609,43 @@ viewerEl.addEventListener('mousedown', (e) => {
     e.preventDefault();
 });
 
+viewerEl.addEventListener('mousemove', (e) => {
+    if (view3dActive || cursorMode !== 'profile') return;
+    if (profileState.drawing || profileState.editMode) return;
+    if (!profileState.line || !profileState.data) {
+        viewerEl.style.cursor = '';
+        return;
+    }
+    const hit = profileHitTest(e.clientX, e.clientY);
+    if (hit === 'ep0' || hit === 'ep1') viewerEl.style.cursor = 'pointer';
+    else if (hit === 'move') viewerEl.style.cursor = 'move';
+    else viewerEl.style.cursor = '';
+});
+
 window.addEventListener('mousemove', (e) => {
+    if (profileState.editMode && profileState.editStart) {
+        const p = profileMouseToPt(e.clientX, e.clientY);
+        const s = profileState.editStart;
+        const dx = p.x - s.pt.x, dy = p.y - s.pt.y;
+        if (profileState.editMode === 'ep0') {
+            let L = { ...profileState.line, x0: s.line.x0 + dx, y0: s.line.y0 + dy };
+            if (profileState.space === 'image') L = clampProfileLine(L);
+            profileState.line = L;
+        } else if (profileState.editMode === 'ep1') {
+            let L = { ...profileState.line, x1: s.line.x1 + dx, y1: s.line.y1 + dy };
+            if (profileState.space === 'image') L = clampProfileLine(L);
+            profileState.line = L;
+        } else if (profileState.editMode === 'move') {
+            let L = {
+                x0: s.line.x0 + dx, y0: s.line.y0 + dy,
+                x1: s.line.x1 + dx, y1: s.line.y1 + dy,
+            };
+            if (profileState.space === 'image') L = clampProfileLine(L);
+            profileState.line = L;
+        }
+        drawProfileOverlay();
+        return;
+    }
     if (!profileState.drawing) return;
     const p = profileMouseToPt(e.clientX, e.clientY);
     profileState.line.x1 = p.x;
@@ -5559,13 +5654,25 @@ window.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('mouseup', () => {
+    if (profileState.editMode) {
+        const L = profileState.line;
+        const revert = profileState.editStart && profileState.editStart.line;
+        if (!L || Math.hypot(L.x1 - L.x0, L.y1 - L.y0) < profileMinLineLen()) {
+            if (revert) profileState.line = { ...profileState.editStart.line };
+        } else {
+            recomputeProfile();
+        }
+        profileState.editMode = null;
+        profileState.editStart = null;
+        viewerEl.style.cursor = '';
+        drawProfileOverlay();
+        return;
+    }
     if (!profileState.drawing) return;
     profileState.drawing = false;
     const L = profileState.line;
     const lineLen = Math.hypot(L.x1 - L.x0, L.y1 - L.y0);
-    // 影像以 1 像素為門檻；點雲以「對應 3 螢幕像素的世界長度」為門檻
-    const minLen = profileState.space === 'world' ? 3 * scatterView.worldPerPx : 1;
-    if (lineLen < minLen) {
+    if (lineLen < profileMinLineLen()) {
         // 太短視為取消
         profileState.line = null;
         profilePanel.classList.remove('show');
@@ -5632,12 +5739,15 @@ function applyCursorMode(mode, opts) {
         canvasEl.classList.remove('grabbing');
     }
 
-    // 進入剖面模式時顯示提示；離開時取消任何進行中的拉線
+    // 進入剖面模式時顯示提示；離開時取消任何進行中的拉線或編輯
     if (mode === 'profile' && !opts.silent) {
         const hint = isPcdScatterDataset(currentDataset) ? 'profileHintScatter' : 'profileHint';
         showToast(t(hint), 'info');
-    } else if (profileState.drawing) {
+    } else if (profileState.drawing || profileState.editMode) {
         profileState.drawing = false;
+        profileState.editMode = null;
+        profileState.editStart = null;
+        viewerEl.style.cursor = '';
     }
 
     updateModeIndicator();
