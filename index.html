@@ -838,8 +838,6 @@
         flex-wrap: wrap;
         align-items: center;
     }
-    /* 「還原」靠左，其餘按鈕靠右；自動換行時也不會被截到容器外 */
-    .calc-actions #calcResetBtn { margin-right: auto; }
     .calc-actions button {
         padding: 8px 14px;
         font-size: 13px;
@@ -1362,7 +1360,7 @@
 
         <span class="ctrl-sep ctrl-sep--more" id="viewerSepMore" aria-hidden="true"></span>
 
-        <!-- 群組：更多（儲存格式、計算機；視窗縮小時另收納顯示／工具） -->
+        <!-- 群組：更多（儲存格式；視窗縮小時另收納顯示／工具） -->
         <div class="ctrl-group more-wrap" id="viewerMoreWrap">
             <button type="button" id="btnMore" class="more-btn" aria-haspopup="true" aria-expanded="false" data-i18n-title="btnMoreTitle" title="更多選項">
                 <span data-i18n="btnMore">更多</span>
@@ -1382,9 +1380,6 @@
                             <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
                         </select>
                     </label>
-                    <div class="more-item">
-                        <button id="btnCalc" data-i18n="btnCalc">計算機</button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -1529,6 +1524,7 @@
                     <button type="button" id="edCropApply" data-i18n="cropApply" disabled>套用裁切</button>
                     <button type="button" id="edCropCancel" data-i18n="cropCancel" disabled>取消</button>
                     <button type="button" id="edDenoise" data-i18n="denoise" data-i18n-title="denoiseTitle">刪除雜點</button>
+                    <button type="button" id="edBtnCalc" data-i18n="btnCalc" data-i18n-title="calcTitle">計算機</button>
                 </div>
             </div>
 
@@ -1713,7 +1709,6 @@
             </div> 
 
             <div class="calc-actions">
-                <button type="button" id="calcResetBtn" class="btn-secondary" data-i18n="calcReset" disabled>還原</button>
                 <button type="button" id="calcCancelBtn" class="btn-secondary" data-i18n="calcCancel">關閉</button>
                 <button type="button" id="calcApplyBtn" data-i18n="calcApply">套用</button>
             </div>
@@ -1794,8 +1789,8 @@ const I18N = {
         btnSaving: '儲存中…',
         btnCalc: '計算機',
         btnMore: '更多',
-        btnMoreTitle: '更多選項（儲存格式、計算機、色彩、工具等）',
-        btnMoreTitleEditor: '更多選項（復原、色彩、裁切、傳送等）',
+        btnMoreTitle: '更多選項（儲存格式、色彩、工具等）',
+        btnMoreTitleEditor: '更多選項（復原、色彩、裁切、計算機、傳送等）',
         calcTitle: '數值運算',
         calcDesc: '對影像中所有像素值套用 +、−、×、÷ 運算，並更新畫面。',
         calcOperandPlaceholder: '輸入數值',
@@ -1967,8 +1962,8 @@ const I18N = {
         btnSaving: 'Saving…',
         btnCalc: 'Calculator',
         btnMore: 'More',
-        btnMoreTitle: 'More options (save format, calculator, colormap, tools, etc.)',
-        btnMoreTitleEditor: 'More options (undo, colormap, crop, send, etc.)',
+        btnMoreTitle: 'More options (save format, colormap, tools, etc.)',
+        btnMoreTitleEditor: 'More options (undo, colormap, crop, calculator, send, etc.)',
         calcTitle: 'Value Calculator',
         calcDesc: 'Apply +, −, ×, ÷ with a number to all pixel values and update the view.',
         calcOperandPlaceholder: 'Enter a number',
@@ -5709,18 +5704,17 @@ document.addEventListener('keydown', (e) => {
 
 
 /* =========================================================================
- *  5. 計算機 (對所有像素值套用 +、-、*、/ 運算)
+ *  5. 計算機 (對所有像素值套用 +、-、*、/ 運算) — 點雲編輯器專用
  * ========================================================================= */
 
-const btnCalc        = document.getElementById('btnCalc');
-const calcOverlay    = document.getElementById('calcOverlay');
-const calcCloseBtn   = document.getElementById('calcCloseBtn');
-const calcCancelBtn  = document.getElementById('calcCancelBtn');
-const calcApplyBtn   = document.getElementById('calcApplyBtn');
-const calcResetBtn   = document.getElementById('calcResetBtn');
-const calcOperandEl  = document.getElementById('calcOperand');
-const calcStatusEl   = document.getElementById('calcStatus');
-const calcOpsEl      = document.getElementById('calcOps');
+const edBtnCalc       = document.getElementById('edBtnCalc');
+const calcOverlay     = document.getElementById('calcOverlay');
+const calcCloseBtn    = document.getElementById('calcCloseBtn');
+const calcCancelBtn   = document.getElementById('calcCancelBtn');
+const calcApplyBtn    = document.getElementById('calcApplyBtn');
+const calcOperandEl   = document.getElementById('calcOperand');
+const calcStatusEl    = document.getElementById('calcStatus');
+const calcOpsEl       = document.getElementById('calcOps');
 
 let calcOp = '+';   // 目前選中的運算子
 
@@ -5731,19 +5725,17 @@ function setCalcStatus(msg, type) {
 }
 
 function openCalc() {
-    closeMoreMenu();
-    if (!currentDataset) {
+    if (typeof closeEdMoreMenu === 'function') closeEdMoreMenu();
+    if (typeof editorView === 'undefined' || !editorView.hasData()) {
         showToast(t('calcNoData'), 'error');
         return;
     }
-    if (currentDataset.type === 'pcd-scatter') {
+    if (!editorView.canUseCalc()) {
         showToast(t('calcPcdScatter'), 'info');
         return;
     }
     calcOverlay.classList.add('show');
     setCalcStatus('');
-    // Reset 按鈕只有在已備份過原始資料時才可用
-    calcResetBtn.disabled = !currentDataset.originalData;
     setTimeout(() => {
         calcOperandEl.focus();
         calcOperandEl.select();
@@ -5755,73 +5747,31 @@ function closeCalc() {
     setCalcStatus('');
 }
 
-/** 對 currentDataset.data 全部像素套用 op 與 operand，並更新畫面 */
+/** 透過編輯器對所有像素套用 op 與 operand，並更新畫面 */
 function applyCalcOperation(op, operand) {
-    if (!currentDataset) {
+    if (typeof editorView === 'undefined') {
         setCalcStatus(t('calcNoData'), 'error');
         return false;
     }
-    if (!Number.isFinite(operand)) {
-        setCalcStatus(t('calcInvalidOperand'), 'error');
+    const result = editorView.applyCalc(op, operand);
+    if (!result.ok) {
+        const msgs = {
+            noData: 'calcNoData',
+            scatter: 'calcPcdScatter',
+            invalid: 'calcInvalidOperand',
+            divZero: 'calcDivByZero',
+        };
+        setCalcStatus(t(msgs[result.reason] || 'calcInvalidOperand'), 'error');
         return false;
     }
-    if (op === '/' && operand === 0) {
-        setCalcStatus(t('calcDivByZero'), 'error');
-        return false;
-    }
-
-    const src = currentDataset.data;
-
-    // 第一次運算前，備份原始資料供「還原」使用
-    if (!currentDataset.originalData) {
-        currentDataset.originalData = new Float32Array(src);
-    }
-
-    // 不在原 buffer 上修改 (BCRF 的 data 可能是檔案 ArrayBuffer 的 view)
-    const dst = new Float32Array(src.length);
-    switch (op) {
-        case '+': for (let i = 0; i < src.length; i++) dst[i] = src[i] + operand; break;
-        case '-': for (let i = 0; i < src.length; i++) dst[i] = src[i] - operand; break;
-        case '*': for (let i = 0; i < src.length; i++) dst[i] = src[i] * operand; break;
-        case '/': {
-            const inv = 1 / operand;
-            for (let i = 0; i < src.length; i++) dst[i] = src[i] * inv;
-            break;
-        }
-        default:
-            setCalcStatus(t('calcInvalidOperand'), 'error');
-            return false;
-    }
-
-    currentDataset.data = dst;
-    const { vmin, vmax } = computeRange(dst);
-    currentDataset.vmin = vmin;
-    currentDataset.vmax = vmax;
-
-    render(currentDataset, cmapSelect.value, false);
-    if (typeof Viewer3D !== 'undefined' && Viewer3D.isActive()) Viewer3D.rebuild();
-
-    calcResetBtn.disabled = false;
     const opSymbol = ({ '+': '+', '-': '−', '*': '×', '/': '÷' })[op] || op;
     setCalcStatus(t('calcApplied', opSymbol, operand), 'ok');
     return true;
 }
 
-/** 將資料還原為最初載入時的內容 */
-function resetCalcOperation() {
-    if (!currentDataset || !currentDataset.originalData) return;
-    currentDataset.data = new Float32Array(currentDataset.originalData);
-    const { vmin, vmax } = computeRange(currentDataset.data);
-    currentDataset.vmin = vmin;
-    currentDataset.vmax = vmax;
-    render(currentDataset, cmapSelect.value, false);
-    if (typeof Viewer3D !== 'undefined' && Viewer3D.isActive()) Viewer3D.rebuild();
-    setCalcStatus(t('calcResetDone'), 'ok');
-}
-
 // --- 事件綁定 ---
 
-btnCalc.addEventListener('click', openCalc);
+if (edBtnCalc) edBtnCalc.addEventListener('click', openCalc);
 calcCloseBtn.addEventListener('click', closeCalc);
 calcCancelBtn.addEventListener('click', closeCalc);
 
@@ -5863,9 +5813,6 @@ calcApplyBtn.addEventListener('click', () => {
     const operand = parseFloat(raw);
     applyCalcOperation(calcOp, operand);
 });
-
-// 還原
-calcResetBtn.addEventListener('click', resetCalcOperation);
 
 
 /* =========================================================================
@@ -6872,7 +6819,7 @@ function createImageView(ids, options) {
     function updateEditButtons() {
         if (!editing) return;
         const has = !!st.dataset;
-        [el.cropRect, el.cropCircle, el.denoise, el.sendToViewer].forEach(b => { if (b) b.disabled = !has; });
+        [el.cropRect, el.cropCircle, el.denoise, el.btnCalc, el.sendToViewer].forEach(b => { if (b) b.disabled = !has; });
         if (el.cropApply) el.cropApply.disabled = !(has && st.edit.cropMode && st.edit.cropSel);
         if (el.cropCancel) el.cropCancel.disabled = !(has && st.edit.cropMode);
         updateHistoryButtons();
@@ -6954,6 +6901,34 @@ function createImageView(ids, options) {
         st.edit.histIndex++;
         restoreState(st.edit.history[st.edit.histIndex]);
         updateHistoryButtons();
+    }
+
+    /** 計算機：對所有像素值套用 +、-、*、/ 運算（僅點陣影像，不含散布點雲） */
+    function applyCalc(op, operand) {
+        if (!editing || !st.dataset) return { ok: false, reason: 'noData' };
+        if (isScatter(st.dataset)) return { ok: false, reason: 'scatter' };
+        if (!Number.isFinite(operand)) return { ok: false, reason: 'invalid' };
+        if (op === '/' && operand === 0) return { ok: false, reason: 'divZero' };
+        endTransientModes();
+
+        const src = st.dataset.data;
+        const dst = new Float32Array(src.length);
+        switch (op) {
+            case '+': for (let i = 0; i < src.length; i++) dst[i] = src[i] + operand; break;
+            case '-': for (let i = 0; i < src.length; i++) dst[i] = src[i] - operand; break;
+            case '*': for (let i = 0; i < src.length; i++) dst[i] = src[i] * operand; break;
+            case '/': {
+                const inv = 1 / operand;
+                for (let i = 0; i < src.length; i++) dst[i] = src[i] * inv;
+                break;
+            }
+            default: return { ok: false, reason: 'invalid' };
+        }
+
+        st.dataset.data = dst;
+        refreshAfterEdit(false);
+        pushHistory();
+        return { ok: true };
     }
 
     /* 複製目前資料集（深拷貝陣列、移除畫布參照）以便安全傳送到檢視器 */
@@ -7413,6 +7388,8 @@ function createImageView(ids, options) {
     return {
         loadFile,
         hasData: () => !!st.dataset,
+        canUseCalc: () => !!st.dataset && !isScatter(st.dataset),
+        applyCalc,
         refit: () => { if (st.dataset && el.viewer.clientWidth > 0) { fitImage(); if (st.edit.denoise) renderHist(); } },
         syncLang: () => {
             const ds = st.dataset;
@@ -7445,6 +7422,7 @@ const editorView = createImageView({
     histStats: 'edHistStats', histAxisMin: 'edHistAxisMin', histAxisMax: 'edHistAxisMax',
     histApply: 'edDenoiseApply',
     sendToViewer: 'edSendToViewer', undo: 'edUndo', redo: 'edRedo',
+    btnCalc: 'edBtnCalc',
 }, { editing: true });
 
 
