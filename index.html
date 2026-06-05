@@ -381,12 +381,32 @@
         border: 1px solid var(--border);
         border-radius: 3px;
     }
-    .colorbar .minmax {
+    .minmax {
         display: flex;
         justify-content: space-between;
+        align-items: flex-start;
+        margin-top: 8px;
         font-size: 12px;
         color: var(--muted);
-        margin-top: 2px;
+    }
+    .minmax .mm-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .minmax .mm-item.mm-hi {
+        align-items: flex-end;
+        text-align: right;
+    }
+    .minmax .mm-label {
+        font-size: 10px;
+        letter-spacing: .3px;
+        opacity: .75;
+    }
+    .minmax .mm-val {
+        font-size: 13px;
+        color: var(--fg);
+        font-variant-numeric: tabular-nums;
     }
 
     /* 可調整色階範圍 */
@@ -1195,8 +1215,14 @@
                 </div>
             </div>
             <div class="minmax">
-                <span id="zMin">-</span>
-                <span id="zMax">-</span>
+                <span class="mm-item mm-lo">
+                    <span class="mm-label" data-i18n="zMinLabel">最小值 (Min)</span>
+                    <span class="mm-val" id="zMin">-</span>
+                </span>
+                <span class="mm-item mm-hi">
+                    <span class="mm-label" data-i18n="zMaxLabel">最大值 (Max)</span>
+                    <span class="mm-val" id="zMax">-</span>
+                </span>
             </div>
             <button type="button" class="cb-reset" id="cbReset" data-i18n="colorbarReset">重設色階範圍</button>
         </div>
@@ -1346,8 +1372,14 @@
                     </div>
                 </div>
                 <div class="minmax">
-                    <span id="edZMin">-</span>
-                    <span id="edZMax">-</span>
+                    <span class="mm-item mm-lo">
+                        <span class="mm-label" data-i18n="zMinLabel">最小值 (Min)</span>
+                        <span class="mm-val" id="edZMin">-</span>
+                    </span>
+                    <span class="mm-item mm-hi">
+                        <span class="mm-label" data-i18n="zMaxLabel">最大值 (Max)</span>
+                        <span class="mm-val" id="edZMax">-</span>
+                    </span>
                 </div>
                 <button type="button" class="cb-reset" id="edCbReset" data-i18n="colorbarReset">重設色階範圍</button>
             </div>
@@ -1494,6 +1526,8 @@ const I18N = {
         sideProgress: '進度',
         sideColorbar: '色階 (Z 值)',
         colorbarReset: '重設色階範圍',
+        zMinLabel: '最小值 (Min)',
+        zMaxLabel: '最大值 (Max)',
         sideInfo: '檔案資訊',
         infoSize: '影像尺寸',
         statusIdle: '尚未載入檔案',
@@ -1638,6 +1672,8 @@ const I18N = {
         sideProgress: 'Progress',
         sideColorbar: 'Color scale (Z)',
         colorbarReset: 'Reset color range',
+        zMinLabel: 'Min',
+        zMaxLabel: 'Max',
         sideInfo: 'File Info',
         infoSize: 'Image size',
         statusIdle: 'No file loaded',
