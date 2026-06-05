@@ -1387,6 +1387,13 @@
 
         <span class="ctrl-sep ctrl-sep--more" id="viewerSepMore" aria-hidden="true"></span>
 
+        <span class="ctrl-sep" id="viewerSepSend" aria-hidden="true"></span>
+
+        <!-- 群組：傳送 -->
+        <div class="ctrl-group" id="viewerSendGroup" data-toolbar-priority="50">
+            <button type="button" id="btnSendToEditor" disabled data-i18n="sendToEditor" data-i18n-title="sendToEditorTitle">傳送到編輯器</button>
+        </div>
+
         <!-- 群組：更多（儲存格式；視窗縮小時另收納顯示／工具） -->
         <div class="ctrl-group more-wrap" id="viewerMoreWrap">
             <button type="button" id="btnMore" class="more-btn" aria-haspopup="true" aria-expanded="false" data-i18n-title="btnMoreTitle" title="更多選項">
@@ -1809,8 +1816,11 @@ const I18N = {
         denoiseDone: '已套用雜點篩除，保留 {0} 筆資料',
         sendToViewer: '傳送到檢視器',
         sendToViewerTitle: '將目前編輯後的資料傳送到「點雲檢視器」頁面並切換過去',
+        sendToEditor: '傳送到編輯器',
+        sendToEditorTitle: '將目前資料傳送到「點雲編輯器」頁面並切換過去',
         sendNoData: '尚未載入資料，無法傳送',
         sentToViewer: '已將資料傳送到點雲檢視器',
+        sentToEditor: '已將資料傳送到點雲編輯器',
         undo: '↶ 上一步',
         redo: '↷ 下一步',
         undoTitle: '返回上一步編輯 (Ctrl+Z)',
@@ -2005,8 +2015,11 @@ const I18N = {
         denoiseDone: 'Noise removal applied, {0} points kept',
         sendToViewer: 'Send to Viewer',
         sendToViewerTitle: 'Send the currently edited data to the Point Cloud Viewer and switch to it',
+        sendToEditor: 'Send to Editor',
+        sendToEditorTitle: 'Send the current data to the Point Cloud Editor and switch to it',
         sendNoData: 'No data loaded to send',
         sentToViewer: 'Data sent to the Point Cloud Viewer',
+        sentToEditor: 'Data sent to the Point Cloud Editor',
         undo: '↶ Undo',
         redo: '↷ Redo',
         undoTitle: 'Undo last edit (Ctrl+Z)',
@@ -2284,6 +2297,8 @@ function applyLanguage(lang) {
     if (cursorProfileBtn) cursorProfileBtn.title = t('cursorProfileTitle');
     if (cursorMeasureBtn) cursorMeasureBtn.title = t('cursorMeasureTitle');
     if (cursorAreaBtn) cursorAreaBtn.title = t('cursorAreaTitle');
+    const btnSendToEditor = document.getElementById('btnSendToEditor');
+    if (btnSendToEditor) btnSendToEditor.title = t('sendToEditorTitle');
 
     // 目前模式標章文字（隨語言更新）
     if (typeof updateModeIndicator === 'function') updateModeIndicator();
@@ -4641,7 +4656,24 @@ async function loadFile(file) {
         hideProgress();
         setBusy(openLabel, false);
         if (typeof btnSave !== 'undefined' && btnSave) btnSave.disabled = false;
+        if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) {
+            btnSendToEditor.disabled = !currentDataset;
+        }
     }
+}
+
+/* 深拷貝資料集以便在檢視器與編輯器之間傳送 */
+function cloneDatasetForTransfer(ds) {
+    const c = { ...ds };
+    delete c.canvasEl;
+    if (ds.type === 'pcd-scatter') {
+        c.x = ds.x.slice(0); c.y = ds.y.slice(0); c.z = ds.z.slice(0);
+        if (ds.bounds) c.bounds = { ...ds.bounds };
+    } else if (ds.data) {
+        c.data = ds.data.slice(0);
+    }
+    if (ds.header) c.header = { ...ds.header };
+    return c;
 }
 
 /* 直接把一個資料集物件載入檢視器（供「點雲編輯器」傳送資料使用） */
@@ -4665,6 +4697,7 @@ function loadDatasetIntoViewer(ds) {
     if (ds.type === 'pcd-scatter') statusEl.textContent = t('statusLoadedPcd', ds.filename, ds.pointCount);
     else statusEl.textContent = t('statusLoaded', ds.filename, ds.width, ds.height);
     applyPreferredViewMode();
+    if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) btnSendToEditor.disabled = false;
     return true;
 }
 
@@ -4781,6 +4814,22 @@ function applyPreferredViewMode() {
     setViewMode('3d');
 }
 const btnSave = document.getElementById('btnSave');
+const btnSendToEditor = document.getElementById('btnSendToEditor');
+
+function sendToEditor() {
+    if (!currentDataset) { showToast(t('sendNoData'), 'info'); return; }
+    if (typeof editorView === 'undefined' || !editorView.loadDataset) return;
+    const clone = cloneDatasetForTransfer(currentDataset);
+    const cmap = cmapSelect.value;
+    if (typeof switchPage === 'function') switchPage('editor');
+    requestAnimationFrame(() => {
+        if (editorView.loadDataset(clone, { colormap: cmap })) {
+            showToast(t('sentToEditor'), 'info');
+        }
+    });
+}
+
+if (btnSendToEditor) btnSendToEditor.addEventListener('click', sendToEditor);
 
 const supportsSavePicker = (typeof window.showSaveFilePicker === 'function');
 
@@ -7703,18 +7752,6 @@ function createImageView(ids, options) {
     }
 
     /* 複製目前資料集（深拷貝陣列、移除畫布參照）以便安全傳送到檢視器 */
-    function cloneDatasetForTransfer(ds) {
-        const c = { ...ds };
-        delete c.canvasEl;
-        if (isScatter(ds)) {
-            c.x = ds.x.slice(0); c.y = ds.y.slice(0); c.z = ds.z.slice(0);
-            if (ds.bounds) c.bounds = { ...ds.bounds };
-        } else if (ds.data) {
-            c.data = ds.data.slice(0);
-        }
-        if (ds.header) c.header = { ...ds.header };
-        return c;
-    }
     function sendToViewer() {
         if (!st.dataset) { showToast(t('sendNoData'), 'info'); return; }
         if (st.edit.denoise) toggleDenoise(false); // 先套用雜點篩除結果
@@ -7724,6 +7761,24 @@ function createImageView(ids, options) {
         if (typeof loadDatasetIntoViewer === 'function' && loadDatasetIntoViewer(clone)) {
             showToast(t('sentToViewer'), 'info');
         }
+    }
+
+    function loadDataset(ds, opts) {
+        opts = opts || {};
+        if (!ds) return false;
+        const rangeSrc = ds.type === 'pcd-scatter' ? ds.z : ds.data;
+        const { vmin, vmax } = computeRange(rangeSrc);
+        st.dataset = { ...ds, vmin, vmax, canvasEl: el.canvas };
+        resetColorClip(false);
+        if (opts.colormap && el.colormap) el.colormap.value = opts.colormap;
+        render(st.dataset, el.colormap.value, true);
+        const infoExtra = ds.type === 'pcd-scatter' ? { pointCount: ds.pointCount } : null;
+        renderInfo(ds.header, ds.width, ds.height, infoExtra);
+        if (ds.type === 'pcd-scatter') el.status.textContent = t('statusLoadedPcd', ds.filename, ds.pointCount);
+        else el.status.textContent = t('statusLoaded', ds.filename, ds.width, ds.height);
+        if (typeof editAfterLoad === 'function') editAfterLoad();
+        if (el.btnSave) el.btnSave.disabled = false;
+        return true;
     }
 
     /* ---- 裁切 ---- */
@@ -8158,6 +8213,7 @@ function createImageView(ids, options) {
 
     return {
         loadFile,
+        loadDataset,
         hasData: () => !!st.dataset,
         canUseCalc: () => !!st.dataset && !isScatter(st.dataset),
         applyCalc,
@@ -8331,6 +8387,7 @@ const layoutViewerToolbar = setupOverflowToolbar({
     groups: [
         { id: 'viewerDisplayGroup', sepId: 'viewerSepDisplay', priority: 35 },
         { id: 'viewerToolsGroup',   sepId: 'viewerSepTools',   priority: 45 },
+        { id: 'viewerSendGroup',   sepId: 'viewerSepSend',   priority: 50 },
     ],
 });
 
