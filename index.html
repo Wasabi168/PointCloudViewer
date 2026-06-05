@@ -124,6 +124,43 @@
     }
     .more-item select { flex: 1; min-width: 0; }
 
+    /* 「更多」選單內收納的工具列群組 */
+    .more-menu .toolbar-overflow-group {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding-bottom: 10px;
+        margin-bottom: 2px;
+        border-bottom: 1px solid var(--border);
+    }
+    .more-menu .toolbar-overflow-group:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+    .more-menu .toolbar-overflow-group .ctrl-field { flex: 1 1 100%; }
+    .more-menu #edHistoryTools button,
+    .more-menu #edEditTools button,
+    .more-menu #viewerToolsGroup button { font-size: 13px; padding: 6px 12px; }
+    .more-menu .ctrl-sep { display: none; }
+    .more-menu-overflow {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .more-menu-overflow:not(:empty) + .more-menu-static {
+        margin-top: 2px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+    }
+
+    /* 響應式工具列：不換行，空間不足時收進「更多」 */
+    .controls--overflow {
+        flex: 1;
+        min-width: 0;
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+    }
+    .controls--overflow > .ctrl-group,
+    .controls--overflow > .ctrl-sep { flex-shrink: 0; }
+
     button, select, label.file-btn {
         background: var(--accent);
         color: #fff;
@@ -144,6 +181,29 @@
     }
 
     input[type="file"] { display: none; }
+
+    /* 按鈕「處理中」狀態：顯示轉圈並暫時停用，避免重複點擊 */
+    @keyframes ui-spin { to { transform: rotate(360deg); } }
+    .is-busy {
+        position: relative;
+        pointer-events: none;
+        opacity: 0.7;
+        cursor: progress;
+    }
+    .is-busy > * { visibility: hidden; }
+    .is-busy::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 15px;
+        height: 15px;
+        margin: -8px 0 0 -8px;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: ui-spin 0.6s linear infinite;
+    }
 
     main {
         flex: 1;
@@ -252,6 +312,7 @@
     .viewer.mode-3d .zoom-indicator,
     .viewer.mode-3d .zoom-hint,
     .viewer.mode-3d .value-indicator,
+    .viewer.mode-3d .mode-indicator,
     .viewer.mode-3d .profile-panel { display: none !important; }
     .viewer.mode-3d .canvas3d { display: block; }
     .viewer.mode-3d .hint3d { display: block; }
@@ -311,6 +372,33 @@
         z-index: 5;
     }
     .zoom-indicator.show { display: block; }
+
+    /* 目前滑鼠模式標章（左上角），讓使用者隨時知道現在是拖曳 / 數值 / 剖面 */
+    .mode-indicator {
+        position: absolute;
+        left: 12px;
+        top: 12px;
+        display: none;
+        align-items: center;
+        gap: 7px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        padding: 5px 11px;
+        border-radius: 14px;
+        font-size: 12px;
+        line-height: 1;
+        pointer-events: none;
+        z-index: 8;
+    }
+    .mode-indicator.show { display: inline-flex; }
+    .mode-indicator .mi-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.25);
+    }
+    .mode-indicator .mi-label { font-weight: 600; }
 
     .zoom-hint {
         position: absolute;
@@ -520,7 +608,7 @@
     }
 
     /* 數值顯示模式的鼠標樣式 */
-    #canvas.inspect-mode { cursor: default; }
+    #canvas.inspect-mode { cursor: crosshair; }
 
     /* 鼠標位置數值顯示 */
     .value-indicator {
@@ -1086,14 +1174,14 @@
 <!-- 視窗一：點雲檢視器 -->
 <div class="page active" id="pageViewer" data-page="viewer">
 
-<header>
+<header id="viewerHeader">
     <h1>
         <span data-i18n="appTitle">點雲檢視器</span>
         <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg)</span>
     </h1>
-    <div class="controls">
-        <!-- 群組：檔案 -->
-        <div class="ctrl-group">
+    <div class="controls controls--overflow" id="viewerControls">
+        <!-- 群組：檔案（永不收納） -->
+        <div class="ctrl-group" id="viewerFileGroup" data-toolbar-priority="0">
             <label class="file-btn">
                 <span data-i18n="btnOpen">讀取檔案</span>
                 <input type="file" id="fileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
@@ -1101,10 +1189,10 @@
             <button id="btnSave" data-i18n="btnSave">儲存</button>
         </div>
 
-        <span class="ctrl-sep" aria-hidden="true"></span>
+        <span class="ctrl-sep" id="viewerSepDisplay" aria-hidden="true"></span>
 
         <!-- 群組：顯示 -->
-        <div class="ctrl-group">
+        <div class="ctrl-group" id="viewerDisplayGroup" data-toolbar-priority="35">
             <label class="ctrl-field">
                 <span data-i18n="labelColormap">色彩：</span>
                 <select id="colormap">
@@ -1122,10 +1210,10 @@
             </div>
         </div>
 
-        <span class="ctrl-sep" aria-hidden="true"></span>
+        <span class="ctrl-sep" id="viewerSepTools" aria-hidden="true"></span>
 
         <!-- 群組：工具 -->
-        <div class="ctrl-group">
+        <div class="ctrl-group" id="viewerToolsGroup" data-toolbar-priority="45">
             <div class="cursor-toggle" id="cursorToggle">
                 <button type="button" data-cursor="pan" class="active" data-i18n="cursorPan" title="拖曳模式">拖曳</button>
                 <button type="button" data-cursor="inspect" data-i18n="cursorInspect" title="數值顯示模式">數值</button>
@@ -1136,28 +1224,31 @@
             </div>
         </div>
 
-        <span class="ctrl-sep" aria-hidden="true"></span>
+        <span class="ctrl-sep ctrl-sep--more" id="viewerSepMore" aria-hidden="true"></span>
 
-        <!-- 群組：更多（收納次要選項） -->
-        <div class="ctrl-group more-wrap">
+        <!-- 群組：更多（儲存格式、計算機；視窗縮小時另收納顯示／工具） -->
+        <div class="ctrl-group more-wrap" id="viewerMoreWrap">
             <button type="button" id="btnMore" class="more-btn" aria-haspopup="true" aria-expanded="false" data-i18n-title="btnMoreTitle" title="更多選項">
                 <span data-i18n="btnMore">更多</span>
                 <span class="more-caret" aria-hidden="true">▾</span>
             </button>
             <div class="more-menu" id="moreMenu" role="menu">
-                <label class="more-item" id="saveFormatItem">
-                    <span data-i18n="labelSaveFormat">儲存格式：</span>
-                    <select id="saveFormat">
-                        <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
-                        <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
-                        <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
-                        <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
-                        <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
-                        <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
-                    </select>
-                </label>
-                <div class="more-item">
-                    <button id="btnCalc" data-i18n="btnCalc">計算機</button>
+                <div class="more-menu-overflow" id="viewerMoreOverflow"></div>
+                <div class="more-menu-static">
+                    <label class="more-item" id="saveFormatItem">
+                        <span data-i18n="labelSaveFormat">儲存格式：</span>
+                        <select id="saveFormat">
+                            <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
+                            <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
+                            <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
+                            <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
+                            <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
+                            <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
+                        </select>
+                    </label>
+                    <div class="more-item">
+                        <button id="btnCalc" data-i18n="btnCalc">計算機</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1176,6 +1267,10 @@
         <div class="zoom-hint" id="zoomHint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
         <div class="zoom-indicator" id="zoomIndicator">100%</div>
         <div class="value-indicator" id="valueIndicator"></div>
+        <div class="mode-indicator" id="modeIndicator">
+            <span class="mi-dot" aria-hidden="true"></span>
+            <span class="mi-label" id="modeIndicatorLabel"></span>
+        </div>
 
         <div class="profile-panel" id="profilePanel">
             <div class="profile-head">
@@ -1236,14 +1331,14 @@
 
 <!-- 視窗二：點雲編輯器 -->
 <div class="page" id="pageEditor" data-page="editor">
-    <header>
+    <header id="edHeader">
         <h1>
             <span data-i18n="editorTitle">點雲編輯器</span>
             <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg)</span>
         </h1>
-        <div class="controls">
-            <!-- 群組：檔案 -->
-            <div class="ctrl-group">
+        <div class="controls controls--overflow" id="edControls">
+            <!-- 群組：檔案（永不收納） -->
+            <div class="ctrl-group" id="edFileGroup" data-toolbar-priority="0">
                 <label class="file-btn">
                     <span data-i18n="btnOpen">讀取檔案</span>
                     <input type="file" id="edFileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
@@ -1251,18 +1346,20 @@
                 <button id="edBtnSave" data-i18n="btnSave">儲存</button>
             </div>
 
-            <span class="ctrl-sep" aria-hidden="true"></span>
+            <span class="ctrl-sep" id="edSepHistory" aria-hidden="true"></span>
 
             <!-- 群組：復原 / 重做 -->
-            <div class="ctrl-group" id="edHistoryTools">
-                <button type="button" id="edUndo" data-i18n="undo" data-i18n-title="undoTitle" disabled>↶ 上一步</button>
-                <button type="button" id="edRedo" data-i18n="redo" data-i18n-title="redoTitle" disabled>↷ 下一步</button>
+            <div class="ctrl-group" id="edHistoryGroup" data-toolbar-priority="25">
+                <div class="ctrl-group" id="edHistoryTools">
+                    <button type="button" id="edUndo" data-i18n="undo" data-i18n-title="undoTitle" disabled>↶ 上一步</button>
+                    <button type="button" id="edRedo" data-i18n="redo" data-i18n-title="redoTitle" disabled>↷ 下一步</button>
+                </div>
             </div>
 
-            <span class="ctrl-sep" aria-hidden="true"></span>
+            <span class="ctrl-sep" id="edSepDisplay" aria-hidden="true"></span>
 
             <!-- 群組：顯示 -->
-            <div class="ctrl-group">
+            <div class="ctrl-group" id="edDisplayGroup" data-toolbar-priority="35">
                 <label class="ctrl-field">
                     <span data-i18n="labelColormap">色彩：</span>
                     <select id="edColormap">
@@ -1286,22 +1383,35 @@
                 </label>
             </div>
 
-            <span class="ctrl-sep" aria-hidden="true"></span>
+            <span class="ctrl-sep" id="edSepEdit" aria-hidden="true"></span>
 
             <!-- 群組：影像編輯（裁切 / 刪除雜點） -->
-            <div class="ctrl-group" id="edEditTools">
-                <button type="button" id="edCropRect" data-i18n="cropRect" data-i18n-title="cropRectTitle">方形裁切</button>
-                <button type="button" id="edCropCircle" data-i18n="cropCircle" data-i18n-title="cropCircleTitle">圓形裁切</button>
-                <button type="button" id="edCropApply" data-i18n="cropApply" disabled>套用裁切</button>
-                <button type="button" id="edCropCancel" data-i18n="cropCancel" disabled>取消</button>
-                <button type="button" id="edDenoise" data-i18n="denoise" data-i18n-title="denoiseTitle">刪除雜點</button>
+            <div class="ctrl-group" id="edEditGroup" data-toolbar-priority="45">
+                <div class="ctrl-group" id="edEditTools">
+                    <button type="button" id="edCropRect" data-i18n="cropRect" data-i18n-title="cropRectTitle">方形裁切</button>
+                    <button type="button" id="edCropCircle" data-i18n="cropCircle" data-i18n-title="cropCircleTitle">圓形裁切</button>
+                    <button type="button" id="edCropApply" data-i18n="cropApply" disabled>套用裁切</button>
+                    <button type="button" id="edCropCancel" data-i18n="cropCancel" disabled>取消</button>
+                    <button type="button" id="edDenoise" data-i18n="denoise" data-i18n-title="denoiseTitle">刪除雜點</button>
+                </div>
             </div>
 
-            <span class="ctrl-sep" aria-hidden="true"></span>
+            <span class="ctrl-sep" id="edSepSend" aria-hidden="true"></span>
 
             <!-- 群組：傳送 -->
-            <div class="ctrl-group">
+            <div class="ctrl-group" id="edSendGroup" data-toolbar-priority="55">
                 <button type="button" id="edSendToViewer" data-i18n="sendToViewer" data-i18n-title="sendToViewerTitle">傳送到檢視器</button>
+            </div>
+
+            <span class="ctrl-sep ctrl-sep--more" id="edSepMore" aria-hidden="true" style="display:none;"></span>
+
+            <!-- 群組：更多（視窗縮小時收納次要工具） -->
+            <div class="ctrl-group more-wrap" id="edMoreWrap" style="display:none;">
+                <button type="button" id="edBtnMore" class="more-btn" aria-haspopup="true" aria-expanded="false" data-i18n-title="btnMoreTitleEditor" title="更多選項">
+                    <span data-i18n="btnMore">更多</span>
+                    <span class="more-caret" aria-hidden="true">▾</span>
+                </button>
+                <div class="more-menu" id="edMoreMenu" role="menu"></div>
             </div>
         </div>
     </header>
@@ -1469,7 +1579,8 @@ const I18N = {
         btnSaving: '儲存中…',
         btnCalc: '計算機',
         btnMore: '更多',
-        btnMoreTitle: '更多選項（儲存格式、計算機）',
+        btnMoreTitle: '更多選項（儲存格式、計算機、色彩、工具等）',
+        btnMoreTitleEditor: '更多選項（復原、色彩、裁切、傳送等）',
         calcTitle: '數值運算',
         calcDesc: '對影像中所有像素值套用 +、−、×、÷ 運算，並更新畫面。',
         calcOperandPlaceholder: '輸入數值',
@@ -1497,6 +1608,9 @@ const I18N = {
         cursorPanTitle: '拖曳模式：可平移圖片',
         cursorInspectTitle: '數值模式：顯示鼠標位置的像素數值',
         cursorProfileTitle: '剖面模式：在圖像上拉一條線，顯示沿線的數值剖面',
+        modeBadgePan: '拖曳模式',
+        modeBadgeInspect: '數值模式',
+        modeBadgeProfile: '剖面模式',
         btnMinMax: 'Max/Min',
         btnMinMaxTitle: '顯示 / 隱藏 Max 與 Min 數值點標記',
         view2d: '2D',
@@ -1615,7 +1729,8 @@ const I18N = {
         btnSaving: 'Saving…',
         btnCalc: 'Calculator',
         btnMore: 'More',
-        btnMoreTitle: 'More options (save format, calculator)',
+        btnMoreTitle: 'More options (save format, calculator, colormap, tools, etc.)',
+        btnMoreTitleEditor: 'More options (undo, colormap, crop, send, etc.)',
         calcTitle: 'Value Calculator',
         calcDesc: 'Apply +, −, ×, ÷ with a number to all pixel values and update the view.',
         calcOperandPlaceholder: 'Enter a number',
@@ -1643,6 +1758,9 @@ const I18N = {
         cursorPanTitle: 'Pan mode: drag to move the image',
         cursorInspectTitle: 'Inspect mode: show pixel value at cursor',
         cursorProfileTitle: 'Profile mode: drag a line on the image to see the value profile along it',
+        modeBadgePan: 'Pan mode',
+        modeBadgeInspect: 'Inspect mode',
+        modeBadgeProfile: 'Profile mode',
         btnMinMax: 'Max/Min',
         btnMinMaxTitle: 'Show / hide the Max and Min value markers',
         view2d: '2D',
@@ -1759,6 +1877,52 @@ let currentLang = (() => {
     return 'en';
 })();
 
+/* =========================================================================
+ *  0b. 使用者偏好 (localStorage 持久化)
+ * ========================================================================= */
+const PREFS_STORAGE_KEY = 'pcviewer.prefs';
+const PREFS_DEFAULTS = {
+    colormap: 'jet',
+    edColormap: 'jet',
+    saveFormat: 'bcrf',
+    edSaveFormat: 'bcrf',
+    page: 'viewer',
+    cursorMode: 'pan',
+    viewMode: '2d',
+    showMinMax: false,
+};
+
+let userPrefs = (() => {
+    try {
+        const raw = localStorage.getItem(PREFS_STORAGE_KEY);
+        if (raw) return { ...PREFS_DEFAULTS, ...JSON.parse(raw) };
+    } catch (_) {}
+    return { ...PREFS_DEFAULTS };
+})();
+
+function saveUserPrefs() {
+    try { localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(userPrefs)); } catch (_) {}
+}
+
+function setUserPref(key, value) {
+    if (!(key in PREFS_DEFAULTS)) return;
+    userPrefs[key] = value;
+    saveUserPrefs();
+}
+
+function getUserPref(key) {
+    return userPrefs[key] ?? PREFS_DEFAULTS[key];
+}
+
+/** 將偏好套用到 <select>（僅在選項存在時） */
+function applySelectPref(selectEl, key) {
+    if (!selectEl) return;
+    const v = getUserPref(key);
+    if (v != null && [...selectEl.options].some(o => o.value === v)) {
+        selectEl.value = v;
+    }
+}
+
 function t(key, ...args) {
     const dict = I18N[currentLang] || I18N[DEFAULT_LANG];
     let s = (dict && dict[key] != null) ? dict[key] : (I18N[DEFAULT_LANG][key] ?? key);
@@ -1803,6 +1967,9 @@ function applyLanguage(lang) {
     if (cursorPanBtn) cursorPanBtn.title = t('cursorPanTitle');
     if (cursorInspectBtn) cursorInspectBtn.title = t('cursorInspectTitle');
     if (cursorProfileBtn) cursorProfileBtn.title = t('cursorProfileTitle');
+
+    // 目前模式標章文字（隨語言更新）
+    if (typeof updateModeIndicator === 'function') updateModeIndicator();
 
     // Max/Min 標記切換按鈕的 title
     const minmaxBtn = document.getElementById('btnMinMax');
@@ -3773,6 +3940,7 @@ function render(dataset, cmap, resetView = false) {
     document.getElementById('zMin').textContent = dataset.vmin.toFixed(4);
     document.getElementById('zMax').textContent = dataset.vmax.toFixed(4);
     syncColorbarHandles();
+    if (typeof updateModeIndicator === 'function') updateModeIndicator();
 }
 
 function renderColorbar(cmap) {
@@ -3942,7 +4110,13 @@ const toastEl = document.getElementById('toast');
 const valueIndicator = document.getElementById('valueIndicator');
 
 /* 鼠標模式：'pan' = 拖曳平移；'inspect' = 顯示鼠標位置數值 */
-let cursorMode = 'pan';
+let cursorMode = getUserPref('cursorMode');
+if (cursorMode !== 'pan' && cursorMode !== 'inspect' && cursorMode !== 'profile') cursorMode = 'pan';
+
+applySelectPref(cmapSelect, 'colormap');
+applySelectPref(document.getElementById('saveFormat'), 'saveFormat');
+applySelectPref(document.getElementById('edColormap'), 'edColormap');
+applySelectPref(document.getElementById('edSaveFormat'), 'edSaveFormat');
 
 const SUPPORTED_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'pcd', 'bmp', 'png', 'jpg', 'jpeg'];
 const SUPPORTED_TEXT = '.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg';
@@ -3954,6 +4128,14 @@ function setProgress(p) {
 function hideProgress() {
     setTimeout(() => progressEl.classList.remove('show'), 300);
 }
+
+/** 切換元素的「處理中」忙碌狀態（轉圈 + 暫時停用） */
+function setBusy(el, busy) {
+    if (!el) return;
+    el.classList.toggle('is-busy', !!busy);
+}
+
+const openLabel = fileInput.closest('label.file-btn');
 
 let toastTimer = null;
 function showToast(message, type = 'error') {
@@ -3982,6 +4164,8 @@ async function loadFile(file) {
 
     statusEl.textContent = t('statusReading', file.name);
     setProgress(0);
+    setBusy(openLabel, true);
+    if (typeof btnSave !== 'undefined' && btnSave) btnSave.disabled = true;
 
     try {
         let result;
@@ -4022,12 +4206,15 @@ async function loadFile(file) {
         } else {
             statusEl.textContent = t('statusLoaded', file.name, result.width, result.height);
         }
+        applyPreferredViewMode();
     } catch (err) {
         console.error(err);
         statusEl.textContent = t('statusReadFailed', err.message);
         showToast(t('statusReadFailed', err.message), 'error');
     } finally {
         hideProgress();
+        setBusy(openLabel, false);
+        if (typeof btnSave !== 'undefined' && btnSave) btnSave.disabled = false;
     }
 }
 
@@ -4051,6 +4238,7 @@ function loadDatasetIntoViewer(ds) {
     renderInfo(ds.header, ds.width, ds.height, infoExtra);
     if (ds.type === 'pcd-scatter') statusEl.textContent = t('statusLoadedPcd', ds.filename, ds.pointCount);
     else statusEl.textContent = t('statusLoaded', ds.filename, ds.width, ds.height);
+    applyPreferredViewMode();
     return true;
 }
 
@@ -4147,12 +4335,25 @@ viewerEl.addEventListener('drop', async (e) => {
 });
 
 cmapSelect.addEventListener('change', () => {
+    setUserPref('colormap', cmapSelect.value);
+    renderColorbar(cmapSelect.value);
     // 切換色彩時保留目前的縮放與平移狀態
     if (currentDataset) render(currentDataset, cmapSelect.value, false);
     if (typeof Viewer3D !== 'undefined' && Viewer3D.isActive()) Viewer3D.refreshColors();
 });
 
 const saveFormatSelect = document.getElementById('saveFormat');
+if (saveFormatSelect) {
+    saveFormatSelect.addEventListener('change', () => {
+        setUserPref('saveFormat', saveFormatSelect.value);
+    });
+}
+
+/** 載入資料後，若使用者偏好 3D 則自動切換 */
+function applyPreferredViewMode() {
+    if (getUserPref('viewMode') !== '3d' || !currentDataset || view3dActive) return;
+    setViewMode('3d');
+}
 const btnSave = document.getElementById('btnSave');
 
 const supportsSavePicker = (typeof window.showSaveFilePicker === 'function');
@@ -4504,7 +4705,7 @@ function profilePtToScreen(px, py) {
 }
 
 /* 是否在圖上標記 Max / Min 數值點 */
-let showMinMax = false;
+let showMinMax = !!getUserPref('showMinMax');
 
 /**
  * 找出資料集中 Max / Min 數值的位置（影像像素或世界座標），結果快取在 dataset 上。
@@ -5048,11 +5249,27 @@ profileBandInput.addEventListener('input', () => {
 });
 
 
+const modeIndicator = document.getElementById('modeIndicator');
+const modeIndicatorLabel = document.getElementById('modeIndicatorLabel');
+
+/** 更新左上角「目前滑鼠模式」標章（僅在 2D 且已載入資料時顯示） */
+function updateModeIndicator() {
+    if (!modeIndicator) return;
+    const key = cursorMode === 'inspect' ? 'modeBadgeInspect'
+              : cursorMode === 'profile' ? 'modeBadgeProfile'
+              : 'modeBadgePan';
+    modeIndicatorLabel.textContent = t(key);
+    const in3d = (typeof view3dActive !== 'undefined') && view3dActive;
+    modeIndicator.classList.toggle('show', !!currentDataset && !in3d);
+}
+
 /** 切換鼠標模式 */
-function applyCursorMode(mode) {
+function applyCursorMode(mode, opts) {
+    opts = opts || {};
     if (mode !== 'pan' && mode !== 'inspect' && mode !== 'profile') mode = 'pan';
 
     cursorMode = mode;
+    setUserPref('cursorMode', mode);
 
     // 更新按鈕 active 狀態
     document.querySelectorAll('#cursorToggle button').forEach(b => {
@@ -5076,12 +5293,14 @@ function applyCursorMode(mode) {
     }
 
     // 進入剖面模式時顯示提示；離開時取消任何進行中的拉線
-    if (mode === 'profile') {
+    if (mode === 'profile' && !opts.silent) {
         const hint = isPcdScatterDataset(currentDataset) ? 'profileHintScatter' : 'profileHint';
         showToast(t(hint), 'info');
     } else if (profileState.drawing) {
         profileState.drawing = false;
     }
+
+    updateModeIndicator();
 }
 
 // 鼠標模式切換按鈕事件
@@ -5096,6 +5315,7 @@ const btnMinMax = document.getElementById('btnMinMax');
 if (btnMinMax) {
     btnMinMax.addEventListener('click', () => {
         showMinMax = !showMinMax;
+        setUserPref('showMinMax', showMinMax);
         btnMinMax.classList.toggle('active', showMinMax);
         if (showMinMax && !currentDataset) {
             showToast(t('toastNoData'), 'info');
@@ -5123,27 +5343,23 @@ document.querySelectorAll('#langToggle button').forEach(btn => {
     });
 });
 
-// 「更多」下拉選單：開關、點外面 / Esc 關閉
-const moreWrap = document.getElementById('btnMore').closest('.more-wrap');
-const btnMore  = document.getElementById('btnMore');
+// 「更多」下拉選單：關閉（開關由 setupOverflowToolbar 統一處理）
 function closeMoreMenu() {
-    moreWrap.classList.remove('open');
-    btnMore.setAttribute('aria-expanded', 'false');
+    const wrap = document.getElementById('viewerMoreWrap');
+    const btn  = document.getElementById('btnMore');
+    if (!wrap) return;
+    wrap.classList.remove('open');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
 }
-function toggleMoreMenu() {
-    const open = !moreWrap.classList.contains('open');
-    moreWrap.classList.toggle('open', open);
-    btnMore.setAttribute('aria-expanded', open ? 'true' : 'false');
-}
-btnMore.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleMoreMenu();
+document.addEventListener('click', () => {
+    closeMoreMenu();
+    if (typeof closeEdMoreMenu === 'function') closeEdMoreMenu();
 });
-// 點擊選單內部不關閉（方便操作下拉與切換）
-moreWrap.querySelector('.more-menu').addEventListener('click', (e) => e.stopPropagation());
-document.addEventListener('click', () => closeMoreMenu());
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && moreWrap.classList.contains('open')) closeMoreMenu();
+    if (e.key === 'Escape') {
+        closeMoreMenu();
+        if (typeof closeEdMoreMenu === 'function') closeEdMoreMenu();
+    }
 });
 
 
@@ -5732,10 +5948,12 @@ function setViewMode(mode) {
         }
         view3dActive = true;
         viewer.classList.add('mode-3d');
+        setUserPref('viewMode', '3d');
     } else {
         Viewer3D.exit();
         view3dActive = false;
         viewer.classList.remove('mode-3d');
+        setUserPref('viewMode', '2d');
         // 回到 2D：重新套用縮放/平移與剖面覆蓋層
         if (currentDataset) {
             applyTransform();
@@ -5743,6 +5961,7 @@ function setViewMode(mode) {
         }
     }
     updateViewModeButtons();
+    if (typeof updateModeIndicator === 'function') updateModeIndicator();
 }
 
 document.querySelectorAll('#viewModeToggle button').forEach(btn => {
@@ -6053,6 +6272,9 @@ function createImageView(ids, options) {
         }
         el.status.textContent = t('statusReading', file.name);
         setProgress(0);
+        const edOpenLabel = el.fileInput ? el.fileInput.closest('label.file-btn') : null;
+        setBusy(edOpenLabel, true);
+        if (el.btnSave) el.btnSave.disabled = true;
         try {
             let result;
             switch (ext) {
@@ -6083,6 +6305,8 @@ function createImageView(ids, options) {
             showToast(t('statusReadFailed', err.message), 'error');
         } finally {
             hideProgress();
+            setBusy(edOpenLabel, false);
+            if (el.btnSave) el.btnSave.disabled = false;
         }
     }
 
@@ -6186,8 +6410,14 @@ function createImageView(ids, options) {
     });
 
     el.colormap.addEventListener('change', () => {
+        setUserPref('edColormap', el.colormap.value);
         if (st.dataset) render(st.dataset, el.colormap.value, false);
     });
+    if (el.saveFormat) {
+        el.saveFormat.addEventListener('change', () => {
+            setUserPref('edSaveFormat', el.saveFormat.value);
+        });
+    }
     el.btnSave.addEventListener('click', onSaveClick);
 
     el.viewer.addEventListener('wheel', (e) => {
@@ -6874,6 +7104,159 @@ const editorView = createImageView({
 
 
 /* =========================================================================
+ *  6b. 工具列響應式收納（視窗縮小時收進「更多」）
+ * ========================================================================= */
+function setupOverflowToolbar(cfg) {
+    const controls = document.getElementById(cfg.controlsId);
+    const moreMenu = document.getElementById(cfg.moreMenuId);
+    const moreWrap = document.getElementById(cfg.moreWrapId);
+    const moreSep  = document.getElementById(cfg.moreSepId);
+    const btnMore  = document.getElementById(cfg.btnMoreId);
+    const observeEl = document.getElementById(cfg.observeId) || controls;
+    const overflowTarget = cfg.overflowTargetId
+        ? document.getElementById(cfg.overflowTargetId)
+        : moreMenu;
+    const alwaysShowMore = !!cfg.alwaysShowMore;
+    if (!controls || !moreMenu || !moreWrap || !overflowTarget) return;
+
+    const entries = cfg.groups.map(g => ({
+        group: document.getElementById(g.id),
+        sep:   document.getElementById(g.sepId),
+        priority: g.priority,
+    })).filter(e => e.group);
+
+    const anchor = moreSep || moreWrap;
+
+    function restoreAll() {
+        entries.forEach(e => {
+            if (e.sep && e.sep.parentElement !== controls) {
+                controls.insertBefore(e.sep, anchor);
+            }
+            if (e.group.parentElement !== controls) {
+                controls.insertBefore(e.group, anchor);
+            }
+            e.group.classList.remove('toolbar-overflow-group');
+        });
+    }
+
+    function toolbarContentWidth() {
+        let w = 0;
+        let n = 0;
+        for (const ch of controls.children) {
+            if (ch === moreWrap || ch === moreSep) continue;
+            const r = ch.getBoundingClientRect();
+            if (r.width < 1) continue;
+            w += r.width;
+            n++;
+        }
+        if (n > 1) w += (n - 1) * 10;
+        return w;
+    }
+
+    function reservedMoreWidth() {
+        moreWrap.style.display = '';
+        if (moreSep) moreSep.style.display = '';
+        return moreWrap.offsetWidth + (moreSep ? moreSep.offsetWidth + 10 : 10);
+    }
+
+    function layout() {
+        if (cfg.pageId) {
+            const page = document.getElementById(cfg.pageId);
+            if (!page || !page.classList.contains('active')) return;
+        }
+        if (controls.clientWidth < 1) return;
+
+        restoreAll();
+        moreWrap.classList.remove('open');
+        if (btnMore) btnMore.setAttribute('aria-expanded', 'false');
+
+        const available = controls.clientWidth;
+
+        if (!alwaysShowMore) {
+            moreWrap.style.display = 'none';
+            if (moreSep) moreSep.style.display = 'none';
+            if (toolbarContentWidth() <= available) return;
+        }
+
+        const reserved = reservedMoreWidth();
+
+        const candidates = entries
+            .filter(e => e.priority > 0)
+            .sort((a, b) => b.priority - a.priority);
+
+        for (const e of candidates) {
+            if (toolbarContentWidth() + reserved <= available) break;
+            if (e.sep) overflowTarget.appendChild(e.sep);
+            overflowTarget.appendChild(e.group);
+            e.group.classList.add('toolbar-overflow-group');
+        }
+
+        if (!alwaysShowMore) {
+            const hasOverflow = overflowTarget.children.length > 0;
+            moreWrap.style.display = hasOverflow ? '' : 'none';
+            if (moreSep) moreSep.style.display = hasOverflow ? '' : 'none';
+        }
+    }
+
+    if (btnMore) {
+        btnMore.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const open = !moreWrap.classList.contains('open');
+            moreWrap.classList.toggle('open', open);
+            btnMore.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+    }
+    moreMenu.addEventListener('click', (ev) => ev.stopPropagation());
+
+    if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(() => layout()).observe(observeEl);
+    }
+    window.addEventListener('resize', layout);
+    requestAnimationFrame(layout);
+    return layout;
+}
+
+function closeEdMoreMenu() {
+    const wrap = document.getElementById('edMoreWrap');
+    const btn  = document.getElementById('edBtnMore');
+    if (!wrap) return;
+    wrap.classList.remove('open');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+
+const layoutViewerToolbar = setupOverflowToolbar({
+    controlsId: 'viewerControls',
+    observeId: 'viewerHeader',
+    pageId: 'pageViewer',
+    moreMenuId: 'moreMenu',
+    moreWrapId: 'viewerMoreWrap',
+    moreSepId: 'viewerSepMore',
+    btnMoreId: 'btnMore',
+    overflowTargetId: 'viewerMoreOverflow',
+    alwaysShowMore: true,
+    groups: [
+        { id: 'viewerDisplayGroup', sepId: 'viewerSepDisplay', priority: 35 },
+        { id: 'viewerToolsGroup',   sepId: 'viewerSepTools',   priority: 45 },
+    ],
+});
+
+const layoutEdToolbar = setupOverflowToolbar({
+    controlsId: 'edControls',
+    observeId: 'edHeader',
+    pageId: 'pageEditor',
+    moreMenuId: 'edMoreMenu',
+    moreWrapId: 'edMoreWrap',
+    moreSepId: 'edSepMore',
+    btnMoreId: 'edBtnMore',
+    groups: [
+        { id: 'edHistoryGroup', sepId: 'edSepHistory', priority: 25 },
+        { id: 'edDisplayGroup', sepId: 'edSepDisplay', priority: 35 },
+        { id: 'edEditGroup',    sepId: 'edSepEdit',    priority: 45 },
+        { id: 'edSendGroup',    sepId: 'edSepSend',    priority: 55 },
+    ],
+});
+
+/* =========================================================================
  *  7. 視窗切換 (點雲檢視器 / 點雲編輯器，可按 Tab 來回切換)
  * ========================================================================= */
 const APP_PAGES = ['viewer', 'editor'];
@@ -6882,6 +7265,7 @@ let currentPage = 'viewer';
 function switchPage(page) {
     if (!APP_PAGES.includes(page) || page === currentPage) return;
     currentPage = page;
+    setUserPref('page', page);
     document.querySelectorAll('.page').forEach(el => {
         el.classList.toggle('active', el.getAttribute('data-page') === page);
     });
@@ -6890,10 +7274,15 @@ function switchPage(page) {
         btn.classList.toggle('active', active);
         btn.setAttribute('aria-selected', active ? 'true' : 'false');
     });
-    // 切換到編輯器時重新調整影像（隱藏狀態下尺寸為 0，需重新 fit）
-    if (page === 'editor' && typeof editorView !== 'undefined') {
-        requestAnimationFrame(() => editorView.refit());
-    }
+    requestAnimationFrame(() => {
+        if (page === 'editor') {
+            // 切換到編輯器時重新調整影像（隱藏狀態下尺寸為 0，需重新 fit）
+            if (typeof editorView !== 'undefined') editorView.refit();
+            if (typeof layoutEdToolbar === 'function') layoutEdToolbar();
+        } else if (page === 'viewer') {
+            if (typeof layoutViewerToolbar === 'function') layoutViewerToolbar();
+        }
+    });
 }
 
 function toggleAppPage() {
@@ -6916,6 +7305,13 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     toggleAppPage();
 });
+
+// 套用已儲存的游標模式與 Max/Min 偏好
+applyCursorMode(cursorMode, { silent: true });
+if (btnMinMax) btnMinMax.classList.toggle('active', showMinMax);
+
+// 還原上次使用的頁面
+if (getUserPref('page') === 'editor') switchPage('editor');
 
 // 套用初始語言
 applyLanguage(currentLang);
