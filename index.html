@@ -75,6 +75,79 @@
         color: var(--muted);
         font-size: 13px;
     }
+    .ctrl-field--colormap .colormap-picker-ui { min-width: 0; }
+
+    /* 色彩選單：自訂下拉，滑鼠懸停選項時顯示預覽色條 */
+    .colormap-picker { position: relative; display: inline-block; }
+    .colormap-picker-native {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+    .colormap-picker-ui { position: relative; }
+    .colormap-picker-trigger {
+        background: #3a3a4a;
+        color: var(--text);
+        border: 1px solid var(--border);
+        padding: 8px 28px 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        min-width: 96px;
+        text-align: left;
+        position: relative;
+    }
+    .colormap-picker-trigger:hover { background: #4a4a5c; }
+    .colormap-picker-trigger::after {
+        content: '▾';
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 11px;
+        opacity: 0.7;
+    }
+    .colormap-picker-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        min-width: 100%;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+        z-index: 1600;
+        display: none;
+        padding: 4px 0;
+    }
+    .colormap-picker.open .colormap-picker-menu { display: block; }
+    .colormap-picker-preview-wrap {
+        padding: 6px 10px 4px;
+        display: none;
+    }
+    .colormap-picker.preview-visible .colormap-picker-preview-wrap { display: block; }
+    .colormap-picker-preview {
+        display: block;
+        width: 100%;
+        height: 14px;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+    }
+    .colormap-picker-option {
+        padding: 6px 12px;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--text);
+    }
+    .colormap-picker-option:hover,
+    .colormap-picker-option.focused { background: rgba(79, 140, 255, 0.15); }
+    .colormap-picker-option.selected { color: var(--accent); font-weight: 600; }
 
     /* 「更多」下拉 */
     .more-wrap { position: relative; }
@@ -1671,7 +1744,7 @@
 
         <!-- 群組：顯示 -->
         <div class="ctrl-group" id="viewerDisplayGroup" data-toolbar-priority="35">
-            <label class="ctrl-field">
+            <label class="ctrl-field ctrl-field--colormap">
                 <span data-i18n="labelColormap">色彩：</span>
                 <select id="colormap">
                     <option value="viridis">Viridis</option>
@@ -1851,7 +1924,7 @@
 
             <!-- 群組：顯示 -->
             <div class="ctrl-group" id="edDisplayGroup" data-toolbar-priority="35">
-                <label class="ctrl-field">
+                <label class="ctrl-field ctrl-field--colormap">
                     <span data-i18n="labelColormap">色彩：</span>
                     <select id="edColormap">
                         <option value="viridis">Viridis</option>
@@ -4911,6 +4984,148 @@ function buildColormapLut(cmapName) {
     return lut;
 }
 
+/** 繪製完整色階預覽條 */
+function renderColormapPreview(cmapName, canvasEl) {
+    if (!canvasEl) return;
+    const ctx = canvasEl.getContext('2d');
+    const w = canvasEl.width, h = canvasEl.height;
+    const lut = buildColormapLut(cmapName);
+    const img = ctx.createImageData(w, h);
+    for (let x = 0; x < w; x++) {
+        const lo = (x / (w - 1) * 255) | 0;
+        const r = lut[lo * 3], g = lut[lo * 3 + 1], b = lut[lo * 3 + 2];
+        for (let y = 0; y < h; y++) {
+            const p = (y * w + x) * 4;
+            img.data[p] = r; img.data[p + 1] = g; img.data[p + 2] = b; img.data[p + 3] = 255;
+        }
+    }
+    ctx.putImageData(img, 0, 0);
+}
+
+/** 將原生 <select> 換成可懸停預覽色條的自訂色彩選單 */
+function setupColormapPicker(selectEl) {
+    if (!selectEl || selectEl.dataset.colormapPicker) return;
+
+    selectEl.dataset.colormapPicker = '1';
+    const wrap = document.createElement('div');
+    wrap.className = 'colormap-picker';
+    selectEl.parentNode.insertBefore(wrap, selectEl);
+    wrap.appendChild(selectEl);
+    selectEl.classList.add('colormap-picker-native');
+    selectEl.tabIndex = -1;
+
+    const ui = document.createElement('div');
+    ui.className = 'colormap-picker-ui';
+    wrap.appendChild(ui);
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'colormap-picker-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    ui.appendChild(trigger);
+
+    const menu = document.createElement('div');
+    menu.className = 'colormap-picker-menu';
+    menu.setAttribute('role', 'listbox');
+    ui.appendChild(menu);
+
+    const previewWrap = document.createElement('div');
+    previewWrap.className = 'colormap-picker-preview-wrap';
+    const previewCanvas = document.createElement('canvas');
+    previewCanvas.className = 'colormap-picker-preview';
+    previewCanvas.width = 200;
+    previewCanvas.height = 14;
+    previewCanvas.setAttribute('role', 'img');
+    previewCanvas.setAttribute('aria-hidden', 'true');
+    previewWrap.appendChild(previewCanvas);
+    menu.appendChild(previewWrap);
+
+    const optionEls = [];
+    [...selectEl.options].forEach(opt => {
+        const item = document.createElement('div');
+        item.className = 'colormap-picker-option';
+        item.setAttribute('role', 'option');
+        item.dataset.value = opt.value;
+        item.textContent = opt.textContent;
+        menu.appendChild(item);
+        optionEls.push(item);
+
+        item.addEventListener('mouseenter', () => {
+            wrap.classList.add('preview-visible');
+            renderColormapPreview(opt.value, previewCanvas);
+            optionEls.forEach(o => o.classList.toggle('focused', o === item));
+        });
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectValue(opt.value);
+        });
+    });
+
+    menu.addEventListener('mouseleave', () => {
+        wrap.classList.remove('preview-visible');
+        optionEls.forEach(o => o.classList.remove('focused'));
+    });
+    menu.addEventListener('click', (e) => e.stopPropagation());
+
+    function syncTrigger() {
+        const opt = selectEl.options[selectEl.selectedIndex];
+        trigger.textContent = opt ? opt.textContent : '';
+        optionEls.forEach(o => o.classList.toggle('selected', o.dataset.value === selectEl.value));
+    }
+
+    function selectValue(value) {
+        if (selectEl.value !== value) {
+            selectEl.value = value;
+            selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+            syncTrigger();
+        }
+        closeMenu();
+    }
+
+    function openMenu() {
+        wrap.classList.add('open');
+        trigger.setAttribute('aria-expanded', 'true');
+        syncTrigger();
+    }
+
+    function closeMenu() {
+        wrap.classList.remove('open', 'preview-visible');
+        trigger.setAttribute('aria-expanded', 'false');
+        optionEls.forEach(o => o.classList.remove('focused'));
+    }
+
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (wrap.classList.contains('open')) closeMenu();
+        else openMenu();
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!wrap.contains(e.target)) closeMenu();
+    });
+
+    selectEl.addEventListener('change', syncTrigger);
+    selectEl._syncColormapPicker = syncTrigger;
+    syncTrigger();
+}
+
+function syncColormapPicker(selectEl) {
+    if (selectEl && typeof selectEl._syncColormapPicker === 'function') {
+        selectEl._syncColormapPicker();
+    }
+}
+
+function closeAllColormapPickers() {
+    document.querySelectorAll('.colormap-picker.open').forEach(wrap => {
+        wrap.classList.remove('open', 'preview-visible');
+        const trigger = wrap.querySelector('.colormap-picker-trigger');
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        wrap.querySelectorAll('.colormap-picker-option.focused').forEach(o => o.classList.remove('focused'));
+    });
+}
+
 /** 世界座標 → 畫布像素（Y 軸向上，畫布 Y 向下） */
 function pcdWorldToCanvasPx(dataset, wx, wy) {
     const { bounds, width, height } = dataset;
@@ -5459,6 +5674,7 @@ if (cursorMode !== 'pan' && cursorMode !== 'inspect' && cursorMode !== 'profile'
     && cursorMode !== 'measure' && cursorMode !== 'area') cursorMode = 'pan';
 
 applySelectPref(cmapSelect, 'colormap');
+setupColormapPicker(cmapSelect);
 applySelectPref(document.getElementById('saveFormat'), 'saveFormat');
 applySelectPref(document.getElementById('edColormap'), 'edColormap');
 applySelectPref(document.getElementById('edSaveFormat'), 'edSaveFormat');
@@ -7431,6 +7647,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         closeMoreMenu();
         if (typeof closeEdMoreMenu === 'function') closeEdMoreMenu();
+        closeAllColormapPickers();
     }
 });
 
@@ -8443,6 +8660,7 @@ function createImageView(ids, options) {
 
     el.colormap.addEventListener('change', () => {
         setUserPref('edColormap', el.colormap.value);
+        renderColorbar(el.colormap.value);
         if (st.dataset) render(st.dataset, el.colormap.value, false);
     });
     if (el.saveFormat) {
@@ -8802,7 +9020,10 @@ function createImageView(ids, options) {
         const { vmin, vmax } = computeRange(rangeSrc);
         st.dataset = { ...ds, vmin, vmax, canvasEl: el.canvas };
         resetColorClip(false);
-        if (opts.colormap && el.colormap) el.colormap.value = opts.colormap;
+        if (opts.colormap && el.colormap) {
+            el.colormap.value = opts.colormap;
+            syncColormapPicker(el.colormap);
+        }
         render(st.dataset, el.colormap.value, true);
         const infoExtra = ds.type === 'pcd-scatter' ? { pointCount: ds.pointCount } : null;
         renderInfo(ds.header, ds.width, ds.height, infoExtra);
@@ -9335,6 +9556,7 @@ const editorView = createImageView({
     sendToViewer: 'edSendToViewer', undo: 'edUndo', redo: 'edRedo',
     btnCalc: 'edBtnCalc',
 }, { editing: true });
+setupColormapPicker(document.getElementById('edColormap'));
 
 
 /* =========================================================================
