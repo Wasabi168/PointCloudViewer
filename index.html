@@ -1296,12 +1296,15 @@
     .batch-file-status.busy { color: var(--accent); }
     .batch-file-remove {
         flex-shrink: 0;
+        position: relative;
+        z-index: 1;
         background: transparent;
         color: var(--muted);
         border: 1px solid var(--border);
         padding: 4px 8px;
         font-size: 12px;
         line-height: 1;
+        cursor: pointer;
     }
     .batch-file-remove:hover { background: #3a3a4a; color: #ff7a7a; }
     .batch-side .status { white-space: pre-wrap; word-break: break-word; }
@@ -1313,14 +1316,329 @@
     button.btn-secondary:hover { background: #4a4a5c; }
     button.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    /* ===== 批次編輯 ===== */
+    .batch-edit-page main {
+        grid-template-columns: 1fr 340px;
+    }
+    .batch-edit-workspace.drag-over .batch-drop {
+        border-color: var(--accent);
+        background: rgba(79, 140, 255, 0.08);
+        color: var(--accent);
+    }
+    .batch-edit-workspace.drag-reject .batch-drop {
+        border-color: #ff5c5c;
+        background: rgba(255, 92, 92, 0.08);
+        color: #ff7a7a;
+    }
+    .batch-edit-workspace {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-height: 0;
+    }
+    .batch-edit-preview-panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+    }
+    .batch-edit-preview-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+        font-size: 13px;
+        color: var(--muted);
+    }
+    .batch-edit-preview-head strong { color: var(--text); }
+    .batch-step-previews {
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        min-height: 100px;
+    }
+    .batch-step-previews:empty::after {
+        content: attr(data-empty);
+        display: block;
+        padding: 24px 12px;
+        color: var(--muted);
+        font-size: 13px;
+        width: 100%;
+        text-align: center;
+    }
+    .batch-step-preview-card {
+        flex-shrink: 0;
+        width: 148px;
+        background: #2a2a36;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    .batch-step-preview-card.active {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px rgba(79, 140, 255, 0.35);
+    }
+    .batch-step-preview-card canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        background: #1a1a22;
+    }
+    .batch-step-preview-label {
+        padding: 6px 8px;
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.35;
+        border-top: 1px solid var(--border);
+    }
+    .batch-step-preview-label strong {
+        display: block;
+        color: var(--text);
+        font-size: 12px;
+        margin-bottom: 2px;
+    }
+    .batch-edit-file-panel { flex: 1; min-height: 180px; }
+    .batch-edit-side .batch-file-badge {
+        display: inline-block;
+        margin-top: 6px;
+        padding: 4px 8px;
+        background: #3a3a4a;
+        border-radius: 4px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+    }
+    .batch-edit-side .batch-file-badge.ok { color: #6ec27a; }
+    .batch-edit-side .batch-file-badge.warn { color: #ffaa44; }
+
+    /* ===== 批次檔管理器（編輯器 / 批次編輯共用浮動視窗） ===== */
+    .bfm-float {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        left: auto;
+        top: auto;
+        z-index: 10050;
+        width: min(380px, calc(100vw - 40px));
+        max-height: min(72vh, 560px);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04);
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    .bfm-float .bfm-name-input {
+        user-select: text;
+        -webkit-user-select: text;
+    }
+    @media (max-height: 640px) {
+        .bfm-float { max-height: calc(100vh - 56px); }
+    }
+    .bfm-float.show {
+        display: flex;
+    }
+    .bfm-float.bfm-drag-over {
+        border-color: var(--accent);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(79, 140, 255, 0.45);
+    }
+    .bfm-float.bfm-drag-reject {
+        border-color: #ff5c5c;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(255, 92, 92, 0.45);
+    }
+    .bfm-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        cursor: grab;
+        user-select: none;
+        flex-shrink: 0;
+    }
+    .bfm-header:active { cursor: grabbing; }
+    .bfm-header h3 { margin: 0; font-size: 14px; font-weight: 600; }
+    .bfm-close {
+        background: transparent;
+        border: none;
+        color: var(--muted);
+        font-size: 20px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 2px 6px;
+        flex-shrink: 0;
+    }
+    .bfm-close:hover { color: var(--text); }
+    .bfm-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+    .bfm-toolbar button {
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+    .bfm-add-step-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+    .bfm-last-edit-hint {
+        font-size: 11px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+        min-width: 0;
+        line-height: 1.3;
+    }
+    .bfm-last-edit-hint.has-step {
+        color: var(--text);
+    }
+    .bfm-meta {
+        padding: 8px 14px;
+        font-size: 11px;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+        line-height: 1.5;
+        flex-shrink: 0;
+    }
+    .bfm-meta strong { color: var(--text); }
+    .bfm-steps {
+        flex: 1;
+        overflow-y: auto;
+        padding: 6px 0;
+        min-height: 80px;
+    }
+    .bfm-steps:empty::after {
+        content: attr(data-empty);
+        display: block;
+        padding: 32px 18px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+    }
+    .bfm-steps.bfm-steps-sorting {
+        user-select: none;
+    }
+    .bfm-steps.bfm-steps-sorting .bfm-step-item {
+        transition: transform 0.22s ease;
+    }
+    .bfm-step-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        border-bottom: 1px solid rgba(58, 58, 74, 0.5);
+        font-size: 12px;
+        position: relative;
+        background: var(--panel);
+    }
+    .bfm-step-item.bfm-dragging {
+        transition: none;
+        z-index: 3;
+        opacity: 0.95;
+        background: #323244;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+        border-radius: 6px;
+    }
+    .bfm-step-item.bfm-sort-shift {
+        transition: transform 0.22s ease;
+    }
+    .bfm-step-drag-handle {
+        flex-shrink: 0;
+        width: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1;
+        cursor: grab;
+        touch-action: none;
+        letter-spacing: -2px;
+    }
+    .bfm-step-drag-handle:active { cursor: grabbing; }
+    .bfm-step-drag-handle:hover { color: var(--text); }
+    .bfm-step-item:hover { background: rgba(255, 255, 255, 0.03); }
+    .bfm-step-idx {
+        flex-shrink: 0;
+        width: 26px;
+        height: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #3a3a4a;
+        border-radius: 6px;
+        font-family: Consolas, monospace;
+        font-size: 12px;
+        color: var(--muted);
+    }
+    .bfm-step-desc {
+        flex: 1;
+        min-width: 0;
+        color: var(--text);
+    }
+    .bfm-step-desc small {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        margin-top: 2px;
+    }
+    .bfm-step-actions {
+        display: flex;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+    .bfm-step-actions button {
+        padding: 4px 8px;
+        font-size: 12px;
+        min-width: 28px;
+    }
+    .bfm-footer {
+        padding: 10px 14px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+    .bfm-name-input {
+        flex: 1;
+        min-width: 0;
+        background: #2a2a36;
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 6px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    #edBtnBatchFile.active,
+    #batchEditBtnManage.active {
+        background: var(--accent-hover, #3d7ae8);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    }
+
 </style>
 </head>
 <body>
 
-<!-- 頂部頁籤：點雲檢視器 / 點雲編輯器 / 批次轉檔，可按 Tab 切換 -->
+<!-- 頂部頁籤：點雲檢視器 / 點雲編輯器 / 批次編輯 / 批次轉檔，可按 Tab 切換 -->
 <nav class="app-tabs" id="appTabs">
     <button type="button" class="app-tab active" data-page="viewer" aria-selected="true" data-i18n="tabViewer">點雲檢視器</button>
     <button type="button" class="app-tab" data-page="editor" aria-selected="false" data-i18n="tabEditor">點雲編輯器</button>
+    <button type="button" class="app-tab" data-page="batchEdit" aria-selected="false" data-i18n="tabBatchEdit">批次編輯</button>
     <button type="button" class="app-tab" data-page="batch" aria-selected="false" data-i18n="tabBatch">批次轉檔</button>
     <span class="app-tabs-hint"><span data-i18n="tabHintPrefix">按</span> <kbd>Tab</kbd> <span data-i18n="tabHintSuffix">切換視窗</span></span>
     <div class="lang-toggle" id="langToggle">
@@ -1575,6 +1893,7 @@
 
             <!-- 群組：傳送 -->
             <div class="ctrl-group" id="edSendGroup" data-toolbar-priority="55">
+                <button type="button" id="edBtnBatchFile" data-i18n="batchFileBtn" data-i18n-title="batchFileBtnTitle">批次檔</button>
                 <button type="button" id="edSendToViewer" data-i18n="sendToViewer" data-i18n-title="sendToViewerTitle">傳送到檢視器</button>
             </div>
 
@@ -1731,6 +2050,106 @@
     </main>
 </div><!-- /#pageBatch -->
 
+<!-- 視窗四：批次編輯 -->
+<div class="page batch-page batch-edit-page" id="pageBatchEdit" data-page="batchEdit">
+    <header id="batchEditHeader">
+        <h1>
+            <span data-i18n="batchEditTitle">批次編輯</span>
+            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg)</span>
+        </h1>
+        <div class="controls">
+            <div class="ctrl-group">
+                <label class="file-btn">
+                    <span data-i18n="batchEditBtnAdd">加入檔案</span>
+                    <input type="file" id="batchEditFileInput" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
+                </label>
+                <button type="button" id="batchEditBtnClear" class="btn-secondary" data-i18n="batchEditBtnClear" disabled>清除清單</button>
+            </div>
+            <span class="ctrl-sep" aria-hidden="true"></span>
+            <div class="ctrl-group">
+                <button type="button" id="batchEditBtnOpenBatch" class="btn-secondary" data-i18n="batchEditBtnOpenBatch">開啟批次檔</button>
+                <button type="button" id="batchEditBtnManage" data-i18n="batchEditBtnManage">批次檔管理</button>
+            </div>
+            <span class="ctrl-sep" aria-hidden="true"></span>
+            <div class="ctrl-group">
+                <label class="ctrl-field">
+                    <span data-i18n="labelSaveFormat">儲存格式：</span>
+                    <select id="batchEditSaveFormat">
+                        <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
+                        <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
+                        <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
+                        <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
+                        <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
+                        <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
+                    </select>
+                </label>
+                <button type="button" id="batchEditBtnRun" data-i18n="batchEditBtnRun" disabled>執行批次編輯</button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="batch-edit-workspace" id="batchEditWorkspace">
+            <div class="batch-edit-preview-panel" id="batchEditPreviewPanel">
+                <div class="batch-edit-preview-head">
+                    <span><span data-i18n="batchEditPreviewTitle">步驟預覽</span> · <strong id="batchEditPreviewFile">—</strong></span>
+                    <label class="ctrl-field" style="font-size:12px;">
+                        <span data-i18n="batchEditPreviewSample">預覽樣本：</span>
+                        <select id="batchEditPreviewSelect" disabled><option value="">—</option></select>
+                    </label>
+                </div>
+                <div class="batch-step-previews" id="batchEditStepPreviews" data-empty="請先開啟批次檔並選擇預覽樣本"></div>
+            </div>
+            <div class="batch-drop" id="batchEditDropZone">
+                <div class="batch-drop-icon">&#x2B07;</div>
+                <div class="batch-drop-title" data-i18n="batchEditDropTitle">拖曳多個檔案到此處</div>
+                <div data-i18n="batchEditDropHint">檔案尺寸與種類須與批次檔綁定條件一致</div>
+            </div>
+            <div class="batch-file-panel batch-edit-file-panel">
+                <div class="batch-file-head">
+                    <span><span data-i18n="batchEditFileList">檔案清單</span> · <strong id="batchEditFileCount">0</strong></span>
+                </div>
+                <ul class="batch-file-list" id="batchEditFileList" data-empty="尚未加入任何檔案"></ul>
+            </div>
+        </div>
+
+        <aside class="side batch-side batch-edit-side">
+            <h2 data-i18n="batchEditBatchFile">批次檔</h2>
+            <div class="status" id="batchEditBatchInfo" data-i18n="batchEditNoBatchFile">尚未開啟批次檔</div>
+            <div class="batch-file-badge" id="batchEditBatchBadge" style="display:none;"></div>
+
+            <h2 style="margin-top:20px;" data-i18n="sideProgress">進度</h2>
+            <div class="progress" id="batchEditProgress"><div class="progress-bar" id="batchEditProgressBar"></div></div>
+            <div class="status" id="batchEditStatus" data-i18n="batchEditStatusIdle">尚未加入檔案</div>
+        </aside>
+    </main>
+</div><!-- /#pageBatchEdit -->
+
+<!-- 批次檔管理器浮動視窗（編輯器 / 批次編輯共用） -->
+<div class="bfm-float" id="batchFileManagerPanel" role="dialog" aria-labelledby="bfmTitle" aria-hidden="true">
+    <div class="bfm-header" id="bfmDragHandle">
+        <h3 id="bfmTitle" data-i18n="bfmTitle">批次檔管理</h3>
+        <button type="button" class="bfm-close" id="bfmCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <div class="bfm-toolbar">
+        <button type="button" id="bfmBtnNew" data-i18n="bfmBtnNew">新建</button>
+        <button type="button" id="bfmBtnOpen" class="btn-secondary" data-i18n="bfmBtnOpen">開啟</button>
+        <button type="button" id="bfmBtnSave" class="btn-secondary" data-i18n="bfmBtnSave" disabled>儲存</button>
+        <button type="button" id="bfmBtnClear" class="btn-secondary" data-i18n="bfmBtnClear" disabled>清除</button>
+        <div class="bfm-add-step-wrap">
+            <button type="button" id="bfmBtnAddStep" data-i18n="bfmBtnAddStep" disabled>加入剛才的編輯</button>
+            <span class="bfm-last-edit-hint" id="bfmLastEditHint">（尚無可加入的編輯）</span>
+        </div>
+    </div>
+    <div class="bfm-meta" id="bfmMeta" data-i18n="bfmNoFile">尚未建立或開啟批次檔</div>
+    <div class="bfm-steps" id="bfmSteps" data-empty="流程中尚無步驟"></div>
+    <div class="bfm-footer">
+        <input type="text" id="bfmNameInput" class="bfm-name-input" data-i18n-placeholder="bfmNamePlaceholder" placeholder="批次檔名稱" />
+        <button type="button" id="bfmBtnDone" class="btn-secondary" data-i18n="bfmBtnDone">關閉</button>
+    </div>
+    <input type="file" id="bfmFileInput" accept=".wbatch,.json" hidden />
+</div>
+
 <!-- 計算機 modal -->
 <div class="calc-overlay" id="calcOverlay" role="dialog" aria-modal="true" aria-labelledby="calcTitle">
     <div class="calc-panel">
@@ -1772,6 +2191,7 @@ const I18N = {
         tabViewer: '點雲檢視器',
         tabEditor: '點雲編輯器',
         tabBatch: '批次轉檔',
+        tabBatchEdit: '批次編輯',
         tabHintPrefix: '按',
         tabHintSuffix: '切換視窗',
         batchTitle: '批次轉檔',
@@ -1968,13 +2388,71 @@ const I18N = {
         infoPcdScatter: '散布（實際座標）',
         valueWorldPos: '座標 (x, y)',
         calcPcdScatter: '散布點雲不支援像素計算機',
-        savePcdScatter: '散布點雲僅可儲存為 PNG / JPG 畫面'
+        savePcdScatter: '散布點雲僅可儲存為 PNG / JPG 畫面',
+        batchEditTitle: '批次編輯',
+        batchEditBtnAdd: '加入檔案',
+        batchEditBtnClear: '清除清單',
+        batchEditBtnOpenBatch: '開啟批次檔',
+        batchEditBtnManage: '批次檔管理',
+        batchEditBtnRun: '執行批次編輯',
+        batchEditDropTitle: '拖曳多個檔案到此處',
+        batchEditDropHint: '檔案尺寸與種類須與批次檔綁定條件一致',
+        batchEditFileList: '檔案清單',
+        batchEditBatchFile: '批次檔',
+        batchEditNoBatchFile: '尚未開啟批次檔',
+        batchEditStatusIdle: '尚未加入檔案',
+        batchEditStatusAdded: '已加入 {0} 個檔案（共 {1} 個）',
+        batchEditStatusRunning: '處理中 ({0}/{1})：{2}',
+        batchEditStatusDone: '完成：成功 {0} 個，失敗 {1} 個',
+        batchEditStatusCleared: '已清除檔案清單',
+        batchEditPreviewTitle: '步驟預覽',
+        batchEditPreviewSample: '預覽樣本：',
+        batchEditPreviewOriginal: '原始',
+        batchEditPreviewEmpty: '請先開啟批次檔並選擇預覽樣本',
+        batchEditMismatch: '檔案不符合批次檔條件：{0}',
+        batchEditNoBatch: '請先開啟批次檔',
+        batchEditNoFiles: '請先加入要處理的檔案',
+        batchEditKindGrid: '一般影像',
+        batchEditKindPcd: 'PCD 散布',
+        batchFileBtn: '批次檔',
+        batchFileBtnTitle: '開啟 / 關閉批次檔管理浮動視窗',
+        bfmTitle: '批次檔管理',
+        bfmBtnNew: '新建',
+        bfmBtnOpen: '開啟',
+        bfmBtnSave: '儲存',
+        bfmBtnClear: '清除',
+        bfmBtnAddStep: '加入剛才的編輯',
+        bfmNoLastEditHint: '（尚無可加入的編輯）',
+        bfmLastEditLabel: '上一次：{0}',
+        bfmBtnDone: '關閉',
+        bfmNoFile: '尚未建立或開啟批次檔',
+        bfmNoSteps: '流程中尚無步驟',
+        bfmNamePlaceholder: '批次檔名稱',
+        bfmMetaInfo: '種類：{0} · 尺寸：{1}×{2} · 步驟：{3}',
+        bfmStepGlobalLevel: '全域水平校正',
+        bfmStepDenoise: '刪除雜點（{0} ~ {1}）',
+        bfmStepCalc: '計算機：{0} {1}',
+        bfmStepCropRect: '方形裁切',
+        bfmStepCropCircle: '圓形裁切',
+        bfmStepMoveUp: '上移',
+        bfmStepMoveDown: '下移',
+        bfmStepDragTitle: '拖曳以調整順序',
+        bfmStepRemove: '移除',
+        bfmNewNeedData: '請先在編輯器載入資料以建立批次檔',
+        bfmNoLastEdit: '沒有可加入的編輯步驟（請先完成一項編輯操作）',
+        bfmKindMismatch: '此編輯步驟與批次檔種類不符',
+        bfmSaved: '批次檔已儲存',
+        bfmCleared: '已清除批次檔',
+        bfmLoaded: '已開啟批次檔：{0}',
+        bfmDropUnsupported: '請拖入 .wbatch 批次檔',
+        bfmStepAdded: '已加入編輯步驟'
     },
     'en': {
         appTitle: 'Point Cloud Viewer',
         tabViewer: 'Point Cloud Viewer',
         tabEditor: 'Point Cloud Editor',
         tabBatch: 'Batch Convert',
+        tabBatchEdit: 'Batch Edit',
         tabHintPrefix: 'Press',
         tabHintSuffix: 'to switch windows',
         batchTitle: 'Batch Convert',
@@ -2171,7 +2649,64 @@ const I18N = {
         infoPcdScatter: 'Scatter (world XY)',
         valueWorldPos: 'Coord (x, y)',
         calcPcdScatter: 'Calculator is not available for scatter point clouds',
-        savePcdScatter: 'Scatter point clouds can only be saved as PNG / JPG'
+        savePcdScatter: 'Scatter point clouds can only be saved as PNG / JPG',
+        batchEditTitle: 'Batch Edit',
+        batchEditBtnAdd: 'Add Files',
+        batchEditBtnClear: 'Clear List',
+        batchEditBtnOpenBatch: 'Open Batch File',
+        batchEditBtnManage: 'Batch File',
+        batchEditBtnRun: 'Run Batch Edit',
+        batchEditDropTitle: 'Drag multiple files here',
+        batchEditDropHint: 'Files must match the batch file kind and dimensions',
+        batchEditFileList: 'File List',
+        batchEditBatchFile: 'Batch File',
+        batchEditNoBatchFile: 'No batch file open',
+        batchEditStatusIdle: 'No files added yet',
+        batchEditStatusAdded: 'Added {0} file(s) ({1} total)',
+        batchEditStatusRunning: 'Processing ({0}/{1}): {2}',
+        batchEditStatusDone: 'Done: {0} succeeded, {1} failed',
+        batchEditStatusCleared: 'File list cleared',
+        batchEditPreviewTitle: 'Step Preview',
+        batchEditPreviewSample: 'Preview sample:',
+        batchEditPreviewOriginal: 'Original',
+        batchEditPreviewEmpty: 'Open a batch file and choose a preview sample first',
+        batchEditMismatch: 'File does not match batch file: {0}',
+        batchEditNoBatch: 'Please open a batch file first',
+        batchEditNoFiles: 'Please add files to process first',
+        batchEditKindGrid: 'Grid image',
+        batchEditKindPcd: 'PCD scatter',
+        batchFileBtn: 'Batch File',
+        batchFileBtnTitle: 'Open / close the batch file panel',
+        bfmTitle: 'Batch File',
+        bfmBtnNew: 'New',
+        bfmBtnOpen: 'Open',
+        bfmBtnSave: 'Save',
+        bfmBtnClear: 'Clear',
+        bfmBtnAddStep: 'Add Last Edit',
+        bfmNoLastEditHint: '(no edit to add)',
+        bfmLastEditLabel: 'Last: {0}',
+        bfmBtnDone: 'Close',
+        bfmNoFile: 'No batch file created or open',
+        bfmNoSteps: 'No steps in workflow',
+        bfmNamePlaceholder: 'Batch file name',
+        bfmMetaInfo: 'Kind: {0} · Size: {1}×{2} · Steps: {3}',
+        bfmStepGlobalLevel: 'Global leveling',
+        bfmStepDenoise: 'Denoise ({0} ~ {1})',
+        bfmStepCalc: 'Calculator: {0} {1}',
+        bfmStepCropRect: 'Rectangle crop',
+        bfmStepCropCircle: 'Ellipse crop',
+        bfmStepMoveUp: 'Up',
+        bfmStepMoveDown: 'Down',
+        bfmStepDragTitle: 'Drag to reorder',
+        bfmStepRemove: 'Remove',
+        bfmNewNeedData: 'Load data in the editor first to create a batch file',
+        bfmNoLastEdit: 'No edit step to add (complete an edit operation first)',
+        bfmKindMismatch: 'This edit step does not match the batch file kind',
+        bfmSaved: 'Batch file saved',
+        bfmCleared: 'Batch file cleared',
+        bfmLoaded: 'Opened batch file: {0}',
+        bfmDropUnsupported: 'Please drop a .wbatch file',
+        bfmStepAdded: 'Edit step added'
     }
 };
 
@@ -2367,6 +2902,10 @@ function applyLanguage(lang) {
     // 同步「點雲編輯器」的動態文字（狀態列、儲存按鈕）
     if (typeof editorView !== 'undefined' && editorView && editorView.syncLang) {
         editorView.syncLang();
+    }
+
+    if (typeof BatchFileManager !== 'undefined' && BatchFileManager.refreshLastEditHint) {
+        BatchFileManager.refreshLastEditHint();
     }
 
     // 語系切換後按鈕文字寬度改變，需重新計算工具列收納
@@ -3953,6 +4492,363 @@ function prepareDatasetForExport(dataset, format) {
         renderGridExportToCanvas(dataset, canvas, BATCH_EXPORT_CMAP);
     }
     return { ...dataset, canvasEl: canvas };
+}
+
+/* =========================================================================
+ *  1c. 批次編輯管線（可重複套用的編輯步驟）
+ * ========================================================================= */
+
+const BATCH_FILE_FORMAT = 'webviewer-batch';
+const BATCH_FILE_VERSION = 1;
+
+function getDatasetKind(ds) {
+    return isPcdScatterDataset(ds) ? 'pcd' : 'grid';
+}
+
+function getDatasetSignature(ds) {
+    if (!ds) return null;
+    return { kind: getDatasetKind(ds), width: ds.width, height: ds.height };
+}
+
+function signaturesMatch(sigA, sigB) {
+    if (!sigA || !sigB) return false;
+    return sigA.kind === sigB.kind && sigA.width === sigB.width && sigA.height === sigB.height;
+}
+
+function cloneDatasetDeep(ds) {
+    return cloneDatasetForTransfer(ds);
+}
+
+function batchEnsureFloatPixels(ds) {
+    if (isPcdScatterDataset(ds)) return;
+    if (!(ds.data instanceof Float32Array) && !(ds.data instanceof Float64Array)) {
+        ds.data = Float32Array.from(ds.data);
+    }
+}
+
+function batchRecomputeScatterBounds(ds) {
+    const { x, y } = ds, n = x.length;
+    const b = { xmin: Infinity, xmax: -Infinity, ymin: Infinity, ymax: -Infinity };
+    for (let i = 0; i < n; i++) {
+        if (x[i] < b.xmin) b.xmin = x[i];
+        if (x[i] > b.xmax) b.xmax = x[i];
+        if (y[i] < b.ymin) b.ymin = y[i];
+        if (y[i] > b.ymax) b.ymax = y[i];
+    }
+    if (!Number.isFinite(b.xmin)) { b.xmin = 0; b.xmax = 1; b.ymin = 0; b.ymax = 1; }
+    ds.bounds = b;
+}
+
+function batchPlaneFitAccessors(ds) {
+    if (isPcdScatterDataset(ds)) {
+        const { x, y, z } = ds;
+        return {
+            count: z.length,
+            getX: (i) => x[i],
+            getY: (i) => y[i],
+            getZ: (i) => z[i],
+            isValid: (i) => Number.isFinite(z[i]) && Number.isFinite(x[i]) && Number.isFinite(y[i]),
+        };
+    }
+    const { data, width, height } = ds;
+    const hdr = ds.header || {};
+    let xl = parseFloat(hdr.xlength ?? hdr['x-length'] ?? 0);
+    let yl = parseFloat(hdr.ylength ?? hdr['y-length'] ?? 0);
+    if (!Number.isFinite(xl) || xl <= 0) xl = width;
+    if (!Number.isFinite(yl) || yl <= 0) yl = height;
+    const dx = xl / Math.max(1, width - 1);
+    const dy = yl / Math.max(1, height - 1);
+    return {
+        count: data.length,
+        getX: (i) => (i % width) * dx,
+        getY: (i) => ((i / width) | 0) * dy,
+        getZ: (i) => data[i],
+        isValid: (i) => Number.isFinite(data[i]),
+    };
+}
+
+function batchSolveLinear3(A, B) {
+    const M = [
+        [A[0][0], A[0][1], A[0][2], B[0]],
+        [A[1][0], A[1][1], A[1][2], B[1]],
+        [A[2][0], A[2][1], A[2][2], B[2]],
+    ];
+    for (let col = 0; col < 3; col++) {
+        let maxRow = col, maxVal = Math.abs(M[col][col]);
+        for (let r = col + 1; r < 3; r++) {
+            const v = Math.abs(M[r][col]);
+            if (v > maxVal) { maxVal = v; maxRow = r; }
+        }
+        if (maxVal < 1e-12) return null;
+        if (maxRow !== col) {
+            const tmp = M[col]; M[col] = M[maxRow]; M[maxRow] = tmp;
+        }
+        for (let r = col + 1; r < 3; r++) {
+            const f = M[r][col] / M[col][col];
+            for (let c = col; c < 4; c++) M[r][c] -= f * M[col][c];
+        }
+    }
+    const x = [0, 0, 0];
+    for (let r = 2; r >= 0; r--) {
+        let sum = M[r][3];
+        for (let c = r + 1; c < 3; c++) sum -= M[r][c] * x[c];
+        x[r] = sum / M[r][r];
+    }
+    return x;
+}
+
+function batchFitPlaneLeastSquares(acc) {
+    let n = 0, sx = 0, sy = 0, sz = 0;
+    let sxx = 0, syy = 0, sxy = 0, sxz = 0, syz = 0;
+    for (let i = 0; i < acc.count; i++) {
+        if (!acc.isValid(i)) continue;
+        const x = acc.getX(i), y = acc.getY(i), z = acc.getZ(i);
+        n++;
+        sx += x; sy += y; sz += z;
+        sxx += x * x; syy += y * y; sxy += x * y;
+        sxz += x * z; syz += y * z;
+    }
+    if (n < 3) return null;
+    const sol = batchSolveLinear3(
+        [[sxx, sxy, sx], [sxy, syy, sy], [sx, sy, n]],
+        [sxz, syz, sz],
+    );
+    if (!sol) return null;
+    return { a: sol[0], b: sol[1], c: sol[2], n };
+}
+
+function batchRefreshRange(ds) {
+    const src = isPcdScatterDataset(ds) ? ds.z : ds.data;
+    const { vmin, vmax } = computeRange(src);
+    ds.vmin = vmin;
+    ds.vmax = vmax;
+}
+
+function batchPointInNormRect(px, py, r, circle) {
+    const x0 = r.x0, y0 = r.y0, x1 = r.x1, y1 = r.y1;
+    if (!circle) return px >= x0 && px <= x1 && py >= y0 && py <= y1;
+    const cx = (x0 + x1) * 0.5, cy = (y0 + y1) * 0.5;
+    const rx = (x1 - x0) * 0.5, ry = (y1 - y0) * 0.5;
+    if (rx <= 0 || ry <= 0) return false;
+    const dx = (px - cx) / rx, dy = (py - cy) / ry;
+    return dx * dx + dy * dy <= 1;
+}
+
+function batchApplyGlobalLevel(ds) {
+    const acc = batchPlaneFitAccessors(ds);
+    const plane = batchFitPlaneLeastSquares(acc);
+    if (!plane) return { ok: false, reason: 'insufficient' };
+    const { a, b, c } = plane;
+    if (isPcdScatterDataset(ds)) {
+        const z = ds.z;
+        for (let i = 0; i < z.length; i++) {
+            if (!acc.isValid(i)) continue;
+            z[i] -= a * ds.x[i] + b * ds.y[i] + c;
+        }
+    } else {
+        batchEnsureFloatPixels(ds);
+        const data = ds.data;
+        for (let i = 0; i < data.length; i++) {
+            if (!acc.isValid(i)) continue;
+            data[i] -= a * acc.getX(i) + b * acc.getY(i) + c;
+        }
+    }
+    batchRefreshRange(ds);
+    return { ok: true };
+}
+
+function batchApplyDenoise(ds, loFrac, hiFrac) {
+    const src = isPcdScatterDataset(ds) ? ds.z : ds.data;
+    const { vmin, vmax } = computeRange(src);
+    const span = (vmax - vmin) || 1;
+    const loV = vmin + loFrac * span;
+    const hiV = vmin + hiFrac * span;
+    let keep = 0;
+    if (isPcdScatterDataset(ds)) {
+        const { x, y, z } = ds, total = z.length;
+        const mask = new Uint8Array(total);
+        for (let i = 0; i < total; i++) {
+            const v = z[i];
+            if (Number.isFinite(v) && v >= loV && v <= hiV) { mask[i] = 1; keep++; }
+        }
+        const nx = new Float32Array(keep), ny = new Float32Array(keep), nz = new Float32Array(keep);
+        let j = 0;
+        for (let i = 0; i < total; i++) if (mask[i]) { nx[j] = x[i]; ny[j] = y[i]; nz[j] = z[i]; j++; }
+        ds.x = nx; ds.y = ny; ds.z = nz; ds.pointCount = keep;
+        batchRecomputeScatterBounds(ds);
+    } else {
+        batchEnsureFloatPixels(ds);
+        const data = ds.data;
+        for (let i = 0; i < data.length; i++) {
+            const v = data[i];
+            if (Number.isFinite(v) && v >= loV && v <= hiV) keep++;
+            else data[i] = NaN;
+        }
+    }
+    batchRefreshRange(ds);
+    return { ok: true, keep };
+}
+
+function batchApplyCalc(ds, op, operand) {
+    if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
+    if (!Number.isFinite(operand)) return { ok: false, reason: 'invalid' };
+    if (op === '/' && operand === 0) return { ok: false, reason: 'divZero' };
+    batchEnsureFloatPixels(ds);
+    const src = ds.data;
+    const dst = new Float32Array(src.length);
+    switch (op) {
+        case '+': for (let i = 0; i < src.length; i++) dst[i] = src[i] + operand; break;
+        case '-': for (let i = 0; i < src.length; i++) dst[i] = src[i] - operand; break;
+        case '*': for (let i = 0; i < src.length; i++) dst[i] = src[i] * operand; break;
+        case '/': {
+            const inv = 1 / operand;
+            for (let i = 0; i < src.length; i++) dst[i] = src[i] * inv;
+            break;
+        }
+        default: return { ok: false, reason: 'invalid' };
+    }
+    ds.data = dst;
+    batchRefreshRange(ds);
+    return { ok: true };
+}
+
+function batchApplyCrop(ds, step) {
+    const circle = step.type === 'cropCircle';
+    const r = { x0: step.x0, y0: step.y0, x1: step.x1, y1: step.y1 };
+    if (isPcdScatterDataset(ds)) {
+        const b = ds.bounds;
+        const spanX = (b.xmax - b.xmin) || 1;
+        const spanY = (b.ymax - b.ymin) || 1;
+        const wx0 = b.xmin + r.x0 * spanX, wx1 = b.xmin + r.x1 * spanX;
+        const wy0 = b.ymin + r.y0 * spanY, wy1 = b.ymin + r.y1 * spanY;
+        const nr = {
+            x0: (wx0 - b.xmin) / spanX, y0: (wy0 - b.ymin) / spanY,
+            x1: (wx1 - b.xmin) / spanX, y1: (wy1 - b.ymin) / spanY,
+        };
+        const { x, y, z } = ds, total = z.length;
+        let keep = 0;
+        const mask = new Uint8Array(total);
+        for (let i = 0; i < total; i++) {
+            const nx = (x[i] - b.xmin) / spanX;
+            const ny = (y[i] - b.ymin) / spanY;
+            if (batchPointInNormRect(nx, ny, nr, circle)) { mask[i] = 1; keep++; }
+        }
+        if (keep === 0) return { ok: false, reason: 'empty' };
+        const nx = new Float32Array(keep), ny = new Float32Array(keep), nz = new Float32Array(keep);
+        let j = 0;
+        for (let i = 0; i < total; i++) if (mask[i]) { nx[j] = x[i]; ny[j] = y[i]; nz[j] = z[i]; j++; }
+        ds.x = nx; ds.y = ny; ds.z = nz; ds.pointCount = keep;
+        batchRecomputeScatterBounds(ds);
+    } else {
+        batchEnsureFloatPixels(ds);
+        const { data, width, height } = ds;
+        const ix0 = r.x0 * width, ix1 = r.x1 * width;
+        const iy0 = r.y0 * height, iy1 = r.y1 * height;
+        const cx = (ix0 + ix1) * 0.5, cy = (iy0 + iy1) * 0.5;
+        const rx = (ix1 - ix0) * 0.5, ry = (iy1 - iy0) * 0.5;
+        let keep = 0;
+        for (let iy = 0; iy < height; iy++) {
+            for (let ix = 0; ix < width; ix++) {
+                const px = (ix + 0.5) / width, py = (iy + 0.5) / height;
+                let inside;
+                if (circle) {
+                    const dx = (ix + 0.5 - cx) / rx, dy = (iy + 0.5 - cy) / ry;
+                    inside = rx > 0 && ry > 0 && dx * dx + dy * dy <= 1;
+                } else {
+                    inside = (ix + 0.5) >= ix0 && (ix + 0.5) <= ix1 && (iy + 0.5) >= iy0 && (iy + 0.5) <= iy1;
+                }
+                const idx = iy * width + ix;
+                if (inside) { if (Number.isFinite(data[idx])) keep++; }
+                else data[idx] = NaN;
+            }
+        }
+        if (keep === 0) return { ok: false, reason: 'empty' };
+    }
+    batchRefreshRange(ds);
+    return { ok: true };
+}
+
+function batchApplyStep(ds, step) {
+    if (!step || !step.type) return { ok: false, reason: 'invalid' };
+    switch (step.type) {
+        case 'globalLevel': return batchApplyGlobalLevel(ds);
+        case 'denoise': return batchApplyDenoise(ds, step.lo, step.hi);
+        case 'calc': return batchApplyCalc(ds, step.op, step.operand);
+        case 'cropRect':
+        case 'cropCircle': return batchApplyCrop(ds, step);
+        default: return { ok: false, reason: 'unknown' };
+    }
+}
+
+function batchApplyPipeline(ds, steps) {
+    const out = cloneDatasetDeep(ds);
+    for (const step of steps) {
+        const res = batchApplyStep(out, step);
+        if (!res.ok) return { ok: false, dataset: out, step, reason: res.reason };
+    }
+    return { ok: true, dataset: out };
+}
+
+function describeBatchStep(step) {
+    if (!step) return '';
+    switch (step.type) {
+        case 'globalLevel': return t('bfmStepGlobalLevel');
+        case 'denoise': return t('bfmStepDenoise', (step.lo * 100).toFixed(0) + '%', (step.hi * 100).toFixed(0) + '%');
+        case 'calc': return t('bfmStepCalc', step.op, step.operand);
+        case 'cropRect': return t('bfmStepCropRect');
+        case 'cropCircle': return t('bfmStepCropCircle');
+        default: return step.type;
+    }
+}
+
+function batchKindLabel(kind) {
+    return kind === 'pcd' ? t('batchEditKindPcd') : t('batchEditKindGrid');
+}
+
+function createEmptyBatchFile(sig, name) {
+    return {
+        format: BATCH_FILE_FORMAT,
+        version: BATCH_FILE_VERSION,
+        kind: sig.kind,
+        width: sig.width,
+        height: sig.height,
+        name: name || t('bfmNamePlaceholder'),
+        steps: [],
+    };
+}
+
+function parseBatchFile(json) {
+    if (!json || json.format !== BATCH_FILE_FORMAT) throw new Error('invalid');
+    if (!json.kind || !json.width || !json.height || !Array.isArray(json.steps)) throw new Error('invalid');
+    return json;
+}
+
+function datasetMatchesBatchFile(ds, batchFile) {
+    const sig = getDatasetSignature(ds);
+    return sig && batchFile && sig.kind === batchFile.kind &&
+        sig.width === batchFile.width && sig.height === batchFile.height;
+}
+
+function renderDatasetPreviewThumb(ds, canvas, maxW) {
+    maxW = maxW || 140;
+    if (isPcdScatterDataset(ds)) {
+        const aspect = (ds.width || 1) / (ds.height || 1);
+        const w = maxW;
+        const h = Math.max(1, Math.round(w / aspect));
+        canvas.width = w;
+        canvas.height = h;
+        renderScatterExportToCanvas(ds, canvas, BATCH_EXPORT_CMAP, w, h);
+    } else {
+        const scale = maxW / Math.max(1, ds.width);
+        const w = maxW;
+        const h = Math.max(1, Math.round(ds.height * scale));
+        canvas.width = w;
+        canvas.height = h;
+        const off = document.createElement('canvas');
+        renderGridExportToCanvas(ds, off, BATCH_EXPORT_CMAP);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(off, 0, 0, w, h);
+    }
 }
 
 
@@ -7124,10 +8020,18 @@ function createImageView(ids, options) {
             histLo: 0, histHi: 1,
             history: [],         // 編輯歷史（資料集快照）
             histIndex: -1,       // 目前所在的歷史索引
+            lastEditStep: null,  // 最近一次可加入批次檔的編輯步驟
         },
     };
 
     const isScatter = (ds) => ds && ds.type === 'pcd-scatter';
+
+    function setLastEditStep(step) {
+        st.edit.lastEditStep = step;
+        if (editing && typeof BatchFileManager !== 'undefined' && BatchFileManager.refreshLastEditHint) {
+            BatchFileManager.refreshLastEditHint();
+        }
+    }
 
     /* ---- 進度 / 狀態 ---- */
     function setProgress(p) { el.progress.classList.add('show'); el.progressBar.style.width = (p * 100).toFixed(1) + '%'; }
@@ -7764,6 +8668,7 @@ function createImageView(ids, options) {
         st.dataset.data = dst;
         refreshAfterEdit(false);
         pushHistory();
+        setLastEditStep({ type: 'calc', op, operand });
         return { ok: true };
     }
 
@@ -7873,6 +8778,7 @@ function createImageView(ids, options) {
         }
         refreshAfterEdit(false);
         pushHistory();
+        setLastEditStep({ type: 'globalLevel' });
         el.status.textContent = t('globalLevelDone', n);
         showToast(t('globalLevelDone', n), 'info');
     }
@@ -8034,6 +8940,47 @@ function createImageView(ids, options) {
         const dx = (px - cx) / rx, dy = (py - cy) / ry;
         return dx * dx + dy * dy <= 1;
     }
+
+    /** 將目前裁切框轉為可序列化的批次步驟（正規化座標） */
+    function captureCropStep() {
+        if (!st.edit.cropMode || !st.edit.cropSel || !st.dataset) return null;
+        const n = normSel(st.edit.cropSel);
+        const ds = st.dataset;
+        const type = st.edit.cropMode === 'circle' ? 'cropCircle' : 'cropRect';
+        if (isScatter(ds)) {
+            const b = ds.bounds;
+            const spanX = (b.xmax - b.xmin) || 1;
+            const spanY = (b.ymax - b.ymin) || 1;
+            const sc = st.sc;
+            const halfW = sc.screenW * 0.5, halfH = sc.screenH * 0.5;
+            const toWorld = (sx, sy) => ({
+                wx: sc.centerX + (sx - halfW) * sc.worldPerPx,
+                wy: sc.centerY - (sy - halfH) * sc.worldPerPx,
+            });
+            const c0 = toWorld(n.x0, n.y0), c1 = toWorld(n.x1, n.y1);
+            const wx0 = Math.min(c0.wx, c1.wx), wx1 = Math.max(c0.wx, c1.wx);
+            const wy0 = Math.min(c0.wy, c1.wy), wy1 = Math.max(c0.wy, c1.wy);
+            return {
+                type,
+                x0: Math.max(0, Math.min(1, (wx0 - b.xmin) / spanX)),
+                y0: Math.max(0, Math.min(1, (wy0 - b.ymin) / spanY)),
+                x1: Math.max(0, Math.min(1, (wx1 - b.xmin) / spanX)),
+                y1: Math.max(0, Math.min(1, (wy1 - b.ymin) / spanY)),
+            };
+        }
+        const scv = st.view.scale, tx = st.view.tx, ty = st.view.ty;
+        const ix0 = (n.x0 - tx) / scv, ix1 = (n.x1 - tx) / scv;
+        const iy0 = (n.y0 - ty) / scv, iy1 = (n.y1 - ty) / scv;
+        const { width, height } = ds;
+        return {
+            type,
+            x0: Math.max(0, Math.min(1, ix0 / width)),
+            y0: Math.max(0, Math.min(1, iy0 / height)),
+            x1: Math.max(0, Math.min(1, ix1 / width)),
+            y1: Math.max(0, Math.min(1, iy1 / height)),
+        };
+    }
+
     function applyCrop() {
         if (!editing || !st.dataset || !st.edit.cropMode || !st.edit.cropSel) {
             showToast(t('cropNoSelection'), 'info'); return;
@@ -8041,6 +8988,7 @@ function createImageView(ids, options) {
         const circle = st.edit.cropMode === 'circle';
         const n = normSel(st.edit.cropSel);
         const ds = st.dataset;
+        const cropStep = captureCropStep();
         if (isScatter(ds)) {
             const { x, y, z } = ds, total = z.length;
             let keep = 0;
@@ -8055,6 +9003,7 @@ function createImageView(ids, options) {
             for (let i = 0; i < total; i++) if (mask[i]) { nx[j] = x[i]; ny[j] = y[i]; nz[j] = z[i]; j++; }
             ds.x = nx; ds.y = ny; ds.z = nz; ds.pointCount = keep;
             recomputeScatterBounds(ds);
+            setLastEditStep(cropStep);
             exitCrop();
             refreshAfterEdit(true);
             pushHistory();
@@ -8080,6 +9029,7 @@ function createImageView(ids, options) {
                 }
             }
             if (keep === 0) { showToast(t('cropEmpty'), 'info'); return; }
+            setLastEditStep(cropStep);
             exitCrop();
             refreshAfterEdit(false);
             pushHistory();
@@ -8229,7 +9179,10 @@ function createImageView(ids, options) {
             }
             st.edit.denoiseBase = null;
             histData = null;
-            if (changed) pushHistory();  // 有實際篩除才記錄歷史
+            if (changed) {
+                setLastEditStep({ type: 'denoise', lo: st.edit.histLo, hi: st.edit.histHi });
+                pushHistory();  // 有實際篩除才記錄歷史
+            }
         }
     }
 
@@ -8344,6 +9297,10 @@ function createImageView(ids, options) {
         hasData: () => !!st.dataset,
         canUseCalc: () => !!st.dataset && !isScatter(st.dataset),
         applyCalc,
+        getDataset: () => st.dataset ? cloneDatasetForTransfer(st.dataset) : null,
+        getDatasetSignature: () => st.dataset ? getDatasetSignature(st.dataset) : null,
+        getLastEditStep: () => st.edit.lastEditStep,
+        clearLastEditStep: () => { setLastEditStep(null); },
         refit: () => { if (st.dataset && el.viewer.clientWidth > 0) { fitImage(); if (st.edit.denoise) renderHist(); } },
         syncLang: () => {
             const ds = st.dataset;
@@ -8827,9 +9784,959 @@ const layoutEdToolbar = setupOverflowToolbar({
 })();
 
 /* =========================================================================
- *  7. 視窗切換 (點雲檢視器 / 點雲編輯器 / 批次轉檔，可按 Tab 循環切換)
+ *  6c. 批次檔管理器（編輯器 / 批次編輯共用）
  * ========================================================================= */
-const APP_PAGES = ['viewer', 'editor', 'batch'];
+const BatchFileManager = (() => {
+    let currentFile = null;
+    let onChangeCallback = null;
+    let isOpen = false;
+    let signatureProvider = null;
+
+    const panel = document.getElementById('batchFileManagerPanel');
+    const dragHandle = document.getElementById('bfmDragHandle');
+    const stepsEl = document.getElementById('bfmSteps');
+    const metaEl = document.getElementById('bfmMeta');
+    const nameInput = document.getElementById('bfmNameInput');
+    const btnNew = document.getElementById('bfmBtnNew');
+    const btnOpen = document.getElementById('bfmBtnOpen');
+    const btnSave = document.getElementById('bfmBtnSave');
+    const btnClear = document.getElementById('bfmBtnClear');
+    const btnAddStep = document.getElementById('bfmBtnAddStep');
+    const lastEditHint = document.getElementById('bfmLastEditHint');
+    const btnDone = document.getElementById('bfmBtnDone');
+    const btnClose = document.getElementById('bfmCloseBtn');
+    const fileInput = document.getElementById('bfmFileInput');
+    const toggleBtns = [
+        document.getElementById('edBtnBatchFile'),
+        document.getElementById('batchEditBtnManage'),
+    ].filter(Boolean);
+
+    function syncToggleButtons() {
+        toggleBtns.forEach(btn => btn.classList.toggle('active', isOpen));
+    }
+
+    function notifyChange() {
+        if (typeof onChangeCallback === 'function') onChangeCallback(currentFile);
+    }
+
+    function updateLastEditHint() {
+        const step = editorView.getLastEditStep();
+        if (!step) {
+            lastEditHint.textContent = t('bfmNoLastEditHint');
+            lastEditHint.classList.remove('has-step');
+            if (currentFile) btnAddStep.disabled = true;
+            return;
+        }
+        lastEditHint.textContent = t('bfmLastEditLabel', describeBatchStep(step));
+        lastEditHint.classList.add('has-step');
+        if (currentFile) {
+            btnAddStep.disabled = step.type === 'calc' && currentFile.kind === 'pcd';
+        }
+    }
+
+    function renderMeta() {
+        if (!currentFile) {
+            metaEl.textContent = t('bfmNoFile');
+            nameInput.value = '';
+            btnSave.disabled = true;
+            btnClear.disabled = true;
+            btnAddStep.disabled = true;
+            updateLastEditHint();
+            return;
+        }
+        metaEl.innerHTML = t('bfmMetaInfo',
+            batchKindLabel(currentFile.kind),
+            currentFile.width,
+            currentFile.height,
+            currentFile.steps.length);
+        nameInput.value = currentFile.name || '';
+        btnSave.disabled = false;
+        btnClear.disabled = false;
+        updateLastEditHint();
+    }
+
+    function renderSteps() {
+        stepsEl.innerHTML = '';
+        if (!currentFile || !currentFile.steps.length) {
+            stepsEl.setAttribute('data-empty', t('bfmNoSteps'));
+            return;
+        }
+        stepsEl.removeAttribute('data-empty');
+        currentFile.steps.forEach((step, idx) => {
+            const li = document.createElement('div');
+            li.className = 'bfm-step-item';
+            li.dataset.idx = String(idx);
+
+            const handle = document.createElement('span');
+            handle.className = 'bfm-step-drag-handle';
+            handle.textContent = '⋮⋮';
+            handle.title = t('bfmStepDragTitle');
+            handle.setAttribute('aria-hidden', 'true');
+
+            const idxEl = document.createElement('span');
+            idxEl.className = 'bfm-step-idx';
+            idxEl.textContent = String(idx + 1);
+
+            const desc = document.createElement('div');
+            desc.className = 'bfm-step-desc';
+            desc.innerHTML = `<strong>${idx + 1}. ${describeBatchStep(step)}</strong>`;
+
+            const actions = document.createElement('div');
+            actions.className = 'bfm-step-actions';
+            const btnRm = document.createElement('button');
+            btnRm.type = 'button';
+            btnRm.className = 'btn-secondary';
+            btnRm.textContent = '×';
+            btnRm.title = t('bfmStepRemove');
+            btnRm.addEventListener('click', () => removeStep(idx));
+            actions.appendChild(btnRm);
+
+            li.append(handle, idxEl, desc, actions);
+            stepsEl.appendChild(li);
+        });
+    }
+
+    let stepSortState = null;
+
+    function getStepItems() {
+        return Array.from(stepsEl.querySelectorAll('.bfm-step-item'));
+    }
+
+    function clearStepSortVisuals() {
+        getStepItems().forEach((el) => {
+            el.classList.remove('bfm-dragging', 'bfm-sort-shift');
+            el.style.transform = '';
+            el.style.zIndex = '';
+        });
+        stepsEl.classList.remove('bfm-steps-sorting');
+    }
+
+    function targetIdxAtY(clientY, excludeIdx) {
+        const items = getStepItems();
+        if (!items.length) return 0;
+        for (let i = 0; i < items.length; i++) {
+            if (i === excludeIdx) continue;
+            const r = items[i].getBoundingClientRect();
+            if (clientY < r.top + r.height * 0.5) return i;
+        }
+        return items.length - 1;
+    }
+
+    function applyStepSortVisuals(fromIdx, toIdx, dragDy) {
+        const items = getStepItems();
+        const dragged = items[fromIdx];
+        if (!dragged) return;
+        const h = dragged.offsetHeight || 36;
+        items.forEach((el, i) => {
+            el.classList.remove('bfm-dragging', 'bfm-sort-shift');
+            el.style.transform = '';
+            el.style.zIndex = '';
+            if (i === fromIdx) {
+                el.classList.add('bfm-dragging');
+                el.style.transform = `translateY(${dragDy}px)`;
+                el.style.zIndex = '3';
+            } else {
+                let shift = 0;
+                if (fromIdx < toIdx && i > fromIdx && i <= toIdx) shift = -h;
+                else if (fromIdx > toIdx && i >= toIdx && i < fromIdx) shift = h;
+                if (shift) {
+                    el.classList.add('bfm-sort-shift');
+                    el.style.transform = `translateY(${shift}px)`;
+                }
+            }
+        });
+    }
+
+    function finishStepSort() {
+        if (!stepSortState || !currentFile) return;
+        const { fromIdx, toIdx, pointerId, handle } = stepSortState;
+        stepSortState = null;
+        try { handle.releasePointerCapture(pointerId); } catch (_) {}
+
+        if (fromIdx !== toIdx) {
+            const steps = currentFile.steps;
+            const [moved] = steps.splice(fromIdx, 1);
+            steps.splice(toIdx, 0, moved);
+            notifyChange();
+        }
+        clearStepSortVisuals();
+        renderSteps();
+    }
+
+    function setupStepsDragSort() {
+        if (stepsEl._bfmSortBound) return;
+        stepsEl._bfmSortBound = true;
+
+        stepsEl.addEventListener('pointerdown', (e) => {
+            if (!currentFile || stepSortState) return;
+            const handle = e.target.closest('.bfm-step-drag-handle');
+            if (!handle) return;
+            e.preventDefault();
+            const item = handle.closest('.bfm-step-item');
+            if (!item) return;
+            const fromIdx = parseInt(item.dataset.idx, 10);
+            if (!Number.isFinite(fromIdx)) return;
+            stepSortState = {
+                fromIdx,
+                toIdx: fromIdx,
+                startY: e.clientY,
+                pointerId: e.pointerId,
+                handle,
+            };
+            handle.setPointerCapture(e.pointerId);
+            stepsEl.classList.add('bfm-steps-sorting');
+            applyStepSortVisuals(fromIdx, fromIdx, 0);
+        });
+
+        stepsEl.addEventListener('pointermove', (e) => {
+            if (!stepSortState || e.pointerId !== stepSortState.pointerId) return;
+            const dy = e.clientY - stepSortState.startY;
+            let toIdx = targetIdxAtY(e.clientY, stepSortState.fromIdx);
+            toIdx = Math.max(0, Math.min(currentFile.steps.length - 1, toIdx));
+            stepSortState.toIdx = toIdx;
+            applyStepSortVisuals(stepSortState.fromIdx, toIdx, dy);
+        });
+
+        const endStepSort = (e) => {
+            if (!stepSortState || e.pointerId !== stepSortState.pointerId) return;
+            finishStepSort();
+        };
+        stepsEl.addEventListener('pointerup', endStepSort);
+        stepsEl.addEventListener('pointercancel', endStepSort);
+    }
+
+    setupStepsDragSort();
+
+    function render() {
+        renderMeta();
+        renderSteps();
+    }
+
+    function removeStep(idx) {
+        if (!currentFile) return;
+        currentFile.steps.splice(idx, 1);
+        render();
+        notifyChange();
+    }
+
+    const BFM_MARGIN = 8;
+    const BFM_TOP_MIN = 48;
+    const BFM_MIN_VISIBLE = 56;
+
+    function panelHasLayout() {
+        return panel.classList.contains('show') && panel.getBoundingClientRect().width > 0;
+    }
+
+    function isPanelInViewport() {
+        if (!panelHasLayout()) return false;
+        const rect = panel.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        return rect.top < vh - BFM_MIN_VISIBLE
+            && rect.bottom > BFM_TOP_MIN
+            && rect.left < vw - BFM_MIN_VISIBLE
+            && rect.right > BFM_MIN_VISIBLE;
+    }
+
+    function resetPanelPosition() {
+        panel.style.left = 'auto';
+        panel.style.top = 'auto';
+        panel.style.right = BFM_MARGIN + 'px';
+        panel.style.bottom = BFM_MARGIN + 'px';
+    }
+
+    function clampPanelToViewport() {
+        if (!panel.classList.contains('show')) return;
+        const rect = panel.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        let left = rect.left;
+        let top = rect.top;
+        const w = rect.width;
+        const h = rect.height;
+        left = Math.max(BFM_MARGIN, Math.min(left, vw - w - BFM_MARGIN));
+        top = Math.max(BFM_TOP_MIN, Math.min(top, vh - h - BFM_MARGIN));
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+        panel.style.left = left + 'px';
+        panel.style.top = top + 'px';
+    }
+
+    function ensurePanelVisible() {
+        if (!isOpen) return;
+        if (!isPanelInViewport()) resetPanelPosition();
+        clampPanelToViewport();
+    }
+
+    function newFromEditor() {
+        const sig = editorView.getDatasetSignature();
+        if (!sig) { showToast(t('bfmNewNeedData'), 'info'); return; }
+        setCurrent(createEmptyBatchFile(sig));
+    }
+
+    function tryAutoCreateBatchFile() {
+        if (currentFile) return true;
+        let sig = editorView.getDatasetSignature();
+        if (!sig && typeof signatureProvider === 'function') sig = signatureProvider();
+        if (!sig) return false;
+        setCurrent(createEmptyBatchFile(sig));
+        return true;
+    }
+
+    function open() {
+        if (!currentFile) tryAutoCreateBatchFile();
+        isOpen = true;
+        panel.classList.add('show');
+        panel.setAttribute('aria-hidden', 'false');
+        syncToggleButtons();
+        render();
+        requestAnimationFrame(() => {
+            ensurePanelVisible();
+            requestAnimationFrame(ensurePanelVisible);
+        });
+    }
+
+    function close() {
+        isOpen = false;
+        panel.classList.remove('show');
+        panel.setAttribute('aria-hidden', 'true');
+        syncToggleButtons();
+    }
+
+    function toggle() {
+        if (isOpen) {
+            if (!isPanelInViewport()) {
+                resetPanelPosition();
+                requestAnimationFrame(ensurePanelVisible);
+                return;
+            }
+            close();
+        } else {
+            open();
+        }
+    }
+
+    function isVisible() {
+        return isOpen;
+    }
+
+    function getCurrent() {
+        return currentFile;
+    }
+
+    function setCurrent(file) {
+        currentFile = file;
+        render();
+        notifyChange();
+    }
+
+    function addLastEditStep() {
+        if (!currentFile) return;
+        const step = editorView.getLastEditStep();
+        if (!step) { showToast(t('bfmNoLastEdit'), 'info'); return; }
+        if (step.type === 'calc' && currentFile.kind === 'pcd') {
+            showToast(t('bfmKindMismatch'), 'error');
+            return;
+        }
+        currentFile.steps.push(JSON.parse(JSON.stringify(step)));
+        editorView.clearLastEditStep();
+        render();
+        notifyChange();
+        showToast(t('bfmStepAdded'), 'info');
+    }
+
+    async function saveFile() {
+        if (!currentFile) return;
+        currentFile.name = nameInput.value.trim() || t('bfmNamePlaceholder');
+        const blob = new Blob([JSON.stringify(currentFile, null, 2)], { type: 'application/json' });
+        const base = (currentFile.name || 'batch').replace(/[^\w\u4e00-\u9fff.-]+/g, '_');
+        if (window.showSaveFilePicker) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: base + '.wbatch',
+                    types: [{ description: 'WebViewer Batch', accept: { 'application/json': ['.wbatch', '.json'] } }],
+                });
+                const w = await handle.createWritable();
+                await w.write(blob);
+                await w.close();
+                showToast(t('bfmSaved'), 'info');
+                return;
+            } catch (err) {
+                if (err && err.name === 'AbortError') return;
+            }
+        }
+        triggerDownload(blob, base + '.wbatch');
+        showToast(t('bfmSaved'), 'info');
+    }
+
+    function loadFromJson(json) {
+        const file = parseBatchFile(json);
+        setCurrent(file);
+        showToast(t('bfmLoaded', file.name || ''), 'info');
+    }
+
+    function isWbatchFile(file) {
+        if (!file || !file.name) return false;
+        const ext = getExt(file.name);
+        return ext === 'wbatch' || ext === 'json';
+    }
+
+    async function loadFromFile(file) {
+        if (!file) return;
+        if (!isWbatchFile(file)) {
+            showToast(t('bfmDropUnsupported'), 'error');
+            return;
+        }
+        try {
+            const text = await file.text();
+            loadFromJson(JSON.parse(text));
+        } catch (err) {
+            console.error(err);
+            showToast(t('batchUnsupported', file.name), 'error');
+        }
+    }
+
+    function clearCurrent() {
+        if (!currentFile) return;
+        currentFile = null;
+        render();
+        notifyChange();
+        showToast(t('bfmCleared'), 'info');
+    }
+
+    btnNew.addEventListener('click', newFromEditor);
+    btnOpen.addEventListener('click', () => fileInput.click());
+    btnSave.addEventListener('click', saveFile);
+    btnClear.addEventListener('click', clearCurrent);
+    btnAddStep.addEventListener('click', addLastEditStep);
+    btnDone.addEventListener('click', close);
+    btnClose.addEventListener('click', close);
+    nameInput.addEventListener('change', () => {
+        if (currentFile) currentFile.name = nameInput.value.trim();
+        notifyChange();
+    });
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        fileInput.value = '';
+        if (file) await loadFromFile(file);
+    });
+
+    function bfmDragHasFiles(e) {
+        if (!e.dataTransfer) return false;
+        const types = e.dataTransfer.types;
+        if (!types) return false;
+        for (let i = 0; i < types.length; i++) {
+            if (types[i] === 'Files') return true;
+        }
+        return false;
+    }
+
+    function pickWbatchFromDrop(dt) {
+        if (!dt || !dt.files || !dt.files.length) return null;
+        for (let i = 0; i < dt.files.length; i++) {
+            if (isWbatchFile(dt.files[i])) return dt.files[i];
+        }
+        return null;
+    }
+
+    let bfmFileDragDepth = 0;
+    panel.addEventListener('dragenter', (e) => {
+        if (!bfmDragHasFiles(e)) return;
+        e.preventDefault();
+        bfmFileDragDepth++;
+        panel.classList.remove('bfm-drag-reject');
+        panel.classList.add('bfm-drag-over');
+    });
+    panel.addEventListener('dragover', (e) => {
+        if (!bfmDragHasFiles(e)) return;
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    });
+    panel.addEventListener('dragleave', (e) => {
+        if (!bfmDragHasFiles(e)) return;
+        bfmFileDragDepth--;
+        if (bfmFileDragDepth <= 0) {
+            bfmFileDragDepth = 0;
+            panel.classList.remove('bfm-drag-over', 'bfm-drag-reject');
+        }
+    });
+    panel.addEventListener('drop', async (e) => {
+        if (!bfmDragHasFiles(e)) return;
+        e.preventDefault();
+        bfmFileDragDepth = 0;
+        panel.classList.remove('bfm-drag-over', 'bfm-drag-reject');
+        const file = pickWbatchFromDrop(e.dataTransfer);
+        if (!file) {
+            panel.classList.add('bfm-drag-reject');
+            showToast(t('bfmDropUnsupported'), 'error');
+            setTimeout(() => panel.classList.remove('bfm-drag-reject'), 400);
+            return;
+        }
+        await loadFromFile(file);
+    });
+
+    /* 拖曳浮動視窗 */
+    let dragState = null;
+    dragHandle.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0 || e.target.closest('.bfm-close')) return;
+        const rect = panel.getBoundingClientRect();
+        dragState = {
+            pointerId: e.pointerId,
+            startX: e.clientX,
+            startY: e.clientY,
+            origLeft: rect.left,
+            origTop: rect.top,
+        };
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+        panel.style.left = rect.left + 'px';
+        panel.style.top = rect.top + 'px';
+        dragHandle.setPointerCapture(e.pointerId);
+        e.preventDefault();
+    });
+    dragHandle.addEventListener('pointermove', (e) => {
+        if (!dragState || dragState.pointerId !== e.pointerId) return;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const rect = panel.getBoundingClientRect();
+        let left = dragState.origLeft + (e.clientX - dragState.startX);
+        let top = dragState.origTop + (e.clientY - dragState.startY);
+        left = Math.max(BFM_MARGIN, Math.min(left, vw - rect.width - BFM_MARGIN));
+        top = Math.max(BFM_TOP_MIN, Math.min(top, vh - rect.height - BFM_MARGIN));
+        panel.style.left = left + 'px';
+        panel.style.top = top + 'px';
+    });
+    const endDrag = (e) => {
+        if (!dragState || dragState.pointerId !== e.pointerId) return;
+        dragState = null;
+        try { dragHandle.releasePointerCapture(e.pointerId); } catch (_) {}
+        clampPanelToViewport();
+    };
+    dragHandle.addEventListener('pointerup', endDrag);
+    dragHandle.addEventListener('pointercancel', endDrag);
+
+    let resizeRaf = 0;
+    window.addEventListener('resize', () => {
+        if (!isOpen) return;
+        if (resizeRaf) cancelAnimationFrame(resizeRaf);
+        resizeRaf = requestAnimationFrame(() => {
+            resizeRaf = 0;
+            ensurePanelVisible();
+        });
+    });
+
+    document.body.appendChild(panel);
+
+    return {
+        open, close, toggle, isVisible, getCurrent, setCurrent,
+        onChange: (fn) => { onChangeCallback = fn; },
+        setSignatureProvider: (fn) => { signatureProvider = fn; },
+        refreshLastEditHint: updateLastEditHint,
+        loadFromJson,
+    };
+})();
+
+document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchFileManager.toggle());
+
+/* =========================================================================
+ *  6d. 批次編輯頁
+ * ========================================================================= */
+(function initBatchEdit() {
+    const fileInput = document.getElementById('batchEditFileInput');
+    const btnClear = document.getElementById('batchEditBtnClear');
+    const btnOpenBatch = document.getElementById('batchEditBtnOpenBatch');
+    const btnManage = document.getElementById('batchEditBtnManage');
+    const btnRun = document.getElementById('batchEditBtnRun');
+    const saveFormat = document.getElementById('batchEditSaveFormat');
+    const workspace = document.getElementById('batchEditWorkspace');
+    const fileList = document.getElementById('batchEditFileList');
+    const fileCount = document.getElementById('batchEditFileCount');
+    const batchInfo = document.getElementById('batchEditBatchInfo');
+    const batchBadge = document.getElementById('batchEditBatchBadge');
+    const statusEl = document.getElementById('batchEditStatus');
+    const progress = document.getElementById('batchEditProgress');
+    const progressBar = document.getElementById('batchEditProgressBar');
+    const previewSelect = document.getElementById('batchEditPreviewSelect');
+    const previewFileLabel = document.getElementById('batchEditPreviewFile');
+    const stepPreviews = document.getElementById('batchEditStepPreviews');
+
+    let entries = [];
+    let running = false;
+    let previewDataset = null;
+    let entryIdSeq = 0;
+    let previewGen = 0;
+
+    function setProgress(p) {
+        progress.classList.add('show');
+        progressBar.style.width = (p * 100).toFixed(1) + '%';
+    }
+    function hideProgress() { setTimeout(() => progress.classList.remove('show'), 300); }
+
+    function updateBatchInfo() {
+        const bf = BatchFileManager.getCurrent();
+        if (!bf) {
+            batchInfo.textContent = t('batchEditNoBatchFile');
+            batchBadge.style.display = 'none';
+            return;
+        }
+        batchInfo.textContent = bf.name || t('bfmNamePlaceholder');
+        batchBadge.style.display = 'block';
+        batchBadge.className = 'batch-file-badge ok';
+        batchBadge.textContent = t('bfmMetaInfo', batchKindLabel(bf.kind), bf.width, bf.height, bf.steps.length);
+    }
+
+    function updateControls() {
+        const bf = BatchFileManager.getCurrent();
+        const hasBatch = !!bf && bf.steps.length > 0;
+        fileCount.textContent = String(entries.length);
+        btnClear.disabled = !entries.length || running;
+        btnRun.disabled = !entries.length || !hasBatch || running;
+        previewSelect.disabled = !entries.length || running;
+        updateBatchInfo();
+    }
+
+    function syncPreviewSelect() {
+        const prev = previewSelect.value;
+        previewSelect.innerHTML = '';
+        const opt0 = document.createElement('option');
+        opt0.value = '';
+        opt0.textContent = '—';
+        previewSelect.appendChild(opt0);
+        entries.forEach((e) => {
+            const o = document.createElement('option');
+            o.value = e.id;
+            o.textContent = e.file.name;
+            previewSelect.appendChild(o);
+        });
+        if (prev && entries.some(e => e.id === prev)) previewSelect.value = prev;
+        else if (entries.length) previewSelect.value = entries[0].id;
+        else previewSelect.value = '';
+    }
+
+    function renderFileList() {
+        fileList.innerHTML = '';
+        if (!entries.length) {
+            fileList.setAttribute('data-empty', t('batchEditStatusIdle'));
+        } else {
+            fileList.removeAttribute('data-empty');
+        }
+        entries.forEach((entry, idx) => {
+            const li = document.createElement('li');
+            li.className = 'batch-file-item';
+            li.dataset.id = entry.id;
+
+            const idxEl = document.createElement('span');
+            idxEl.className = 'batch-file-idx';
+            idxEl.textContent = String(idx + 1);
+
+            const name = document.createElement('span');
+            name.className = 'batch-file-name';
+            name.textContent = entry.file.name;
+            name.title = entry.file.name;
+
+            const st = document.createElement('span');
+            st.className = 'batch-file-status' + (entry.status === 'ok' ? ' ok' : entry.status === 'error' ? ' err' : entry.status === 'busy' ? ' busy' : '');
+            st.textContent = entry.statusText || t('batchItemPending');
+
+            const rm = document.createElement('button');
+            rm.type = 'button';
+            rm.className = 'batch-file-remove';
+            rm.textContent = '×';
+            rm.title = t('batchRemoveTitle');
+            rm.disabled = running;
+
+            li.append(idxEl, name, st, rm);
+            fileList.appendChild(li);
+        });
+        updateControls();
+        syncPreviewSelect();
+    }
+
+    fileList.addEventListener('click', (e) => {
+        const btn = e.target.closest('.batch-file-remove');
+        if (!btn || running || btn.disabled) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const li = btn.closest('.batch-file-item');
+        if (!li || !li.dataset.id) return;
+        entries = entries.filter(en => en.id !== li.dataset.id);
+        renderFileList();
+        refreshStepPreviews();
+    });
+
+    async function loadPreviewDataset(entry) {
+        if (!entry) { previewDataset = null; return null; }
+        const ds = await parseFileToDataset(entry.file);
+        const bf = BatchFileManager.getCurrent();
+        if (bf && !datasetMatchesBatchFile(ds, bf)) {
+            showToast(t('batchEditMismatch', entry.file.name), 'error');
+            previewDataset = null;
+            return null;
+        }
+        previewDataset = ds;
+        return ds;
+    }
+
+    async function refreshStepPreviews() {
+        const gen = ++previewGen;
+        stepPreviews.innerHTML = '';
+        const bf = BatchFileManager.getCurrent();
+        const entryId = previewSelect.value;
+        const entry = entries.find(e => e.id === entryId);
+        if (!bf || !entry) {
+            stepPreviews.setAttribute('data-empty', t('batchEditPreviewEmpty'));
+            previewFileLabel.textContent = '—';
+            return;
+        }
+        stepPreviews.removeAttribute('data-empty');
+        previewFileLabel.textContent = entry.file.name;
+
+        let ds;
+        try {
+            ds = await loadPreviewDataset(entry);
+        } catch (err) {
+            console.error(err);
+            return;
+        }
+        if (gen !== previewGen) return;
+        if (!ds) return;
+
+        const cards = [{ label: t('batchEditPreviewOriginal'), ds: cloneDatasetDeep(ds) }];
+        let working = cloneDatasetDeep(ds);
+        for (let i = 0; i < bf.steps.length; i++) {
+            const res = batchApplyStep(working, bf.steps[i]);
+            if (!res.ok) break;
+            cards.push({ label: `${i + 1}. ${describeBatchStep(bf.steps[i])}`, ds: cloneDatasetDeep(working) });
+        }
+
+        if (gen !== previewGen) return;
+        stepPreviews.innerHTML = '';
+        cards.forEach((card) => {
+            const el = document.createElement('div');
+            el.className = 'batch-step-preview-card';
+            const cv = document.createElement('canvas');
+            renderDatasetPreviewThumb(card.ds, cv, 140);
+            const lbl = document.createElement('div');
+            lbl.className = 'batch-step-preview-label';
+            lbl.innerHTML = `<strong>${card.label}</strong>`;
+            el.appendChild(cv);
+            el.appendChild(lbl);
+            stepPreviews.appendChild(el);
+        });
+    }
+
+    function fileSignatureKey(file) {
+        return `${file.name}|${file.size}|${file.lastModified}`;
+    }
+
+    async function addFiles(files) {
+        let bf = BatchFileManager.getCurrent();
+        let added = 0;
+        const existing = new Set(entries.map(e => fileSignatureKey(e.file)));
+        for (const file of files) {
+            if (!SUPPORTED_EXTS.includes(getExt(file.name))) { showToast(t('batchUnsupported', file.name), 'error'); continue; }
+            const key = fileSignatureKey(file);
+            if (existing.has(key)) continue;
+            let ds;
+            try {
+                ds = await parseFileToDataset(file);
+                if (!bf) {
+                    bf = createEmptyBatchFile(getDatasetSignature(ds));
+                    BatchFileManager.setCurrent(bf);
+                } else if (!datasetMatchesBatchFile(ds, bf)) {
+                    showToast(t('batchEditMismatch', file.name), 'error');
+                    continue;
+                }
+            } catch (err) {
+                console.error(err);
+                showToast(t('batchUnsupported', file.name), 'error');
+                continue;
+            }
+            entries.push({
+                id: 'be' + (++entryIdSeq),
+                file,
+                status: 'pending',
+                statusText: '',
+                signature: getDatasetSignature(ds),
+            });
+            existing.add(key);
+            added++;
+        }
+        if (added) {
+            statusEl.textContent = t('batchEditStatusAdded', added, entries.length);
+            renderFileList();
+            await refreshStepPreviews();
+        }
+    }
+
+    function batchEditDragHasFiles(e) {
+        if (!e.dataTransfer) return false;
+        const types = e.dataTransfer.types;
+        if (!types) return false;
+        for (let i = 0; i < types.length; i++) {
+            if (types[i] === 'Files') return true;
+        }
+        return false;
+    }
+
+    let batchEditDragDepth = 0;
+    if (workspace) {
+        workspace.addEventListener('dragenter', (e) => {
+            if (!batchEditDragHasFiles(e)) return;
+            e.preventDefault();
+            batchEditDragDepth++;
+            workspace.classList.remove('drag-reject');
+            workspace.classList.add('drag-over');
+        });
+        workspace.addEventListener('dragover', (e) => {
+            if (!batchEditDragHasFiles(e)) return;
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+        });
+        workspace.addEventListener('dragleave', (e) => {
+            if (!batchEditDragHasFiles(e)) return;
+            batchEditDragDepth--;
+            if (batchEditDragDepth <= 0) {
+                batchEditDragDepth = 0;
+                workspace.classList.remove('drag-over', 'drag-reject');
+            }
+        });
+        workspace.addEventListener('drop', (e) => {
+            if (!batchEditDragHasFiles(e)) return;
+            e.preventDefault();
+            batchEditDragDepth = 0;
+            workspace.classList.remove('drag-over', 'drag-reject');
+            const files = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+            if (files.length) addFiles(files);
+        });
+    }
+
+    btnOpenBatch.addEventListener('click', () => document.getElementById('bfmFileInput').click());
+    btnManage.addEventListener('click', () => BatchFileManager.toggle());
+    btnClear.addEventListener('click', () => {
+        if (running) return;
+        entries = [];
+        previewDataset = null;
+        statusEl.textContent = t('batchEditStatusCleared');
+        renderFileList();
+        refreshStepPreviews();
+    });
+    fileInput.addEventListener('change', (e) => {
+        const files = e.target.files ? Array.from(e.target.files) : [];
+        fileInput.value = '';
+        if (files.length) addFiles(files);
+    });
+    previewSelect.addEventListener('change', () => refreshStepPreviews());
+
+    BatchFileManager.setSignatureProvider(() => {
+        const entry = entries.find(e => e.signature);
+        return entry ? entry.signature : null;
+    });
+    BatchFileManager.onChange(() => {
+        updateControls();
+        refreshStepPreviews();
+    });
+
+    btnRun.addEventListener('click', async () => {
+        if (running) return;
+        const bf = BatchFileManager.getCurrent();
+        if (!bf || !bf.steps.length) { showToast(t('batchEditNoBatch'), 'error'); return; }
+        if (!entries.length) { showToast(t('batchEditNoFiles'), 'error'); return; }
+
+        const format = saveFormat.value;
+        running = true;
+        btnRun.classList.add('is-busy');
+        updateControls();
+        setProgress(0);
+
+        let dirHandle = null;
+        if (typeof supportsDirPicker !== 'undefined' && supportsDirPicker) {
+            try {
+                dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            } catch (err) {
+                if (err && err.name === 'AbortError') {
+                    running = false;
+                    btnRun.classList.remove('is-busy');
+                    renderFileList();
+                    hideProgress();
+                    return;
+                }
+            }
+        }
+
+        let ok = 0, fail = 0;
+        const total = entries.length;
+        const previewEntryId = previewSelect.value;
+
+        for (let i = 0; i < total; i++) {
+            const entry = entries[i];
+            entry.status = 'busy';
+            entry.statusText = t('batchItemReading');
+            renderFileList();
+            statusEl.textContent = t('batchEditStatusRunning', i + 1, total, entry.file.name);
+
+            try {
+                let ds = await parseFileToDataset(entry.file);
+                if (!datasetMatchesBatchFile(ds, bf)) throw new Error(t('batchEditMismatch', entry.file.name));
+
+                entry.statusText = t('batchItemConverting');
+                renderFileList();
+
+                const pipe = batchApplyPipeline(ds, bf.steps);
+                if (!pipe.ok) throw new Error(describeBatchStep(pipe.step) + ': ' + (pipe.reason || ''));
+
+                ds = pipe.dataset;
+                ds.filename = entry.file.name;
+
+                if (entry.id === previewEntryId) {
+                    previewDataset = cloneDatasetDeep(ds);
+                    await refreshStepPreviews();
+                }
+
+                const allowed = getAllowedSaveFormats(ds);
+                if (!allowed.includes(format)) throw new Error(t('savePcdScatter'));
+                const prepared = prepareDatasetForExport(ds, format);
+                const blob = await buildSaveBlob(prepared, format);
+                const base = stripExt(entry.file.name);
+                const ext = formatToExt(format);
+                if (dirHandle) {
+                    const fh = await dirHandle.getFileHandle(`${base}.${ext}`, { create: true });
+                    const w = await fh.createWritable();
+                    await w.write(blob);
+                    await w.close();
+                } else {
+                    triggerDownload(blob, `${base}_edited.${ext}`);
+                }
+
+                entry.status = 'ok';
+                entry.statusText = t('batchItemDone');
+                ok++;
+            } catch (err) {
+                console.error(err);
+                entry.status = 'error';
+                entry.statusText = t('batchItemFailed');
+                entry.error = err.message || String(err);
+                fail++;
+            }
+            setProgress((i + 1) / total);
+            renderFileList();
+        }
+
+        statusEl.textContent = t('batchEditStatusDone', ok, fail);
+        running = false;
+        btnRun.classList.remove('is-busy');
+        renderFileList();
+        hideProgress();
+    });
+
+    updateControls();
+})();
+
+/* =========================================================================
+ *  7. 視窗切換 (點雲檢視器 / 點雲編輯器 / 批次編輯 / 批次轉檔，可按 Tab 循環切換)
+ * ========================================================================= */
+const APP_PAGES = ['viewer', 'editor', 'batchEdit', 'batch'];
 let currentPage = 'viewer';
 
 function switchPage(page) {
@@ -8883,7 +10790,7 @@ if (btnMinMax) btnMinMax.classList.toggle('active', showMinMax);
 
 // 還原上次使用的頁面
 const savedPage = getUserPref('page');
-if (savedPage === 'editor' || savedPage === 'batch') switchPage(savedPage);
+if (savedPage === 'editor' || savedPage === 'batch' || savedPage === 'batchEdit') switchPage(savedPage);
 
 // 套用初始語言
 applyLanguage(currentLang);
