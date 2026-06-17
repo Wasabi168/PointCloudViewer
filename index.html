@@ -1517,6 +1517,7 @@
         border: 1px solid var(--border);
         border-radius: 6px;
         overflow: hidden;
+        cursor: context-menu;
     }
     .batch-step-preview-card.active {
         border-color: var(--accent);
@@ -1540,6 +1541,32 @@
         color: var(--text);
         font-size: 12px;
         margin-bottom: 2px;
+    }
+    .ctx-menu {
+        position: fixed;
+        z-index: 10050;
+        min-width: 168px;
+        padding: 4px 0;
+        background: #2a2a36;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    }
+    .ctx-menu-item {
+        display: block;
+        width: 100%;
+        padding: 8px 14px;
+        border: none;
+        background: transparent;
+        color: var(--text);
+        font-size: 13px;
+        text-align: left;
+        cursor: pointer;
+    }
+    .ctx-menu-item:hover,
+    .ctx-menu-item:focus-visible {
+        background: rgba(79, 140, 255, 0.15);
+        outline: none;
     }
     .batch-edit-file-panel { flex: 1; min-height: 180px; }
     .batch-edit-side .batch-file-badge {
@@ -2572,6 +2599,7 @@ const I18N = {
         batchEditPreviewTitle: '步驟預覽',
         batchEditPreviewSample: '預覽樣本：',
         batchEditPreviewOriginal: '原始',
+        batchEditPreviewSendToViewer: '傳送到點雲檢視',
         batchEditPreviewEmpty: '請先開啟批次檔並選擇預覽樣本',
         batchEditMismatch: '檔案不符合批次檔條件：{0}',
         batchEditNoBatch: '請先開啟批次檔',
@@ -2838,6 +2866,7 @@ const I18N = {
         batchEditPreviewTitle: 'Step Preview',
         batchEditPreviewSample: 'Preview sample:',
         batchEditPreviewOriginal: 'Original',
+        batchEditPreviewSendToViewer: 'Send to Point Cloud Viewer',
         batchEditPreviewEmpty: 'Open a batch file and choose a preview sample first',
         batchEditMismatch: 'File does not match batch file: {0}',
         batchEditNoBatch: 'Please open a batch file first',
@@ -10686,6 +10715,57 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
     let previewDataset = null;
     let entryIdSeq = 0;
     let previewGen = 0;
+    let previewCtxMenu = null;
+
+    function hidePreviewCtxMenu() {
+        if (previewCtxMenu) previewCtxMenu.remove();
+        previewCtxMenu = null;
+    }
+
+    function showPreviewCtxMenu(x, y, items) {
+        hidePreviewCtxMenu();
+        const menu = document.createElement('div');
+        menu.className = 'ctx-menu';
+        menu.setAttribute('role', 'menu');
+        items.forEach((item) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'ctx-menu-item';
+            btn.textContent = item.label;
+            btn.setAttribute('role', 'menuitem');
+            btn.addEventListener('click', () => {
+                hidePreviewCtxMenu();
+                item.action();
+            });
+            menu.appendChild(btn);
+        });
+        document.body.appendChild(menu);
+        const rect = menu.getBoundingClientRect();
+        const left = Math.min(x, window.innerWidth - rect.width - 8);
+        const top = Math.min(y, window.innerHeight - rect.height - 8);
+        menu.style.left = Math.max(8, left) + 'px';
+        menu.style.top = Math.max(8, top) + 'px';
+        previewCtxMenu = menu;
+    }
+
+    function sendPreviewToViewer(ds) {
+        if (!ds) return;
+        const clone = cloneDatasetForTransfer(ds);
+        if (typeof switchPage === 'function') switchPage('viewer');
+        if (typeof loadDatasetIntoViewer === 'function' && loadDatasetIntoViewer(clone)) {
+            showToast(t('sentToViewer'), 'info');
+        }
+    }
+
+    document.addEventListener('click', (e) => {
+        if (previewCtxMenu && !previewCtxMenu.contains(e.target)) hidePreviewCtxMenu();
+    });
+    document.addEventListener('contextmenu', (e) => {
+        if (!previewCtxMenu) return;
+        if (!previewCtxMenu.contains(e.target)) hidePreviewCtxMenu();
+    });
+    window.addEventListener('scroll', hidePreviewCtxMenu, true);
+    window.addEventListener('resize', hidePreviewCtxMenu);
 
     function setProgress(p) {
         progress.classList.add('show');
@@ -10842,6 +10922,14 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
             lbl.innerHTML = `<strong>${card.label}</strong>`;
             el.appendChild(cv);
             el.appendChild(lbl);
+            el.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                showPreviewCtxMenu(e.clientX, e.clientY, [{
+                    label: t('batchEditPreviewSendToViewer'),
+                    action: () => sendPreviewToViewer(card.ds),
+                }]);
+            });
             stepPreviews.appendChild(el);
         });
     }
