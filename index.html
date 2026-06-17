@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231e1e28'/%3E%3Cpath d='M4 26 L16 20 L28 26' fill='none' stroke='%233a3a4a' stroke-width='1.2' stroke-linecap='round'/%3E%3Cpath d='M8 26 L16 17 L24 26' fill='none' stroke='%233a3a4a' stroke-width='0.8' opacity='0.55'/%3E%3Ccircle cx='8' cy='16' r='1.6' fill='%233a6fd4'/%3E%3Ccircle cx='10' cy='22' r='1.8' fill='%234f8cff' opacity='0.9'/%3E%3Ccircle cx='13' cy='14' r='2' fill='%236aa1ff'/%3E%3Ccircle cx='16' cy='18' r='2.2' fill='%236aa1ff'/%3E%3Ccircle cx='19' cy='11' r='2.4' fill='%236aa1ff'/%3E%3Ccircle cx='22' cy='21' r='1.8' fill='%234f8cff'/%3E%3Ccircle cx='24' cy='15' r='1.7' fill='%234f8cff' opacity='0.85'/%3E%3C/svg%3E" />
-<title data-i18n-title>點雲檢視器</title>
+<title data-i18n-title>點雲檢視</title>
 <style>
     :root {
         --bg: #1e1e28;
@@ -1636,8 +1636,8 @@
 
 <!-- 頂部頁籤：點雲檢視器 / 點雲編輯器 / 批次編輯 / 批次轉檔，可按 Tab 切換 -->
 <nav class="app-tabs" id="appTabs">
-    <button type="button" class="app-tab active" data-page="viewer" aria-selected="true" data-i18n="tabViewer">點雲檢視器</button>
-    <button type="button" class="app-tab" data-page="editor" aria-selected="false" data-i18n="tabEditor">點雲編輯器</button>
+    <button type="button" class="app-tab active" data-page="viewer" aria-selected="true" data-i18n="tabViewer">點雲檢視</button>
+    <button type="button" class="app-tab" data-page="editor" aria-selected="false" data-i18n="tabEditor">點雲編輯</button>
     <button type="button" class="app-tab" data-page="batchEdit" aria-selected="false" data-i18n="tabBatchEdit">批次編輯</button>
     <button type="button" class="app-tab" data-page="batch" aria-selected="false" data-i18n="tabBatch">批次轉檔</button>
     <span class="app-tabs-hint"><span data-i18n="tabHintPrefix">按</span> <kbd>Tab</kbd> <span data-i18n="tabHintSuffix">切換視窗</span></span>
@@ -1654,7 +1654,7 @@
 
 <header id="viewerHeader">
     <h1>
-        <span data-i18n="appTitle">點雲檢視器</span>
+        <span data-i18n="appTitle">點雲檢視</span>
         <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg)</span>
     </h1>
     <div class="controls controls--overflow" id="viewerControls">
@@ -1824,7 +1824,7 @@
 <div class="page" id="pageEditor" data-page="editor">
     <header id="edHeader">
         <h1>
-            <span data-i18n="editorTitle">點雲編輯器</span>
+            <span data-i18n="editorTitle">點雲編輯</span>
             <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg)</span>
         </h1>
         <div class="controls controls--overflow" id="edControls">
@@ -2187,9 +2187,9 @@
 
 const I18N = {
     'zh-Hant': {
-        appTitle: '點雲檢視器',
-        tabViewer: '點雲檢視器',
-        tabEditor: '點雲編輯器',
+        appTitle: '點雲檢視',
+        tabViewer: '點雲檢視',
+        tabEditor: '點雲編輯',
         tabBatch: '批次轉檔',
         tabBatchEdit: '批次編輯',
         tabHintPrefix: '按',
@@ -2216,7 +2216,7 @@ const I18N = {
         batchPickFolder: '選擇輸出資料夾',
         batchSaveFailed: '儲存失敗：{0}',
         batchRemoveTitle: '移除此檔案',
-        editorTitle: '點雲編輯器',
+        editorTitle: '點雲編輯',
         editorSubtitle: '編輯與處理點雲資料',
         editorPlaceholder: '點雲編輯器功能開發中，後續將陸續新增編輯工具。',
         cropRect: '方形裁切',
@@ -2241,12 +2241,12 @@ const I18N = {
         globalLevelDone: '已完成全域水平校正（有效點 {0} 個）',
         globalLevelInsufficient: '有效資料點不足，無法擬合平面（至少需要 3 個）',
         sendToViewer: '傳送到檢視器',
-        sendToViewerTitle: '將目前編輯後的資料傳送到「點雲檢視器」頁面並切換過去',
+        sendToViewerTitle: '將目前編輯後的資料傳送到「點雲檢視」頁面並切換過去',
         sendToEditor: '傳送到編輯器',
-        sendToEditorTitle: '將目前資料傳送到「點雲編輯器」頁面並切換過去',
+        sendToEditorTitle: '將目前資料傳送到「點雲編輯」頁面並切換過去',
         sendNoData: '尚未載入資料，無法傳送',
-        sentToViewer: '已將資料傳送到點雲檢視器',
-        sentToEditor: '已將資料傳送到點雲編輯器',
+        sentToViewer: '已將資料傳送到點雲檢視',
+        sentToEditor: '已將資料傳送到點雲編輯',
         undo: '↶ 上一步',
         redo: '↷ 下一步',
         undoTitle: '返回上一步編輯 (Ctrl+Z)',
