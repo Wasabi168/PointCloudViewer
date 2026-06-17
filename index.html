@@ -1565,6 +1565,7 @@
                     <button type="button" id="edCropApply" data-i18n="cropApply" disabled>套用裁切</button>
                     <button type="button" id="edCropCancel" data-i18n="cropCancel" disabled>取消</button>
                     <button type="button" id="edDenoise" data-i18n="denoise" data-i18n-title="denoiseTitle">刪除雜點</button>
+                    <button type="button" id="edGlobalLevel" data-i18n="globalLevel" data-i18n-title="globalLevelTitle">全域水平校正</button>
                     <button type="button" id="edBtnCalc" data-i18n="btnCalc" data-i18n-title="calcTitle">計算機</button>
                 </div>
             </div>
@@ -1814,6 +1815,10 @@ const I18N = {
         denoiseApply: '套用',
         denoiseApplyTitle: '將目前的雜點篩除結果套用並更新圖像',
         denoiseDone: '已套用雜點篩除，保留 {0} 筆資料',
+        globalLevel: '全域水平校正',
+        globalLevelTitle: '以最小平方法擬合最佳平面並從所有高度值中扣除，消除整體傾斜',
+        globalLevelDone: '已完成全域水平校正（有效點 {0} 個）',
+        globalLevelInsufficient: '有效資料點不足，無法擬合平面（至少需要 3 個）',
         sendToViewer: '傳送到檢視器',
         sendToViewerTitle: '將目前編輯後的資料傳送到「點雲檢視器」頁面並切換過去',
         sendToEditor: '傳送到編輯器',
@@ -1834,7 +1839,7 @@ const I18N = {
         btnCalc: '計算機',
         btnMore: '更多',
         btnMoreTitle: '更多選項（儲存格式、色彩、工具等）',
-        btnMoreTitleEditor: '更多選項（復原、色彩、裁切、計算機、傳送等）',
+        btnMoreTitleEditor: '更多選項（復原、色彩、裁切、水平校正、計算機、傳送等）',
         calcTitle: '數值運算',
         calcDesc: '對影像中所有像素值套用 +、−、×、÷ 運算，並更新畫面。',
         calcOperandPlaceholder: '輸入數值',
@@ -1996,24 +2001,28 @@ const I18N = {
         editorTitle: 'Point Cloud Editor',
         editorSubtitle: 'Edit and process point cloud data',
         editorPlaceholder: 'The Point Cloud Editor is under development. Editing tools will be added soon.',
-        cropRect: 'Rect Crop',
-        cropCircle: 'Circle Crop',
-        cropApply: 'Apply Crop',
+        cropRect: 'Rect',
+        cropCircle: 'Circle',
+        cropApply: 'Apply',
         cropCancel: 'Cancel',
         cropRectTitle: 'Enable rectangle crop: drag on the image to select the region to keep',
         cropCircleTitle: 'Enable ellipse crop: drag on the image to select the region to keep',
-        cropDrawHint: 'Drag to select the region to keep; drag the handles to resize or drag inside to move, then click "Apply Crop"',
+        cropDrawHint: 'Drag to select the region to keep; drag the handles to resize or drag inside to move, then click "Apply"',
         cropNoSelection: 'Please select a region on the image first',
         cropDone: 'Cropped, {0} points kept',
         cropEmpty: 'No data points inside the selection',
-        denoise: 'Remove Noise',
+        denoise: 'Denoise',
         denoiseTitle: 'Interactive noise removal: filter out outlier points by value distribution',
         denoiseTitleLabel: 'Value Distribution',
         denoiseAxis: 'Value',
         denoiseApply: 'Apply',
         denoiseApplyTitle: 'Apply the current noise removal result and update the image',
         denoiseDone: 'Noise removal applied, {0} points kept',
-        sendToViewer: 'Send to Viewer',
+        globalLevel: 'Level',
+        globalLevelTitle: 'Fit a best-fit plane by least squares and subtract it from all height values to remove overall tilt',
+        globalLevelDone: 'Global leveling applied ({0} valid points)',
+        globalLevelInsufficient: 'Not enough valid points to fit a plane (at least 3 required)',
+        sendToViewer: 'To Viewer',
         sendToViewerTitle: 'Send the currently edited data to the Point Cloud Viewer and switch to it',
         sendToEditor: 'Send to Editor',
         sendToEditorTitle: 'Send the current data to the Point Cloud Editor and switch to it',
@@ -2030,10 +2039,10 @@ const I18N = {
         labelSaveFormat: 'Save as:',
         btnSave: 'Save',
         btnSaving: 'Saving…',
-        btnCalc: 'Calculator',
+        btnCalc: 'Calc',
         btnMore: 'More',
         btnMoreTitle: 'More options (save format, colormap, tools, etc.)',
-        btnMoreTitleEditor: 'More options (undo, colormap, crop, calculator, send, etc.)',
+        btnMoreTitleEditor: 'More options (undo, colormap, crop, leveling, calculator, send, etc.)',
         calcTitle: 'Value Calculator',
         calcDesc: 'Apply +, −, ×, ÷ with a number to all pixel values and update the view.',
         calcOperandPlaceholder: 'Enter a number',
@@ -2358,6 +2367,12 @@ function applyLanguage(lang) {
     if (typeof editorView !== 'undefined' && editorView && editorView.syncLang) {
         editorView.syncLang();
     }
+
+    // 語系切換後按鈕文字寬度改變，需重新計算工具列收納
+    requestAnimationFrame(() => {
+        if (typeof layoutViewerToolbar === 'function') layoutViewerToolbar();
+        if (typeof layoutEdToolbar === 'function') layoutEdToolbar();
+    });
 }
 
 
@@ -7639,7 +7654,7 @@ function createImageView(ids, options) {
     function updateEditButtons() {
         if (!editing) return;
         const has = !!st.dataset;
-        [el.cropRect, el.cropCircle, el.denoise, el.btnCalc, el.sendToViewer].forEach(b => { if (b) b.disabled = !has; });
+        [el.cropRect, el.cropCircle, el.denoise, el.globalLevel, el.btnCalc, el.sendToViewer].forEach(b => { if (b) b.disabled = !has; });
         if (el.cropApply) el.cropApply.disabled = !(has && st.edit.cropMode && st.edit.cropSel);
         if (el.cropCancel) el.cropCancel.disabled = !(has && st.edit.cropMode);
         updateHistoryButtons();
@@ -7749,6 +7764,116 @@ function createImageView(ids, options) {
         refreshAfterEdit(false);
         pushHistory();
         return { ok: true };
+    }
+
+    /** 建立平面擬合用座標存取器（影像用實體尺寸，散布點雲用世界座標） */
+    function planeFitAccessors(ds) {
+        if (isScatter(ds)) {
+            const { x, y, z } = ds;
+            return {
+                count: z.length,
+                getX: (i) => x[i],
+                getY: (i) => y[i],
+                getZ: (i) => z[i],
+                isValid: (i) => Number.isFinite(z[i]) && Number.isFinite(x[i]) && Number.isFinite(y[i]),
+            };
+        }
+        const { data, width, height } = ds;
+        const hdr = ds.header || {};
+        let xl = parseFloat(hdr.xlength ?? hdr['x-length'] ?? 0);
+        let yl = parseFloat(hdr.ylength ?? hdr['y-length'] ?? 0);
+        if (!Number.isFinite(xl) || xl <= 0) xl = width;
+        if (!Number.isFinite(yl) || yl <= 0) yl = height;
+        const dx = xl / Math.max(1, width - 1);
+        const dy = yl / Math.max(1, height - 1);
+        return {
+            count: data.length,
+            getX: (i) => (i % width) * dx,
+            getY: (i) => ((i / width) | 0) * dy,
+            getZ: (i) => data[i],
+            isValid: (i) => Number.isFinite(data[i]),
+        };
+    }
+
+    /** 解 3×3 線性方程組（部分樞軸高斯消去） */
+    function solveLinear3(A, B) {
+        const M = [
+            [A[0][0], A[0][1], A[0][2], B[0]],
+            [A[1][0], A[1][1], A[1][2], B[1]],
+            [A[2][0], A[2][1], A[2][2], B[2]],
+        ];
+        for (let col = 0; col < 3; col++) {
+            let maxRow = col, maxVal = Math.abs(M[col][col]);
+            for (let r = col + 1; r < 3; r++) {
+                const v = Math.abs(M[r][col]);
+                if (v > maxVal) { maxVal = v; maxRow = r; }
+            }
+            if (maxVal < 1e-12) return null;
+            if (maxRow !== col) {
+                const tmp = M[col]; M[col] = M[maxRow]; M[maxRow] = tmp;
+            }
+            for (let r = col + 1; r < 3; r++) {
+                const f = M[r][col] / M[col][col];
+                for (let c = col; c < 4; c++) M[r][c] -= f * M[col][c];
+            }
+        }
+        const x = [0, 0, 0];
+        for (let r = 2; r >= 0; r--) {
+            let sum = M[r][3];
+            for (let c = r + 1; c < 3; c++) sum -= M[r][c] * x[c];
+            x[r] = sum / M[r][r];
+        }
+        return x;
+    }
+
+    /** 最小平方法擬合平面 z = ax + by + c */
+    function fitPlaneLeastSquares(acc) {
+        let n = 0, sx = 0, sy = 0, sz = 0;
+        let sxx = 0, syy = 0, sxy = 0, sxz = 0, syz = 0;
+        for (let i = 0; i < acc.count; i++) {
+            if (!acc.isValid(i)) continue;
+            const x = acc.getX(i), y = acc.getY(i), z = acc.getZ(i);
+            n++;
+            sx += x; sy += y; sz += z;
+            sxx += x * x; syy += y * y; sxy += x * y;
+            sxz += x * z; syz += y * z;
+        }
+        if (n < 3) return null;
+        const sol = solveLinear3(
+            [[sxx, sxy, sx], [sxy, syy, sy], [sx, sy, n]],
+            [sxz, syz, sz],
+        );
+        if (!sol) return null;
+        return { a: sol[0], b: sol[1], c: sol[2], n };
+    }
+
+    /** 全域水平校正：扣除最佳擬合平面 */
+    function applyGlobalLeveling() {
+        if (!editing || !st.dataset) { showToast(t('editNoData'), 'info'); return; }
+        endTransientModes();
+        const acc = planeFitAccessors(st.dataset);
+        const plane = fitPlaneLeastSquares(acc);
+        if (!plane) { showToast(t('globalLevelInsufficient'), 'info'); return; }
+        const { a, b, c, n } = plane;
+        const ds = st.dataset;
+        if (isScatter(ds)) {
+            const z = ds.z;
+            for (let i = 0; i < z.length; i++) {
+                if (!acc.isValid(i)) continue;
+                z[i] -= a * ds.x[i] + b * ds.y[i] + c;
+            }
+        } else {
+            ensureFloatPixels(ds);
+            const data = ds.data;
+            for (let i = 0; i < data.length; i++) {
+                if (!acc.isValid(i)) continue;
+                data[i] -= a * acc.getX(i) + b * acc.getY(i) + c;
+            }
+        }
+        refreshAfterEdit(false);
+        pushHistory();
+        el.status.textContent = t('globalLevelDone', n);
+        showToast(t('globalLevelDone', n), 'info');
     }
 
     /* 複製目前資料集（深拷貝陣列、移除畫布參照）以便安全傳送到檢視器 */
@@ -8187,6 +8312,7 @@ function createImageView(ids, options) {
         el.cropApply.addEventListener('click', applyCrop);
         el.cropCancel.addEventListener('click', exitCrop);
         el.denoise.addEventListener('click', () => toggleDenoise());
+        if (el.globalLevel) el.globalLevel.addEventListener('click', applyGlobalLeveling);
         if (el.histApply) el.histApply.addEventListener('click', () => toggleDenoise(false));
         if (el.sendToViewer) el.sendToViewer.addEventListener('click', sendToViewer);
         if (el.undo) el.undo.addEventListener('click', doUndo);
@@ -8242,7 +8368,7 @@ const editorView = createImageView({
     zMin: 'edZMin', zMax: 'edZMax',
     cropRect: 'edCropRect', cropCircle: 'edCropCircle', cropApply: 'edCropApply',
     cropCancel: 'edCropCancel', cropOverlay: 'edCropOverlay', cropShape: 'edCropShape',
-    cropHint: 'edCropHint', denoise: 'edDenoise',
+    cropHint: 'edCropHint', denoise: 'edDenoise', globalLevel: 'edGlobalLevel',
     histPanel: 'edHistPanel', histWrap: 'edHistWrap', histCanvas: 'edHistCanvas',
     histHandleLo: 'edHistHandleLo', histHandleHi: 'edHistHandleHi',
     histValLo: 'edHistValLo', histValHi: 'edHistValHi',
