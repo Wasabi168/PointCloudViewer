@@ -211,8 +211,10 @@
     .more-menu .toolbar-overflow-group:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
     .more-menu .toolbar-overflow-group .ctrl-field { flex: 1 1 100%; }
     .more-menu #edHistoryTools button,
-    .more-menu #edEditTools button,
+    .more-menu #edEditGroup button,
     .more-menu #viewerToolsGroup button { font-size: 13px; padding: 6px 12px; }
+    .more-menu .ed-toolbar-block { flex-wrap: wrap; }
+    .more-menu .ed-toolbar-label { flex: 1 1 100%; margin-bottom: 2px; }
     .more-menu .ctrl-sep { display: none; }
     .more-menu-overflow {
         display: flex;
@@ -1025,7 +1027,7 @@
     }
     .page.active { display: flex; }
 
-    /* ===== 點雲編輯器：影像編輯工具 ===== */
+    /* ===== 點雲編輯器：工具列與影像編輯 ===== */
     /* 編輯器左欄：影像 + 直方圖面板（垂直排列） */
     .ed-left {
         display: flex;
@@ -1036,44 +1038,67 @@
     }
     .ed-left .viewer { flex: 1; min-height: 320px; }
 
-    /* 編輯工具按鈕：預設為中性灰，未啟用時不搶眼 */
-    #edEditTools button {
+    /* 編輯器工具列：帶標籤的功能分群 */
+    .ed-toolbar-block {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .ed-toolbar-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--muted);
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+        user-select: none;
+        opacity: 0.85;
+    }
+    .ed-toolbar-block-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .ed-edit-cluster { gap: 12px; }
+    .ctrl-sep--inline {
+        align-self: stretch;
+        min-height: 22px;
+        margin: 0;
+    }
+
+    /* 復原 / 重做：緊湊圖示按鈕組 */
+    .ed-icon-group {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+        background: #3a3a4a;
+    }
+    .ed-icon-group button {
+        background: transparent;
+        color: var(--text);
+        border: none;
+        border-radius: 0;
+        padding: 8px 13px;
+        font-size: 17px;
+        line-height: 1;
+        min-width: 40px;
+    }
+    .ed-icon-group button:hover:not(:disabled) { background: #4a4a5c; }
+    .ed-icon-group button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* 裁切模式切換（方形 / 圓形） */
+    .ed-crop-toggle button { padding: 6px 14px; font-size: 13px; }
+
+    /* 裁切動作按鈕 */
+    .ed-crop-actions button {
         background: #3a3a4a;
         color: var(--text);
         border: 1px solid var(--border);
-        position: relative;
-        transition: background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+        padding: 6px 12px;
+        font-size: 13px;
     }
-    #edEditTools button:hover:not(:disabled) { background: #4a4a5c; }
-    #edEditTools button:disabled { opacity: 0.4; cursor: not-allowed; }
-    #edSendToViewer:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    /* 復原 / 重做按鈕：中性樣式，停用時淡化 */
-    #edHistoryTools button {
-        background: #3a3a4a;
-        color: var(--text);
-        border: 1px solid var(--border);
-    }
-    #edHistoryTools button:hover:not(:disabled) { background: #4a4a5c; }
-    #edHistoryTools button:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    /* 三個「切換型」工具按鈕：左側保留指示燈位置（不論啟用與否，避免版面跳動） */
-    #edCropRect, #edCropCircle, #edDenoise { padding-left: 28px; }
-    #edCropRect::before, #edCropCircle::before, #edDenoise::before {
-        content: '';
-        position: absolute;
-        left: 12px;
-        top: 50%;
-        width: 8px;
-        height: 8px;
-        margin-top: -4px;
-        border-radius: 50%;
-        background: var(--muted);          /* 未啟用：暗點 */
-        opacity: 0.55;
-        transition: background 0.15s ease, box-shadow 0.15s ease;
-    }
-
-    /* 主要動作：可用時的「套用裁切」以強調色凸顯 */
+    .ed-crop-actions button:hover:not(:disabled) { background: #4a4a5c; }
+    .ed-crop-actions button:disabled { opacity: 0.35; cursor: not-allowed; }
     #edCropApply:not(:disabled) {
         background: var(--accent);
         border-color: var(--accent);
@@ -1082,16 +1107,40 @@
     }
     #edCropApply:not(:disabled):hover { background: var(--accent-hover); }
 
-    /* 啟用中的模式：強調色 + 外光暈 + 指示燈亮起並脈動，清楚標示目前模式 */
-    #edEditTools button.tool-active {
+    /* 刪除雜點：切換型工具（左側指示燈） */
+    #edDenoise {
+        background: #3a3a4a;
+        color: var(--text);
+        border: 1px solid var(--border);
+        position: relative;
+        padding-left: 28px;
+        font-size: 13px;
+        transition: background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+    }
+    #edDenoise:hover:not(:disabled) { background: #4a4a5c; }
+    #edDenoise:disabled { opacity: 0.4; cursor: not-allowed; }
+    #edDenoise::before {
+        content: '';
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        width: 8px;
+        height: 8px;
+        margin-top: -4px;
+        border-radius: 50%;
+        background: var(--muted);
+        opacity: 0.55;
+        transition: background 0.15s ease, box-shadow 0.15s ease;
+    }
+    #edDenoise.tool-active {
         background: var(--accent);
         color: #fff;
         border-color: var(--accent-hover);
         font-weight: 600;
         box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.35), 0 0 12px rgba(79, 140, 255, 0.55);
     }
-    #edEditTools button.tool-active:hover:not(:disabled) { background: var(--accent-hover); }
-    #edEditTools button.tool-active::before {
+    #edDenoise.tool-active:hover:not(:disabled) { background: var(--accent-hover); }
+    #edDenoise.tool-active::before {
         background: #fff;
         opacity: 1;
         box-shadow: 0 0 6px rgba(255, 255, 255, 0.95);
@@ -1101,6 +1150,26 @@
         0%, 100% { opacity: 1; transform: scale(1); }
         50%      { opacity: 0.4; transform: scale(0.6); }
     }
+
+    #edSendToViewer:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* 「更多」選單內的次要工具 */
+    .more-menu-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .more-menu-actions button {
+        width: 100%;
+        background: #3a3a4a;
+        color: var(--text);
+        border: 1px solid var(--border);
+        text-align: left;
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+    .more-menu-actions button:hover:not(:disabled) { background: #4a4a5c; }
+    .more-menu-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
 
     /* 裁切選取覆蓋層：覆蓋在影像之上接收滑鼠繪製 */
     .crop-overlay {
@@ -1914,9 +1983,9 @@
 
             <!-- 群組：復原 / 重做 -->
             <div class="ctrl-group" id="edHistoryGroup" data-toolbar-priority="25">
-                <div class="ctrl-group" id="edHistoryTools">
-                    <button type="button" id="edUndo" data-i18n="undo" data-i18n-title="undoTitle" disabled>↶ 上一步</button>
-                    <button type="button" id="edRedo" data-i18n="redo" data-i18n-title="redoTitle" disabled>↷ 下一步</button>
+                <div class="ed-icon-group" id="edHistoryTools">
+                    <button type="button" id="edUndo" data-i18n="undo" data-i18n-title="undoTitle" disabled>↶</button>
+                    <button type="button" id="edRedo" data-i18n="redo" data-i18n-title="redoTitle" disabled>↷</button>
                 </div>
             </div>
 
@@ -1934,31 +2003,29 @@
                         <option value="inferno">Inferno</option>
                     </select>
                 </label>
-                <label class="ctrl-field" id="edSaveFormatItem">
-                    <span data-i18n="labelSaveFormat">儲存格式：</span>
-                    <select id="edSaveFormat">
-                        <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
-                        <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
-                        <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
-                        <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
-                        <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
-                        <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
-                    </select>
-                </label>
             </div>
 
             <span class="ctrl-sep" id="edSepEdit" aria-hidden="true"></span>
 
             <!-- 群組：影像編輯（裁切 / 刪除雜點） -->
-            <div class="ctrl-group" id="edEditGroup" data-toolbar-priority="45">
-                <div class="ctrl-group" id="edEditTools">
-                    <button type="button" id="edCropRect" data-i18n="cropRect" data-i18n-title="cropRectTitle">方形裁切</button>
-                    <button type="button" id="edCropCircle" data-i18n="cropCircle" data-i18n-title="cropCircleTitle">圓形裁切</button>
-                    <button type="button" id="edCropApply" data-i18n="cropApply" disabled>套用裁切</button>
-                    <button type="button" id="edCropCancel" data-i18n="cropCancel" disabled>取消</button>
+            <div class="ctrl-group ed-edit-cluster" id="edEditGroup" data-toolbar-priority="45">
+                <div class="ed-toolbar-block" id="edCropBlock">
+                    <span class="ed-toolbar-label" data-i18n="toolGroupCrop">裁切</span>
+                    <div class="ed-toolbar-block-row">
+                        <div class="cursor-toggle ed-crop-toggle" id="edCropModeToggle">
+                            <button type="button" id="edCropRect" data-i18n="cropRectShort" data-i18n-title="cropRectTitle">方形</button>
+                            <button type="button" id="edCropCircle" data-i18n="cropCircleShort" data-i18n-title="cropCircleTitle">圓形</button>
+                        </div>
+                        <div class="ctrl-group ed-crop-actions" id="edCropActions">
+                            <button type="button" id="edCropApply" data-i18n="cropApplyBtn" disabled>套用</button>
+                            <button type="button" id="edCropCancel" data-i18n="cropCancel" disabled>取消</button>
+                        </div>
+                    </div>
+                </div>
+                <span class="ctrl-sep ctrl-sep--inline" aria-hidden="true"></span>
+                <div class="ed-toolbar-block" id="edProcessBlock">
+                    <span class="ed-toolbar-label" data-i18n="toolGroupProcess">處理</span>
                     <button type="button" id="edDenoise" data-i18n="denoise" data-i18n-title="denoiseTitle">刪除雜點</button>
-                    <button type="button" id="edGlobalLevel" data-i18n="globalLevel" data-i18n-title="globalLevelTitle">全域水平校正</button>
-                    <button type="button" id="edBtnCalc" data-i18n="btnCalc" data-i18n-title="calcTitle">計算機</button>
                 </div>
             </div>
 
@@ -1966,19 +2033,38 @@
 
             <!-- 群組：傳送 -->
             <div class="ctrl-group" id="edSendGroup" data-toolbar-priority="55">
-                <button type="button" id="edBtnBatchFile" data-i18n="batchFileBtn" data-i18n-title="batchFileBtnTitle">批次檔</button>
                 <button type="button" id="edSendToViewer" data-i18n="sendToViewer" data-i18n-title="sendToViewerTitle">傳送到檢視器</button>
             </div>
 
-            <span class="ctrl-sep ctrl-sep--more" id="edSepMore" aria-hidden="true" style="display:none;"></span>
+            <span class="ctrl-sep ctrl-sep--more" id="edSepMore" aria-hidden="true"></span>
 
-            <!-- 群組：更多（視窗縮小時收納次要工具） -->
-            <div class="ctrl-group more-wrap" id="edMoreWrap" style="display:none;">
+            <!-- 群組：更多（儲存格式、水平校正、計算機、批次檔；視窗縮小時另收納次要工具） -->
+            <div class="ctrl-group more-wrap" id="edMoreWrap">
                 <button type="button" id="edBtnMore" class="more-btn" aria-haspopup="true" aria-expanded="false" data-i18n-title="btnMoreTitleEditor" title="更多選項">
                     <span data-i18n="btnMore">更多</span>
                     <span class="more-caret" aria-hidden="true">▾</span>
                 </button>
-                <div class="more-menu" id="edMoreMenu" role="menu"></div>
+                <div class="more-menu" id="edMoreMenu" role="menu">
+                    <div class="more-menu-overflow" id="edMoreOverflow"></div>
+                    <div class="more-menu-static">
+                        <label class="more-item" id="edSaveFormatItem">
+                            <span data-i18n="labelSaveFormat">儲存格式：</span>
+                            <select id="edSaveFormat">
+                                <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
+                                <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
+                                <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
+                                <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
+                                <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
+                                <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
+                            </select>
+                        </label>
+                        <div class="more-menu-actions">
+                            <button type="button" id="edGlobalLevel" data-i18n="globalLevel" data-i18n-title="globalLevelTitle">全域水平校正</button>
+                            <button type="button" id="edBtnCalc" data-i18n="btnCalc" data-i18n-title="calcTitle">計算機</button>
+                            <button type="button" id="edBtnBatchFile" data-i18n="batchFileBtn" data-i18n-title="batchFileBtnTitle">批次檔</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </header>
@@ -2294,7 +2380,12 @@ const I18N = {
         editorPlaceholder: '點雲編輯器功能開發中，後續將陸續新增編輯工具。',
         cropRect: '方形裁切',
         cropCircle: '圓形裁切',
+        cropRectShort: '方形',
+        cropCircleShort: '圓形',
         cropApply: '套用裁切',
+        cropApplyBtn: '套用',
+        toolGroupCrop: '裁切',
+        toolGroupProcess: '處理',
         cropCancel: '取消',
         cropRectTitle: '啟用方形框選裁切：在影像上拖曳框選要保留的矩形區域',
         cropCircleTitle: '啟用圓形框選裁切：在影像上拖曳框選要保留的橢圓區域',
@@ -2320,8 +2411,8 @@ const I18N = {
         sendNoData: '尚未載入資料，無法傳送',
         sentToViewer: '已將資料傳送到點雲檢視',
         sentToEditor: '已將資料傳送到點雲編輯',
-        undo: '↶ 上一步',
-        redo: '↷ 下一步',
+        undo: '↶',
+        redo: '↷',
         undoTitle: '返回上一步編輯 (Ctrl+Z)',
         redoTitle: '前進下一步編輯 (Ctrl+Y / Ctrl+Shift+Z)',
         editNoData: '尚未載入資料',
@@ -2333,7 +2424,7 @@ const I18N = {
         btnCalc: '計算機',
         btnMore: '更多',
         btnMoreTitle: '更多選項（儲存格式、色彩、工具等）',
-        btnMoreTitleEditor: '更多選項（復原、色彩、裁切、水平校正、計算機、傳送等）',
+        btnMoreTitleEditor: '更多選項（儲存格式、水平校正、計算機、批次檔等）',
         calcTitle: '數值運算',
         calcDesc: '對影像中所有像素值套用 +、−、×、÷ 運算，並更新畫面。',
         calcOperandPlaceholder: '輸入數值',
@@ -2555,7 +2646,12 @@ const I18N = {
         editorPlaceholder: 'The Point Cloud Editor is under development. Editing tools will be added soon.',
         cropRect: 'Rect',
         cropCircle: 'Circle',
+        cropRectShort: 'Rect',
+        cropCircleShort: 'Circle',
         cropApply: 'Apply',
+        cropApplyBtn: 'Apply',
+        toolGroupCrop: 'Crop',
+        toolGroupProcess: 'Process',
         cropCancel: 'Cancel',
         cropRectTitle: 'Enable rectangle crop: drag on the image to select the region to keep',
         cropCircleTitle: 'Enable ellipse crop: drag on the image to select the region to keep',
@@ -2581,8 +2677,8 @@ const I18N = {
         sendNoData: 'No data loaded to send',
         sentToViewer: 'Data sent to the Point Cloud Viewer',
         sentToEditor: 'Data sent to the Point Cloud Editor',
-        undo: '↶ Undo',
-        redo: '↷ Redo',
+        undo: '↶',
+        redo: '↷',
         undoTitle: 'Undo last edit (Ctrl+Z)',
         redoTitle: 'Redo next edit (Ctrl+Y / Ctrl+Shift+Z)',
         editNoData: 'No data loaded',
@@ -2594,7 +2690,7 @@ const I18N = {
         btnCalc: 'Calc',
         btnMore: 'More',
         btnMoreTitle: 'More options (save format, colormap, tools, etc.)',
-        btnMoreTitleEditor: 'More options (undo, colormap, crop, leveling, calculator, send, etc.)',
+        btnMoreTitleEditor: 'More options (save format, leveling, calculator, batch file, etc.)',
         calcTitle: 'Value Calculator',
         calcDesc: 'Apply +, −, ×, ÷ with a number to all pixel values and update the view.',
         calcOperandPlaceholder: 'Enter a number',
@@ -9045,16 +9141,16 @@ function createImageView(ids, options) {
         el.viewer.classList.add('crop-active');
         if (el.cropShape) el.cropShape.style.display = 'none';
         if (el.cropShape) el.cropShape.classList.toggle('circle', mode === 'circle');
-        el.cropRect.classList.toggle('tool-active', mode === 'rect');
-        el.cropCircle.classList.toggle('tool-active', mode === 'circle');
+        el.cropRect.classList.toggle('active', mode === 'rect');
+        el.cropCircle.classList.toggle('active', mode === 'circle');
         updateEditButtons();
     }
     function exitCrop() {
         st.edit.cropMode = null; st.edit.cropSel = null; st.edit.cropAction = null;
         el.viewer.classList.remove('crop-active');
         if (el.cropShape) el.cropShape.style.display = 'none';
-        el.cropRect.classList.remove('tool-active');
-        el.cropCircle.classList.remove('tool-active');
+        el.cropRect.classList.remove('active');
+        el.cropCircle.classList.remove('active');
         updateEditButtons();
     }
     function normSel(s) {
@@ -9705,6 +9801,8 @@ const layoutEdToolbar = setupOverflowToolbar({
     moreWrapId: 'edMoreWrap',
     moreSepId: 'edSepMore',
     btnMoreId: 'edBtnMore',
+    overflowTargetId: 'edMoreOverflow',
+    alwaysShowMore: true,
     groups: [
         { id: 'edHistoryGroup', sepId: 'edSepHistory', priority: 25 },
         { id: 'edDisplayGroup', sepId: 'edSepDisplay', priority: 35 },
