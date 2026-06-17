@@ -1834,6 +1834,7 @@
                 <input type="file" id="fileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
             </label>
             <button id="btnSave" data-i18n="btnSave">儲存</button>
+            <button type="button" id="btnClear" class="btn-secondary" data-i18n="btnClear" data-i18n-title="btnClearTitle" disabled>清除</button>
         </div>
 
         <span class="ctrl-sep" id="viewerSepDisplay" aria-hidden="true"></span>
@@ -2004,6 +2005,7 @@
                     <input type="file" id="edFileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
                 </label>
                 <button id="edBtnSave" data-i18n="btnSave">儲存</button>
+                <button type="button" id="edBtnClear" class="btn-secondary" data-i18n="btnClear" data-i18n-title="btnClearTitle" disabled>清除</button>
             </div>
 
             <span class="ctrl-sep" id="edSepHistory" aria-hidden="true"></span>
@@ -2447,6 +2449,8 @@ const I18N = {
         labelColormap: '色彩：',
         labelSaveFormat: '儲存格式：',
         btnSave: '儲存',
+        btnClear: '清除',
+        btnClearTitle: '清除目前載入的資料',
         btnSaving: '儲存中…',
         btnCalc: '計算機',
         btnMore: '更多',
@@ -2539,6 +2543,7 @@ const I18N = {
         sideInfo: '檔案資訊',
         infoSize: '影像尺寸',
         statusIdle: '尚未載入檔案',
+        statusCleared: '已清除資料',
         statusReading: '讀取中：{0}',
         statusLoaded: '已載入：{0} ({1}×{2})',
         statusLoadedPcd: '已載入：{0}（{1} 點，散布圖）',
@@ -2714,6 +2719,8 @@ const I18N = {
         labelColormap: 'Colormap:',
         labelSaveFormat: 'Save as:',
         btnSave: 'Save',
+        btnClear: 'Clear',
+        btnClearTitle: 'Clear the currently loaded data',
         btnSaving: 'Saving…',
         btnCalc: 'Calc',
         btnMore: 'More',
@@ -2806,6 +2813,7 @@ const I18N = {
         sideInfo: 'File Info',
         infoSize: 'Image size',
         statusIdle: 'No file loaded',
+        statusCleared: 'Data cleared',
         statusReading: 'Loading: {0}',
         statusLoaded: 'Loaded: {0} ({1}×{2})',
         statusLoadedPcd: 'Loaded: {0} ({1} points, scatter)',
@@ -3090,6 +3098,10 @@ function applyLanguage(lang) {
     // 儲存按鈕若非儲存中，更新文字
     if (typeof btnSave !== 'undefined' && btnSave && !btnSave.disabled) {
         btnSave.textContent = t('btnSave');
+    }
+    if (typeof btnClear !== 'undefined' && btnClear) {
+        btnClear.textContent = t('btnClear');
+        btnClear.title = t('btnClearTitle');
     }
     // 更新拖放提示 (依目前是否為 drag-reject 狀態)
     if (typeof dropText !== 'undefined' && dropText && typeof viewerEl !== 'undefined' && viewerEl) {
@@ -5912,7 +5924,55 @@ async function loadFile(file) {
         if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) {
             btnSendToEditor.disabled = !currentDataset;
         }
+        if (typeof btnClear !== 'undefined' && btnClear) {
+            btnClear.disabled = !currentDataset;
+        }
     }
+}
+
+/** 清除檢視器目前載入的資料，回到初始狀態 */
+function clearViewerData() {
+    if (!currentDataset) return;
+    currentDataset = null;
+
+    if (view3dActive) {
+        Viewer3D.exit();
+        view3dActive = false;
+        document.getElementById('viewer').classList.remove('mode-3d');
+        updateViewModeButtons();
+    }
+    if (typeof clearProfile === 'function') clearProfile();
+    if (typeof clearMeasureDistance === 'function') clearMeasureDistance();
+    if (typeof clearMeasureArea === 'function') clearMeasureArea();
+
+    const canvas = document.getElementById('canvas');
+    canvas.style.display = 'none';
+    canvas.classList.remove('scatter-view');
+    canvas.style.width = '';
+    canvas.style.height = '';
+    document.getElementById('placeholder').style.display = '';
+    document.getElementById('zoomIndicator').classList.remove('show');
+    document.getElementById('zoomHint').classList.remove('show');
+    if (valueIndicator) valueIndicator.textContent = '';
+
+    const overlay = document.getElementById('overlay');
+    if (overlay) {
+        const octx = overlay.getContext('2d');
+        octx.clearRect(0, 0, overlay.width, overlay.height);
+    }
+
+    resetColorClip(false);
+    renderColorbar(cmapSelect.value);
+    document.getElementById('zMin').textContent = '-';
+    document.getElementById('zMax').textContent = '-';
+    document.getElementById('infoList').innerHTML = '';
+    statusEl.textContent = t('statusIdle');
+    fileInput.value = '';
+
+    if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) btnSendToEditor.disabled = true;
+    if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = true;
+    if (typeof updateModeIndicator === 'function') updateModeIndicator();
+    showToast(t('statusCleared'), 'info');
 }
 
 /* 深拷貝資料集以便在檢視器與編輯器之間傳送 */
@@ -5951,6 +6011,7 @@ function loadDatasetIntoViewer(ds) {
     else statusEl.textContent = t('statusLoaded', ds.filename, ds.width, ds.height);
     applyPreferredViewMode();
     if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) btnSendToEditor.disabled = false;
+    if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = false;
     return true;
 }
 
@@ -6067,6 +6128,7 @@ function applyPreferredViewMode() {
     setViewMode('3d');
 }
 const btnSave = document.getElementById('btnSave');
+const btnClear = document.getElementById('btnClear');
 const btnSendToEditor = document.getElementById('btnSendToEditor');
 
 function sendToEditor() {
@@ -6162,6 +6224,8 @@ btnSave.addEventListener('click', async () => {
     // ---- 不支援時的 fallback：沿用工具列選單的格式直接下載 ----
     fallbackSave(preferred, base);
 });
+
+if (btnClear) btnClear.addEventListener('click', clearViewerData);
 
 /** 傳統下載（不支援 showSaveFilePicker 的瀏覽器） */
 function fallbackSave(format, base) {
@@ -8673,6 +8737,7 @@ function createImageView(ids, options) {
             if (result.type === 'pcd-scatter') el.status.textContent = t('statusLoadedPcd', file.name, result.pointCount);
             else el.status.textContent = t('statusLoaded', file.name, result.width, result.height);
             if (typeof editAfterLoad === 'function') editAfterLoad();
+            if (el.btnClear) el.btnClear.disabled = false;
         } catch (err) {
             console.error(err);
             el.status.textContent = t('statusReadFailed', err.message);
@@ -8794,6 +8859,7 @@ function createImageView(ids, options) {
         });
     }
     el.btnSave.addEventListener('click', onSaveClick);
+    if (el.btnClear) el.btnClear.addEventListener('click', clearData);
 
     el.viewer.addEventListener('wheel', (e) => {
         if (!st.dataset) return;
@@ -8903,9 +8969,42 @@ function createImageView(ids, options) {
         if (!editing) return;
         const has = !!st.dataset;
         [el.cropRect, el.cropCircle, el.denoise, el.globalLevel, el.btnCalc, el.sendToViewer].forEach(b => { if (b) b.disabled = !has; });
+        if (el.btnClear) el.btnClear.disabled = !has;
         if (el.cropApply) el.cropApply.disabled = !(has && st.edit.cropMode && st.edit.cropSel);
         if (el.cropCancel) el.cropCancel.disabled = !(has && st.edit.cropMode);
         updateHistoryButtons();
+    }
+
+    function clearData() {
+        if (!st.dataset) return;
+        if (editing) endTransientModes();
+        st.dataset = null;
+        st.colorClip.lo = 0;
+        st.colorClip.hi = 1;
+        if (editing) {
+            setLastEditStep(null);
+            resetHistory();
+        }
+
+        const canvas = el.canvas;
+        canvas.style.display = 'none';
+        canvas.classList.remove('scatter-view');
+        canvas.style.width = '';
+        canvas.style.height = '';
+        el.placeholder.style.display = '';
+        el.zoomIndicator.classList.remove('show');
+        el.zoomHint.classList.remove('show');
+
+        renderColorbar(el.colormap.value);
+        syncColorbarHandles();
+        el.zMin.textContent = '-';
+        el.zMax.textContent = '-';
+        el.infoList.innerHTML = '';
+        el.status.textContent = t('statusIdle');
+        if (el.fileInput) el.fileInput.value = '';
+        if (el.btnClear) el.btnClear.disabled = true;
+        if (editing) updateEditButtons();
+        showToast(t('statusCleared'), 'info');
     }
 
     /* ---- 編輯歷史（上一步 / 下一步） ---- */
@@ -9156,6 +9255,7 @@ function createImageView(ids, options) {
         else el.status.textContent = t('statusLoaded', ds.filename, ds.width, ds.height);
         if (typeof editAfterLoad === 'function') editAfterLoad();
         if (el.btnSave) el.btnSave.disabled = false;
+        if (el.btnClear) el.btnClear.disabled = false;
         return true;
     }
 
@@ -9650,11 +9750,16 @@ function createImageView(ids, options) {
         refit: () => { if (st.dataset && el.viewer.clientWidth > 0) { fitImage(); if (st.edit.denoise) renderHist(); } },
         syncLang: () => {
             const ds = st.dataset;
-            if (!ds) { el.status.textContent = t('statusIdle'); return; }
-            if (ds.type === 'pcd-scatter') el.status.textContent = t('statusLoadedPcd', ds.filename, ds.pointCount);
+            if (!ds) el.status.textContent = t('statusIdle');
+            else if (ds.type === 'pcd-scatter') el.status.textContent = t('statusLoadedPcd', ds.filename, ds.pointCount);
             else el.status.textContent = t('statusLoaded', ds.filename, ds.width, ds.height);
             if (!el.btnSave.disabled) el.btnSave.textContent = t('btnSave');
+            if (el.btnClear) {
+                el.btnClear.textContent = t('btnClear');
+                el.btnClear.title = t('btnClearTitle');
+            }
         },
+        clearData,
     };
 }
 
@@ -9665,6 +9770,7 @@ const editorView = createImageView({
     dropIcon: 'edDropIcon', dropText: 'edDropText',
     fileInput: 'edFileInput', colormap: 'edColormap',
     btnSave: 'edBtnSave', saveFormat: 'edSaveFormat', saveFormatItem: 'edSaveFormatItem',
+    btnClear: 'edBtnClear',
     progress: 'edProgress', progressBar: 'edProgressBar', status: 'edStatus', infoList: 'edInfoList',
     colorbarCanvas: 'edColorbarCanvas', colorbarTrack: 'edColorbarTrack',
     cbHandleLo: 'edCbHandleLo', cbHandleHi: 'edCbHandleHi',
