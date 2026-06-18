@@ -77,7 +77,7 @@
     }
     .ctrl-field--colormap .colormap-picker-ui { min-width: 0; }
 
-    /* 色彩選單：自訂下拉，滑鼠懸停選項時顯示預覽色條 */
+    /* 色彩選單：自訂下拉，開啟時顯示目前選項色條，懸停其他選項時切換預覽 */
     .colormap-picker { position: relative; display: inline-block; }
     .colormap-picker-native {
         position: absolute;
@@ -1107,8 +1107,9 @@
     }
     #edCropApply:not(:disabled):hover { background: var(--accent-hover); }
 
-    /* 刪除雜點：切換型工具（左側指示燈） */
-    #edDenoise {
+    /* 切換型工具按鈕（左側指示燈）：刪除雜點、預覽檔案圖片等 */
+    #edDenoise,
+    #batchPreviewEnable {
         background: #3a3a4a;
         color: var(--text);
         border: 1px solid var(--border);
@@ -1117,9 +1118,12 @@
         font-size: 13px;
         transition: background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
     }
-    #edDenoise:hover:not(:disabled) { background: #4a4a5c; }
-    #edDenoise:disabled { opacity: 0.4; cursor: not-allowed; }
-    #edDenoise::before {
+    #edDenoise:hover:not(:disabled),
+    #batchPreviewEnable:hover:not(:disabled) { background: #4a4a5c; }
+    #edDenoise:disabled,
+    #batchPreviewEnable:disabled { opacity: 0.4; cursor: not-allowed; }
+    #edDenoise::before,
+    #batchPreviewEnable::before {
         content: '';
         position: absolute;
         left: 12px;
@@ -1132,15 +1136,18 @@
         opacity: 0.55;
         transition: background 0.15s ease, box-shadow 0.15s ease;
     }
-    #edDenoise.tool-active {
+    #edDenoise.tool-active,
+    #batchPreviewEnable.tool-active {
         background: var(--accent);
         color: #fff;
         border-color: var(--accent-hover);
         font-weight: 600;
         box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.35), 0 0 12px rgba(79, 140, 255, 0.55);
     }
-    #edDenoise.tool-active:hover:not(:disabled) { background: var(--accent-hover); }
-    #edDenoise.tool-active::before {
+    #edDenoise.tool-active:hover:not(:disabled),
+    #batchPreviewEnable.tool-active:hover:not(:disabled) { background: var(--accent-hover); }
+    #edDenoise.tool-active::before,
+    #batchPreviewEnable.tool-active::before {
         background: #fff;
         opacity: 1;
         box-shadow: 0 0 6px rgba(255, 255, 255, 0.95);
@@ -2242,10 +2249,7 @@
                         <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
                     </select>
                 </label>
-                <label class="ctrl-field">
-                    <input type="checkbox" id="batchPreviewEnable" />
-                    <span data-i18n="batchPreviewFiles">預覽檔案圖片</span>
-                </label>
+                <button type="button" id="batchPreviewEnable" data-i18n="batchPreviewFiles" data-i18n-title="batchPreviewTitle" aria-pressed="false">預覽圖片</button>
                 <button type="button" id="batchBtnConvert" data-i18n="batchBtnConvert" disabled>開始轉換</button>
             </div>
         </div>
@@ -2440,7 +2444,7 @@ const I18N = {
         batchPickFolder: '選擇輸出資料夾',
         batchSaveFailed: '儲存失敗：{0}',
         batchRemoveTitle: '移除此檔案',
-        batchPreviewFiles: '預覽檔案圖片',
+        batchPreviewFiles: '預覽圖片',
         batchPreviewTitle: '檔案預覽',
         batchPreviewEmpty: '尚無檔案可預覽',
         editorTitle: '點雲編輯',
@@ -2718,7 +2722,7 @@ const I18N = {
         batchPickFolder: 'Choose output folder',
         batchSaveFailed: 'Save failed: {0}',
         batchRemoveTitle: 'Remove this file',
-        batchPreviewFiles: 'Preview file images',
+        batchPreviewFiles: 'Preview images',
         batchPreviewTitle: 'File Preview',
         batchPreviewEmpty: 'No files to preview',
         editorTitle: 'Point Cloud Editor',
@@ -5283,7 +5287,7 @@ function renderColormapPreview(cmapName, canvasEl) {
     ctx.putImageData(img, 0, 0);
 }
 
-/** 將原生 <select> 換成可懸停預覽色條的自訂色彩選單 */
+/** 將原生 <select> 換成可預覽色條的自訂色彩選單 */
 function setupColormapPicker(selectEl) {
     if (!selectEl || selectEl.dataset.colormapPicker) return;
 
@@ -5333,9 +5337,7 @@ function setupColormapPicker(selectEl) {
         optionEls.push(item);
 
         item.addEventListener('mouseenter', () => {
-            wrap.classList.add('preview-visible');
-            renderColormapPreview(opt.value, previewCanvas);
-            optionEls.forEach(o => o.classList.toggle('focused', o === item));
+            showColormapPreview(opt.value, item);
         });
         item.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -5343,9 +5345,19 @@ function setupColormapPicker(selectEl) {
         });
     });
 
+    function showColormapPreview(value, focusItem) {
+        wrap.classList.add('preview-visible');
+        renderColormapPreview(value, previewCanvas);
+        optionEls.forEach(o => o.classList.toggle('focused', o === focusItem));
+    }
+
+    function showCurrentColormapPreview() {
+        const current = optionEls.find(o => o.dataset.value === selectEl.value) || null;
+        showColormapPreview(selectEl.value, current);
+    }
+
     menu.addEventListener('mouseleave', () => {
-        wrap.classList.remove('preview-visible');
-        optionEls.forEach(o => o.classList.remove('focused'));
+        showCurrentColormapPreview();
     });
     menu.addEventListener('click', (e) => e.stopPropagation());
 
@@ -5369,6 +5381,7 @@ function setupColormapPicker(selectEl) {
         wrap.classList.add('open');
         trigger.setAttribute('aria-expanded', 'true');
         syncTrigger();
+        showCurrentColormapPreview();
     }
 
     function closeMenu() {
@@ -10529,8 +10542,12 @@ const layoutEdToolbar = setupOverflowToolbar({
         }, { root: batchFileList, rootMargin: '120px' });
     }
 
+    function isBatchPreviewOn() {
+        return batchPreviewEnable && batchPreviewEnable.classList.contains('tool-active');
+    }
+
     function loadBatchItemPreviews() {
-        if (!batchPreviewEnable || !batchPreviewEnable.checked) {
+        if (!isBatchPreviewOn()) {
             teardownBatchPreviewObserver();
             return;
         }
@@ -10651,7 +10668,7 @@ const layoutEdToolbar = setupOverflowToolbar({
     }
 
     function renderBatchFileList() {
-        const previewOn = batchPreviewEnable && batchPreviewEnable.checked;
+        const previewOn = isBatchPreviewOn();
         batchPreviewGen++;
         teardownBatchPreviewObserver();
         batchFileList.innerHTML = '';
@@ -10797,7 +10814,12 @@ const layoutEdToolbar = setupOverflowToolbar({
     });
 
     if (batchPreviewEnable) {
-        batchPreviewEnable.addEventListener('change', () => renderBatchFileList());
+        batchPreviewEnable.addEventListener('click', () => {
+            if (batchConverting) return;
+            batchPreviewEnable.classList.toggle('tool-active');
+            batchPreviewEnable.setAttribute('aria-pressed', isBatchPreviewOn() ? 'true' : 'false');
+            renderBatchFileList();
+        });
     }
 
     async function batchSaveBlob(blob, filename, dirHandle) {
