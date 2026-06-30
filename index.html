@@ -1488,6 +1488,25 @@
         cursor: pointer;
     }
     .batch-file-remove:hover { background: #3a3a4a; color: #ff7a7a; }
+    .batch-file-download {
+        flex-shrink: 0;
+        position: relative;
+        z-index: 1;
+        background: transparent;
+        color: var(--muted);
+        border: 1px solid var(--border);
+        padding: 4px 8px;
+        font-size: 12px;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .batch-file-download:hover:not(:disabled) { background: #3a3a4a; color: var(--accent); }
+    .batch-file-download:disabled { opacity: 0.35; cursor: not-allowed; }
+    .batch-edit-download-all {
+        padding: 4px 10px;
+        font-size: 12px;
+        line-height: 1.3;
+    }
     .batch-side .status { white-space: pre-wrap; word-break: break-word; }
     button.btn-secondary {
         background: #3a3a4a;
@@ -1517,69 +1536,58 @@
         gap: 14px;
         min-height: 0;
     }
-    .batch-edit-preview-panel {
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 12px 14px;
-    }
-    .batch-edit-preview-head {
-        display: flex;
+    .batch-edit-file-item {
+        flex-wrap: nowrap;
         align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        margin-bottom: 10px;
-        font-size: 13px;
-        color: var(--muted);
     }
-    .batch-edit-preview-head strong { color: var(--text); }
-    .batch-step-previews {
+    .batch-edit-file-item .batch-file-name {
+        flex: 0 1 180px;
+        max-width: 220px;
+    }
+    .batch-edit-step-previews {
         display: flex;
-        gap: 10px;
+        gap: 6px;
         overflow-x: auto;
-        padding-bottom: 4px;
-        min-height: 100px;
+        flex: 1;
+        min-width: 0;
+        padding: 2px 0;
+        min-height: 52px;
+        align-items: center;
     }
-    .batch-step-previews:empty::after {
+    .batch-edit-step-previews:empty::after {
         content: attr(data-empty);
         display: block;
-        padding: 24px 12px;
+        padding: 4px 8px;
         color: var(--muted);
-        font-size: 13px;
-        width: 100%;
-        text-align: center;
+        font-size: 12px;
+        white-space: nowrap;
     }
-    .batch-step-preview-card {
+    .batch-edit-step-thumb {
         flex-shrink: 0;
-        width: 148px;
+        width: 72px;
         background: #2a2a36;
         border: 1px solid var(--border);
-        border-radius: 6px;
+        border-radius: 4px;
         overflow: hidden;
         cursor: context-menu;
+        position: relative;
     }
-    .batch-step-preview-card.active {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 1px rgba(79, 140, 255, 0.35);
+    .batch-edit-step-thumb.is-loading::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, transparent, rgba(79, 140, 255, 0.18), transparent);
+        animation: batch-thumb-shimmer 1.1s ease-in-out infinite;
     }
-    .batch-step-preview-card canvas {
+    .batch-edit-step-thumb.is-error {
+        border-color: #ff7a7a;
+        background: rgba(255, 92, 92, 0.08);
+    }
+    .batch-edit-step-thumb canvas {
         display: block;
         width: 100%;
         height: auto;
         background: #1a1a22;
-    }
-    .batch-step-preview-label {
-        padding: 6px 8px;
-        font-size: 11px;
-        color: var(--muted);
-        line-height: 1.35;
-        border-top: 1px solid var(--border);
-    }
-    .batch-step-preview-label strong {
-        display: block;
-        color: var(--text);
-        font-size: 12px;
-        margin-bottom: 2px;
     }
     .ctx-menu {
         position: fixed;
@@ -2318,16 +2326,6 @@
 
     <main>
         <div class="batch-edit-workspace" id="batchEditWorkspace">
-            <div class="batch-edit-preview-panel" id="batchEditPreviewPanel">
-                <div class="batch-edit-preview-head">
-                    <span><span data-i18n="batchEditPreviewTitle">步驟預覽</span> · <strong id="batchEditPreviewFile">—</strong></span>
-                    <label class="ctrl-field" style="font-size:12px;">
-                        <span data-i18n="batchEditPreviewSample">預覽樣本：</span>
-                        <select id="batchEditPreviewSelect" disabled><option value="">—</option></select>
-                    </label>
-                </div>
-                <div class="batch-step-previews" id="batchEditStepPreviews" data-empty="請先開啟批次檔並選擇預覽樣本"></div>
-            </div>
             <div class="batch-drop" id="batchEditDropZone">
                 <div class="batch-drop-icon">&#x2B07;</div>
                 <div class="batch-drop-title" data-i18n="batchEditDropTitle">拖曳多個檔案到此處</div>
@@ -2336,6 +2334,7 @@
             <div class="batch-file-panel batch-edit-file-panel">
                 <div class="batch-file-head">
                     <span><span data-i18n="batchEditFileList">檔案清單</span> · <strong id="batchEditFileCount">0</strong></span>
+                    <button type="button" id="batchEditBtnDownloadAll" class="btn-secondary batch-edit-download-all" data-i18n="batchEditDownloadAll" disabled>下載全部</button>
                 </div>
                 <ul class="batch-file-list" id="batchEditFileList" data-empty="尚未加入任何檔案"></ul>
             </div>
@@ -2639,7 +2638,8 @@ const I18N = {
         batchEditBtnManage: '批次檔管理',
         batchEditBtnRun: '執行批次編輯',
         batchEditDropTitle: '拖曳多個檔案到此處',
-        batchEditDropHint: '檔案尺寸與種類須與批次檔綁定條件一致',
+        batchEditDropHint: '可拖入資料檔或 .wbatch 批次設定檔；資料檔尺寸與種類須與批次檔綁定條件一致',
+        batchEditDropMultipleBatch: '已載入第一個批次設定檔（忽略其餘 {0} 個）',
         batchEditFileList: '檔案清單',
         batchEditBatchFile: '批次檔',
         batchEditNoBatchFile: '尚未開啟批次檔',
@@ -2653,7 +2653,14 @@ const I18N = {
         batchEditPreviewOriginal: '原始',
         batchEditPreviewSendToViewer: '傳送到點雲檢視',
         batchEditPreviewSendToEditor: '傳送到點雲編輯',
-        batchEditPreviewEmpty: '請先開啟批次檔並選擇預覽樣本',
+        batchEditPreviewEmpty: '請先開啟批次檔',
+        batchEditPreviewNotRun: '尚未執行批次編輯',
+        batchEditDownload: '下載',
+        batchEditDownloadAll: '下載全部',
+        batchEditNoResults: '尚無可下載的檔案，請先執行批次編輯',
+        batchEditDownloadDone: '已下載 {0} 個檔案',
+        batchEditDownloadNeedFolder: '下載多個檔案請選擇儲存資料夾',
+        batchEditDownloadMultiHint: '若瀏覽器詢問是否允許下載多個檔案，請點選允許',
         batchEditMismatch: '檔案不符合批次檔條件：{0}',
         batchEditNoBatch: '請先開啟批次檔',
         batchEditNoFiles: '請先加入要處理的檔案',
@@ -2917,7 +2924,8 @@ const I18N = {
         batchEditBtnManage: 'Batch File',
         batchEditBtnRun: 'Run Batch Edit',
         batchEditDropTitle: 'Drag multiple files here',
-        batchEditDropHint: 'Files must match the batch file kind and dimensions',
+        batchEditDropHint: 'Drop data files or a .wbatch batch config; data files must match batch kind and dimensions',
+        batchEditDropMultipleBatch: 'Loaded the first batch config (ignored {0} more)',
         batchEditFileList: 'File List',
         batchEditBatchFile: 'Batch File',
         batchEditNoBatchFile: 'No batch file open',
@@ -2931,7 +2939,14 @@ const I18N = {
         batchEditPreviewOriginal: 'Original',
         batchEditPreviewSendToViewer: 'Send to Point Cloud Viewer',
         batchEditPreviewSendToEditor: 'Send to Point Cloud Editor',
-        batchEditPreviewEmpty: 'Open a batch file and choose a preview sample first',
+        batchEditPreviewEmpty: 'Open a batch file first',
+        batchEditPreviewNotRun: 'Run batch edit to preview',
+        batchEditDownload: 'Download',
+        batchEditDownloadAll: 'Download All',
+        batchEditNoResults: 'Nothing to download — run batch edit first',
+        batchEditDownloadDone: 'Downloaded {0} file(s)',
+        batchEditDownloadNeedFolder: 'Choose a folder to save multiple files',
+        batchEditDownloadMultiHint: 'If prompted, allow multiple downloads from this site',
         batchEditMismatch: 'File does not match batch file: {0}',
         batchEditNoBatch: 'Please open a batch file first',
         batchEditNoFiles: 'Please add files to process first',
@@ -11487,6 +11502,7 @@ const BatchFileManager = (() => {
         setSignatureProvider: (fn) => { signatureProvider = fn; },
         refreshLastEditHint: updateLastEditHint,
         loadFromJson,
+        loadFromFile,
     };
 })();
 
@@ -11510,15 +11526,12 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
     const statusEl = document.getElementById('batchEditStatus');
     const progress = document.getElementById('batchEditProgress');
     const progressBar = document.getElementById('batchEditProgressBar');
-    const previewSelect = document.getElementById('batchEditPreviewSelect');
-    const previewFileLabel = document.getElementById('batchEditPreviewFile');
-    const stepPreviews = document.getElementById('batchEditStepPreviews');
+    const btnDownloadAll = document.getElementById('batchEditBtnDownloadAll');
 
     let entries = [];
     let running = false;
-    let previewDataset = null;
+    let downloading = false;
     let entryIdSeq = 0;
-    let previewGen = 0;
     let previewCtxMenu = null;
 
     function hidePreviewCtxMenu() {
@@ -11552,10 +11565,6 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
         previewCtxMenu = menu;
     }
 
-    function sendPreviewToViewer(ds) {
-        transferDatasetToViewer({ ds });
-    }
-
     document.addEventListener('click', (e) => {
         if (previewCtxMenu && !previewCtxMenu.contains(e.target)) hidePreviewCtxMenu();
     });
@@ -11585,32 +11594,95 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
         batchBadge.textContent = t('bfmMetaInfo', batchKindLabel(bf.kind), bf.width, bf.height, bf.steps.length);
     }
 
+    function buildStepPreviewCards(ds, bf) {
+        const cards = [{ label: t('batchEditPreviewOriginal'), ds: cloneDatasetDeep(ds) }];
+        let working = cloneDatasetDeep(ds);
+        for (let i = 0; i < bf.steps.length; i++) {
+            const res = batchApplyStep(working, bf.steps[i]);
+            if (!res.ok) break;
+            cards.push({ label: `${i + 1}. ${describeBatchStep(bf.steps[i])}`, ds: cloneDatasetDeep(working) });
+        }
+        return cards;
+    }
+
+    function appendStepThumb(container, card) {
+        const el = document.createElement('div');
+        el.className = 'batch-edit-step-thumb is-loaded';
+        el.title = card.label;
+        const cv = document.createElement('canvas');
+        renderDatasetPreviewThumb(card.ds, cv, 68);
+        el.appendChild(cv);
+        el.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showPreviewCtxMenu(e.clientX, e.clientY, buildPreviewSendMenuItems({
+                ds: card.ds,
+                onBeforeAction: hidePreviewCtxMenu,
+            }));
+        });
+        container.appendChild(el);
+    }
+
+    function previewEmptyMessage() {
+        const bf = BatchFileManager.getCurrent();
+        if (!bf || !bf.steps.length) return t('batchEditPreviewEmpty');
+        return t('batchEditPreviewNotRun');
+    }
+
+    function renderEntryPreviews(entry, container) {
+        container.innerHTML = '';
+        if (!entry.previewCards || !entry.previewCards.length) {
+            container.setAttribute('data-empty', previewEmptyMessage());
+            return;
+        }
+        container.removeAttribute('data-empty');
+        entry.previewCards.forEach((card) => appendStepThumb(container, card));
+    }
+
+    function resetEntryResults() {
+        entries.forEach((entry) => {
+            entry.resultDs = null;
+            entry.previewCards = null;
+            entry.status = 'pending';
+            entry.statusText = '';
+            entry.error = '';
+        });
+        fileList.querySelectorAll('.batch-edit-step-previews').forEach((container) => {
+            container.innerHTML = '';
+            container.setAttribute('data-empty', previewEmptyMessage());
+        });
+    }
+
     function updateControls() {
         const bf = BatchFileManager.getCurrent();
         const hasBatch = !!bf && bf.steps.length > 0;
+        const hasResults = entries.some(e => e.resultDs);
         fileCount.textContent = String(entries.length);
         btnClear.disabled = !entries.length || running;
         btnRun.disabled = !entries.length || !hasBatch || running;
-        previewSelect.disabled = !entries.length || running;
+        if (btnDownloadAll) btnDownloadAll.disabled = !hasResults || running || downloading;
         updateBatchInfo();
     }
 
-    function syncPreviewSelect() {
-        const prev = previewSelect.value;
-        previewSelect.innerHTML = '';
-        const opt0 = document.createElement('option');
-        opt0.value = '';
-        opt0.textContent = '—';
-        previewSelect.appendChild(opt0);
-        entries.forEach((e) => {
-            const o = document.createElement('option');
-            o.value = e.id;
-            o.textContent = e.file.name;
-            previewSelect.appendChild(o);
+    function updateFileListStatuses() {
+        entries.forEach((entry) => {
+            const li = fileList.querySelector(`[data-id="${entry.id}"]`);
+            if (!li) return;
+            const st = li.querySelector('.batch-file-status');
+            if (st) {
+                st.className = 'batch-file-status' + (entry.status === 'ok' ? ' ok' : entry.status === 'error' ? ' err' : entry.status === 'busy' ? ' busy' : '');
+                st.textContent = entry.statusText || t('batchItemPending');
+            }
+            const dl = li.querySelector('.batch-file-download');
+            if (dl) dl.disabled = running || downloading || !entry.resultDs;
+            const rm = li.querySelector('.batch-file-remove');
+            if (rm) rm.disabled = running;
         });
-        if (prev && entries.some(e => e.id === prev)) previewSelect.value = prev;
-        else if (entries.length) previewSelect.value = entries[0].id;
-        else previewSelect.value = '';
+        fileCount.textContent = String(entries.length);
+        btnClear.disabled = !entries.length || running;
+        const bf = BatchFileManager.getCurrent();
+        btnRun.disabled = !entries.length || !bf || !bf.steps.length || running;
+        if (btnDownloadAll) btnDownloadAll.disabled = running || downloading || !entries.some(e => e.resultDs);
     }
 
     function renderFileList() {
@@ -11620,9 +11692,10 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
         } else {
             fileList.removeAttribute('data-empty');
         }
+        const emptyPreview = previewEmptyMessage();
         entries.forEach((entry, idx) => {
             const li = document.createElement('li');
-            li.className = 'batch-file-item';
+            li.className = 'batch-file-item batch-edit-file-item';
             li.dataset.id = entry.id;
 
             const idxEl = document.createElement('span');
@@ -11634,9 +11707,20 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
             name.textContent = entry.file.name;
             name.title = entry.file.name;
 
+            const previews = document.createElement('div');
+            previews.className = 'batch-edit-step-previews';
+            if (!entry.previewCards) previews.setAttribute('data-empty', emptyPreview);
+
             const st = document.createElement('span');
             st.className = 'batch-file-status' + (entry.status === 'ok' ? ' ok' : entry.status === 'error' ? ' err' : entry.status === 'busy' ? ' busy' : '');
             st.textContent = entry.statusText || t('batchItemPending');
+
+            const dl = document.createElement('button');
+            dl.type = 'button';
+            dl.className = 'batch-file-download';
+            dl.textContent = '↓';
+            dl.title = t('batchEditDownload');
+            dl.disabled = running || downloading || !entry.resultDs;
 
             const rm = document.createElement('button');
             rm.type = 'button';
@@ -11645,14 +11729,28 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
             rm.title = t('batchRemoveTitle');
             rm.disabled = running;
 
-            li.append(idxEl, name, st, rm);
+            li.append(idxEl, name, previews, st, dl, rm);
             fileList.appendChild(li);
+            if (entry.previewCards) renderEntryPreviews(entry, previews);
         });
         updateControls();
-        syncPreviewSelect();
     }
 
     fileList.addEventListener('click', (e) => {
+        const dlBtn = e.target.closest('.batch-file-download');
+        if (dlBtn && !dlBtn.disabled && !running && !downloading) {
+            e.preventDefault();
+            e.stopPropagation();
+            const li = dlBtn.closest('.batch-file-item');
+            const entry = entries.find(en => en.id === li?.dataset.id);
+            if (entry) {
+                downloadEntry(entry).catch((err) => {
+                    console.error(err);
+                    showToast((err.message || String(err)), 'error');
+                });
+            }
+            return;
+        }
         const btn = e.target.closest('.batch-file-remove');
         if (!btn || running || btn.disabled) return;
         e.preventDefault();
@@ -11661,76 +11759,36 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
         if (!li || !li.dataset.id) return;
         entries = entries.filter(en => en.id !== li.dataset.id);
         renderFileList();
-        refreshStepPreviews();
     });
 
-    async function loadPreviewDataset(entry) {
-        if (!entry) { previewDataset = null; return null; }
-        const ds = await parseFileToDataset(entry.file);
-        const bf = BatchFileManager.getCurrent();
-        if (bf && !datasetMatchesBatchFile(ds, bf)) {
-            showToast(t('batchEditMismatch', entry.file.name), 'error');
-            previewDataset = null;
-            return null;
-        }
-        previewDataset = ds;
-        return ds;
+    function isWbatchConfigFile(file) {
+        const ext = getExt(file.name);
+        return ext === 'wbatch' || ext === 'json';
     }
 
-    async function refreshStepPreviews() {
-        const gen = ++previewGen;
-        stepPreviews.innerHTML = '';
-        const bf = BatchFileManager.getCurrent();
-        const entryId = previewSelect.value;
-        const entry = entries.find(e => e.id === entryId);
-        if (!bf || !entry) {
-            stepPreviews.setAttribute('data-empty', t('batchEditPreviewEmpty'));
-            previewFileLabel.textContent = '—';
-            return;
+    function partitionDroppedFiles(files) {
+        const batchConfigs = [];
+        const dataFiles = [];
+        for (const file of files) {
+            if (isWbatchConfigFile(file)) batchConfigs.push(file);
+            else dataFiles.push(file);
         }
-        stepPreviews.removeAttribute('data-empty');
-        previewFileLabel.textContent = entry.file.name;
+        return { batchConfigs, dataFiles };
+    }
 
-        let ds;
-        try {
-            ds = await loadPreviewDataset(entry);
-        } catch (err) {
-            console.error(err);
-            return;
+    async function handleDroppedFiles(files) {
+        const list = Array.from(files || []);
+        if (!list.length) return;
+        const { batchConfigs, dataFiles } = partitionDroppedFiles(list);
+        if (batchConfigs.length > 1) {
+            showToast(t('batchEditDropMultipleBatch', batchConfigs.length - 1), 'info');
         }
-        if (gen !== previewGen) return;
-        if (!ds) return;
-
-        const cards = [{ label: t('batchEditPreviewOriginal'), ds: cloneDatasetDeep(ds) }];
-        let working = cloneDatasetDeep(ds);
-        for (let i = 0; i < bf.steps.length; i++) {
-            const res = batchApplyStep(working, bf.steps[i]);
-            if (!res.ok) break;
-            cards.push({ label: `${i + 1}. ${describeBatchStep(bf.steps[i])}`, ds: cloneDatasetDeep(working) });
+        if (batchConfigs.length) {
+            await BatchFileManager.loadFromFile(batchConfigs[0]);
         }
-
-        if (gen !== previewGen) return;
-        stepPreviews.innerHTML = '';
-        cards.forEach((card) => {
-            const el = document.createElement('div');
-            el.className = 'batch-step-preview-card';
-            const cv = document.createElement('canvas');
-            renderDatasetPreviewThumb(card.ds, cv, 140);
-            const lbl = document.createElement('div');
-            lbl.className = 'batch-step-preview-label';
-            lbl.innerHTML = `<strong>${card.label}</strong>`;
-            el.appendChild(cv);
-            el.appendChild(lbl);
-            el.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                showPreviewCtxMenu(e.clientX, e.clientY, buildPreviewSendMenuItems({
-                    ds: card.ds,
-                    onBeforeAction: hidePreviewCtxMenu,
-                }));
-            });
-            stepPreviews.appendChild(el);
-        });
+        if (dataFiles.length) {
+            await addFiles(dataFiles);
+        }
     }
 
     function fileSignatureKey(file) {
@@ -11766,6 +11824,8 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
                 status: 'pending',
                 statusText: '',
                 signature: getDatasetSignature(ds),
+                resultDs: null,
+                previewCards: null,
             });
             existing.add(key);
             added++;
@@ -11773,7 +11833,6 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
         if (added) {
             statusEl.textContent = t('batchEditStatusAdded', added, entries.length);
             renderFileList();
-            await refreshStepPreviews();
         }
     }
 
@@ -11815,7 +11874,7 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
             batchEditDragDepth = 0;
             workspace.classList.remove('drag-over', 'drag-reject');
             const files = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
-            if (files.length) addFiles(files);
+            if (files.length) handleDroppedFiles(files);
         });
     }
 
@@ -11824,26 +11883,127 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
     btnClear.addEventListener('click', () => {
         if (running) return;
         entries = [];
-        previewDataset = null;
         statusEl.textContent = t('batchEditStatusCleared');
         renderFileList();
-        refreshStepPreviews();
     });
     fileInput.addEventListener('change', (e) => {
         const files = e.target.files ? Array.from(e.target.files) : [];
         fileInput.value = '';
         if (files.length) addFiles(files);
     });
-    previewSelect.addEventListener('change', () => refreshStepPreviews());
-
     BatchFileManager.setSignatureProvider(() => {
         const entry = entries.find(e => e.signature);
         return entry ? entry.signature : null;
     });
     BatchFileManager.onChange(() => {
+        resetEntryResults();
         updateControls();
-        refreshStepPreviews();
+        updateFileListStatuses();
     });
+
+    function makeBatchEditExportFilename(entry, format, usedNames) {
+        const ext = formatToExt(format);
+        const rawBase = stripExt(entry.file.name).replace(/[^\w\u4e00-\u9fff.-]+/g, '_') || 'image';
+        let name = `${rawBase}_edited.${ext}`;
+        const norm = (s) => s.toLowerCase();
+        if (!usedNames || !usedNames.has(norm(name))) {
+            if (usedNames) usedNames.add(norm(name));
+            return name;
+        }
+        let n = 2;
+        while (usedNames.has(norm(`${rawBase}_edited_${n}.${ext}`))) n++;
+        name = `${rawBase}_edited_${n}.${ext}`;
+        usedNames.add(norm(name));
+        return name;
+    }
+
+    async function batchEditSaveBlob(blob, filename, dirHandle, multiFallback) {
+        if (dirHandle) {
+            const fh = await dirHandle.getFileHandle(filename, { create: true });
+            const w = await fh.createWritable();
+            await w.write(blob);
+            await w.close();
+            return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 8000);
+        if (multiFallback) {
+            await new Promise(r => setTimeout(r, 1500));
+        }
+    }
+
+    async function downloadEntry(entry, dirHandle, usedNames, multiFallback) {
+        if (!entry?.resultDs) return false;
+        const format = saveFormat.value;
+        const allowed = getAllowedSaveFormats(entry.resultDs);
+        if (!allowed.includes(format)) {
+            showToast(t('savePcdScatter'), 'error');
+            return false;
+        }
+        const prepared = prepareDatasetForExport(entry.resultDs, format);
+        const blob = await buildSaveBlob(prepared, format);
+        const filename = makeBatchEditExportFilename(entry, format, usedNames);
+        await batchEditSaveBlob(blob, filename, dirHandle, multiFallback);
+        return true;
+    }
+
+    if (btnDownloadAll) {
+        btnDownloadAll.addEventListener('click', async () => {
+        if (downloading) return;
+        const ready = entries.filter(e => e.resultDs);
+        if (!ready.length) {
+            showToast(t('batchEditNoResults'), 'error');
+            return;
+        }
+
+        const supportsDirPicker = (typeof window.showDirectoryPicker === 'function');
+        let dirHandle = null;
+        const multi = ready.length > 1;
+
+        if (multi && supportsDirPicker) {
+            try {
+                dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            } catch (err) {
+                if (err && err.name === 'AbortError') return;
+                console.warn(err);
+            }
+            if (!dirHandle) {
+                showToast(t('batchEditDownloadNeedFolder'), 'error');
+                return;
+            }
+        } else if (multi) {
+            showToast(t('batchEditDownloadMultiHint'), 'info');
+        }
+
+        downloading = true;
+        updateFileListStatuses();
+        updateControls();
+
+        const usedNames = new Set();
+        let ok = 0;
+        try {
+            for (const entry of ready) {
+                try {
+                    if (await downloadEntry(entry, dirHandle, usedNames, multi && !dirHandle)) ok++;
+                } catch (err) {
+                    console.error(err);
+                    showToast(t('batchItemFailed') + ': ' + entry.file.name, 'error');
+                }
+            }
+            if (ok) showToast(t('batchEditDownloadDone', ok), 'info');
+        } finally {
+            downloading = false;
+            updateFileListStatuses();
+            updateControls();
+        }
+        });
+    }
 
     btnRun.addEventListener('click', async () => {
         if (running) return;
@@ -11851,70 +12011,46 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
         if (!bf || !bf.steps.length) { showToast(t('batchEditNoBatch'), 'error'); return; }
         if (!entries.length) { showToast(t('batchEditNoFiles'), 'error'); return; }
 
-        const format = saveFormat.value;
         running = true;
         btnRun.classList.add('is-busy');
-        updateControls();
+        entries.forEach((entry) => {
+            entry.resultDs = null;
+            entry.previewCards = null;
+            entry.status = 'pending';
+            entry.statusText = '';
+            entry.error = '';
+        });
+        renderFileList();
         setProgress(0);
-
-        let dirHandle = null;
-        if (typeof supportsDirPicker !== 'undefined' && supportsDirPicker) {
-            try {
-                dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-            } catch (err) {
-                if (err && err.name === 'AbortError') {
-                    running = false;
-                    btnRun.classList.remove('is-busy');
-                    renderFileList();
-                    hideProgress();
-                    return;
-                }
-            }
-        }
 
         let ok = 0, fail = 0;
         const total = entries.length;
-        const previewEntryId = previewSelect.value;
 
         for (let i = 0; i < total; i++) {
             const entry = entries[i];
             entry.status = 'busy';
             entry.statusText = t('batchItemReading');
-            renderFileList();
+            updateFileListStatuses();
             statusEl.textContent = t('batchEditStatusRunning', i + 1, total, entry.file.name);
+
+            const li = fileList.querySelector(`[data-id="${entry.id}"]`);
+            const previewContainer = li?.querySelector('.batch-edit-step-previews');
 
             try {
                 let ds = await parseFileToDataset(entry.file);
                 if (!datasetMatchesBatchFile(ds, bf)) throw new Error(t('batchEditMismatch', entry.file.name));
 
                 entry.statusText = t('batchItemConverting');
-                renderFileList();
+                updateFileListStatuses();
 
                 const pipe = batchApplyPipeline(ds, bf.steps);
                 if (!pipe.ok) throw new Error(describeBatchStep(pipe.step) + ': ' + (pipe.reason || ''));
 
-                ds = pipe.dataset;
-                ds.filename = entry.file.name;
+                entry.previewCards = buildStepPreviewCards(ds, bf);
+                entry.resultDs = cloneDatasetDeep(pipe.dataset);
+                entry.resultDs.filename = entry.file.name;
 
-                if (entry.id === previewEntryId) {
-                    previewDataset = cloneDatasetDeep(ds);
-                    await refreshStepPreviews();
-                }
-
-                const allowed = getAllowedSaveFormats(ds);
-                if (!allowed.includes(format)) throw new Error(t('savePcdScatter'));
-                const prepared = prepareDatasetForExport(ds, format);
-                const blob = await buildSaveBlob(prepared, format);
-                const base = stripExt(entry.file.name);
-                const ext = formatToExt(format);
-                if (dirHandle) {
-                    const fh = await dirHandle.getFileHandle(`${base}.${ext}`, { create: true });
-                    const w = await fh.createWritable();
-                    await w.write(blob);
-                    await w.close();
-                } else {
-                    triggerDownload(blob, `${base}_edited.${ext}`);
-                }
+                if (previewContainer) renderEntryPreviews(entry, previewContainer);
 
                 entry.status = 'ok';
                 entry.statusText = t('batchItemDone');
@@ -11924,16 +12060,25 @@ document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchF
                 entry.status = 'error';
                 entry.statusText = t('batchItemFailed');
                 entry.error = err.message || String(err);
+                if (previewContainer) {
+                    previewContainer.innerHTML = '';
+                    const errThumb = document.createElement('div');
+                    errThumb.className = 'batch-edit-step-thumb is-error';
+                    errThumb.title = entry.error;
+                    previewContainer.appendChild(errThumb);
+                    previewContainer.removeAttribute('data-empty');
+                }
                 fail++;
             }
             setProgress((i + 1) / total);
-            renderFileList();
+            updateFileListStatuses();
         }
 
         statusEl.textContent = t('batchEditStatusDone', ok, fail);
         running = false;
         btnRun.classList.remove('is-busy');
-        renderFileList();
+        updateFileListStatuses();
+        updateControls();
         hideProgress();
     });
 
