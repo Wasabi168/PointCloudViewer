@@ -1107,9 +1107,10 @@
     }
     #edCropApply:not(:disabled):hover { background: var(--accent-hover); }
 
-    /* 切換型工具按鈕（左側指示燈）：刪除雜點、預覽檔案圖片等 */
+    /* 切換型工具按鈕（左側指示燈）：刪除雜點、預覽檔案圖片、Max/Min 等 */
     #edDenoise,
-    #batchPreviewEnable {
+    #batchPreviewEnable,
+    #btnMinMax {
         background: #3a3a4a;
         color: var(--text);
         border: 1px solid var(--border);
@@ -1119,11 +1120,14 @@
         transition: background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
     }
     #edDenoise:hover:not(:disabled),
-    #batchPreviewEnable:hover:not(:disabled) { background: #4a4a5c; }
+    #batchPreviewEnable:hover:not(:disabled),
+    #btnMinMax:hover:not(:disabled) { background: #4a4a5c; }
     #edDenoise:disabled,
-    #batchPreviewEnable:disabled { opacity: 0.4; cursor: not-allowed; }
+    #batchPreviewEnable:disabled,
+    #btnMinMax:disabled { opacity: 0.4; cursor: not-allowed; }
     #edDenoise::before,
-    #batchPreviewEnable::before {
+    #batchPreviewEnable::before,
+    #btnMinMax::before {
         content: '';
         position: absolute;
         left: 12px;
@@ -1137,7 +1141,8 @@
         transition: background 0.15s ease, box-shadow 0.15s ease;
     }
     #edDenoise.tool-active,
-    #batchPreviewEnable.tool-active {
+    #batchPreviewEnable.tool-active,
+    #btnMinMax.tool-active {
         background: var(--accent);
         color: #fff;
         border-color: var(--accent-hover);
@@ -1145,9 +1150,11 @@
         box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.35), 0 0 12px rgba(79, 140, 255, 0.55);
     }
     #edDenoise.tool-active:hover:not(:disabled),
-    #batchPreviewEnable.tool-active:hover:not(:disabled) { background: var(--accent-hover); }
+    #batchPreviewEnable.tool-active:hover:not(:disabled),
+    #btnMinMax.tool-active:hover:not(:disabled) { background: var(--accent-hover); }
     #edDenoise.tool-active::before,
-    #batchPreviewEnable.tool-active::before {
+    #batchPreviewEnable.tool-active::before,
+    #btnMinMax.tool-active::before {
         background: #fff;
         opacity: 1;
         box-shadow: 0 0 6px rgba(255, 255, 255, 0.95);
@@ -1926,9 +1933,7 @@
                 <button type="button" data-cursor="measure" data-i18n="cursorMeasure" title="兩點距離測量">距離</button>
                 <button type="button" data-cursor="area" data-i18n="cursorArea" title="區域統計">區域</button>
             </div>
-            <div class="cursor-toggle" id="minmaxToggle">
-                <button type="button" id="btnMinMax" data-i18n="btnMinMax" title="顯示 / 隱藏 Max 與 Min 數值點標記">Max/Min</button>
-            </div>
+            <button type="button" id="btnMinMax" data-i18n="btnMinMax" data-i18n-title="btnMinMaxTitle" aria-pressed="false">Max/Min</button>
         </div>
 
         <span class="ctrl-sep ctrl-sep--more" id="viewerSepMore" aria-hidden="true"></span>
@@ -8315,7 +8320,8 @@ if (btnMinMax) {
     btnMinMax.addEventListener('click', () => {
         showMinMax = !showMinMax;
         setUserPref('showMinMax', showMinMax);
-        btnMinMax.classList.toggle('active', showMinMax);
+        btnMinMax.classList.toggle('tool-active', showMinMax);
+        btnMinMax.setAttribute('aria-pressed', showMinMax ? 'true' : 'false');
         if (showMinMax && !currentDataset) {
             showToast(t('toastNoData'), 'info');
         }
@@ -12242,7 +12248,10 @@ document.addEventListener('keydown', (e) => {
 
 // 套用已儲存的游標模式與 Max/Min 偏好
 applyCursorMode(cursorMode, { silent: true });
-if (btnMinMax) btnMinMax.classList.toggle('active', showMinMax);
+if (btnMinMax) {
+    btnMinMax.classList.toggle('tool-active', showMinMax);
+    btnMinMax.setAttribute('aria-pressed', showMinMax ? 'true' : 'false');
+}
 
 // 還原上次使用的頁面
 const savedPage = getUserPref('page');
