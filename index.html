@@ -1254,6 +1254,16 @@
     .hist-head .hist-title { color: var(--text); font-weight: 600; }
     .hist-head .hist-stats { font-family: Consolas, monospace; font-size: 12px; }
     .hist-head-right { display: flex; align-items: center; gap: 10px; }
+    #edDenoiseAuto {
+        padding: 4px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+    }
+    #edDenoiseAuto:hover { color: var(--text); border-color: var(--accent); }
     #edDenoiseApply {
         padding: 4px 14px;
         font-size: 12px;
@@ -2178,6 +2188,7 @@
                 <span class="hist-title" data-i18n="denoiseTitleLabel">數值分布統計</span>
                 <div class="hist-head-right">
                     <span class="hist-stats" id="edHistStats"></span>
+                    <button type="button" id="edDenoiseAuto" data-i18n="denoiseAuto" data-i18n-title="denoiseAutoTitle">自動</button>
                     <button type="button" id="edDenoiseApply" data-i18n="denoiseApply" data-i18n-title="denoiseApplyTitle">套用</button>
                 </div>
             </div>
@@ -2468,6 +2479,8 @@ const I18N = {
         denoiseTitle: '互動式刪除雜點：以數值分布統計篩除離群資料點',
         denoiseTitleLabel: '數值分布統計',
         denoiseAxis: '數值',
+        denoiseAuto: '自動',
+        denoiseAutoTitle: '依四分位距（IQR）統計自動設定左右標籤，排除離群雜訊',
         denoiseApply: '套用',
         denoiseApplyTitle: '將目前的雜點篩除結果套用並更新圖像',
         denoiseDone: '已套用雜點篩除，保留 {0} 筆資料',
@@ -2683,6 +2696,7 @@ const I18N = {
         bfmMetaInfo: '種類：{0} · 尺寸：{1}×{2} · 步驟：{3}',
         bfmStepGlobalLevel: '全域水平校正',
         bfmStepDenoise: '刪除雜點（{0} ~ {1}）',
+        bfmStepDenoiseAuto: '刪除雜點（自動）',
         bfmStepCalc: '計算機：{0} {1}',
         bfmStepCropRect: '方形裁切',
         bfmStepCropCircle: '圓形裁切',
@@ -2754,6 +2768,8 @@ const I18N = {
         denoiseTitle: 'Interactive noise removal: filter out outlier points by value distribution',
         denoiseTitleLabel: 'Value Distribution',
         denoiseAxis: 'Value',
+        denoiseAuto: 'Auto',
+        denoiseAutoTitle: 'Auto-set handles using IQR statistics to exclude outlier noise',
         denoiseApply: 'Apply',
         denoiseApplyTitle: 'Apply the current noise removal result and update the image',
         denoiseDone: 'Noise removal applied, {0} points kept',
@@ -2969,6 +2985,7 @@ const I18N = {
         bfmMetaInfo: 'Kind: {0} · Size: {1}×{2} · Steps: {3}',
         bfmStepGlobalLevel: 'Global leveling',
         bfmStepDenoise: 'Denoise ({0} ~ {1})',
+        bfmStepDenoiseAuto: 'Denoise (Auto)',
         bfmStepCalc: 'Calculator: {0} {1}',
         bfmStepCropRect: 'Rectangle crop',
         bfmStepCropCircle: 'Ellipse crop',
@@ -4941,6 +4958,60 @@ function batchPointInNormRect(px, py, r, circle) {
     return dx * dx + dy * dy <= 1;
 }
 
+const DENOISE_HIST_BINS = 96;
+
+/** 建立數值直方圖（供自動刪除雜點統計用） */
+function buildValueHistogram(vals, vmin, vmax) {
+    const span = (vmax - vmin) || 1;
+    const counts = new Float64Array(DENOISE_HIST_BINS);
+    let total = 0;
+    for (let i = 0; i < vals.length; i++) {
+        const v = vals[i];
+        if (!Number.isFinite(v)) continue;
+        let f = (v - vmin) / span;
+        if (f < 0) f = 0; else if (f >= 1) f = 0.999999;
+        counts[(f * DENOISE_HIST_BINS) | 0]++; total++;
+    }
+    return { counts, total, vmin, vmax };
+}
+
+function histPercentileFracFromCounts(counts, total, p) {
+    if (total <= 0) return p;
+    const target = p * total;
+    let cum = 0;
+    for (let i = 0; i < DENOISE_HIST_BINS; i++) {
+        cum += counts[i];
+        if (cum >= target) return (i + 0.5) / DENOISE_HIST_BINS;
+    }
+    return 1;
+}
+
+/** 依 IQR 統計計算刪除雜點左右標籤的相對位置（0~1） */
+function computeAutoDenoiseFracs(vals, vmin, vmax) {
+    const { counts, total } = buildValueHistogram(vals, vmin, vmax);
+    if (total < 4) return { lo: 0, hi: 1 };
+    const span = (vmax - vmin) || 1;
+    const valAt = (frac) => vmin + frac * span;
+    const q1 = valAt(histPercentileFracFromCounts(counts, total, 0.25));
+    const q3 = valAt(histPercentileFracFromCounts(counts, total, 0.75));
+    const iqr = q3 - q1;
+    let loV, hiV;
+    if (iqr > 0) {
+        loV = q1 - 1.5 * iqr;
+        hiV = q3 + 1.5 * iqr;
+    } else {
+        loV = valAt(histPercentileFracFromCounts(counts, total, 0.025));
+        hiV = valAt(histPercentileFracFromCounts(counts, total, 0.975));
+    }
+    const MIN_GAP = 0.005;
+    let lo = (loV - vmin) / span;
+    let hi = (hiV - vmin) / span;
+    lo = Math.max(0, Math.min(1 - MIN_GAP, lo));
+    hi = Math.min(1, Math.max(MIN_GAP, hi));
+    if (hi - lo < MIN_GAP) { lo = 0; hi = 1; }
+    return { lo, hi };
+}
+
 function batchApplyGlobalLevel(ds) {
     const acc = batchPlaneFitAccessors(ds);
     const plane = batchFitPlaneLeastSquares(acc);
@@ -4994,6 +5065,19 @@ function batchApplyDenoise(ds, loFrac, hiFrac) {
     }
     batchRefreshRange(ds);
     return { ok: true, keep };
+}
+
+function batchApplyDenoiseFromStep(ds, step) {
+    let loFrac, hiFrac;
+    if (step.auto) {
+        const src = isPcdScatterDataset(ds) ? ds.z : ds.data;
+        const { vmin, vmax } = computeRange(src);
+        ({ lo: loFrac, hi: hiFrac } = computeAutoDenoiseFracs(src, vmin, vmax));
+    } else {
+        loFrac = step.lo;
+        hiFrac = step.hi;
+    }
+    return batchApplyDenoise(ds, loFrac, hiFrac);
 }
 
 function batchApplyCalc(ds, op, operand) {
@@ -5079,7 +5163,7 @@ function batchApplyStep(ds, step) {
     if (!step || !step.type) return { ok: false, reason: 'invalid' };
     switch (step.type) {
         case 'globalLevel': return batchApplyGlobalLevel(ds);
-        case 'denoise': return batchApplyDenoise(ds, step.lo, step.hi);
+        case 'denoise': return batchApplyDenoiseFromStep(ds, step);
         case 'calc': return batchApplyCalc(ds, step.op, step.operand);
         case 'cropRect':
         case 'cropCircle': return batchApplyCrop(ds, step);
@@ -5100,7 +5184,9 @@ function describeBatchStep(step) {
     if (!step) return '';
     switch (step.type) {
         case 'globalLevel': return t('bfmStepGlobalLevel');
-        case 'denoise': return t('bfmStepDenoise', (step.lo * 100).toFixed(0) + '%', (step.hi * 100).toFixed(0) + '%');
+        case 'denoise':
+            if (step.auto) return t('bfmStepDenoiseAuto');
+            return t('bfmStepDenoise', (step.lo * 100).toFixed(0) + '%', (step.hi * 100).toFixed(0) + '%');
         case 'calc': return t('bfmStepCalc', step.op, step.operand);
         case 'cropRect': return t('bfmStepCropRect');
         case 'cropCircle': return t('bfmStepCropCircle');
@@ -8860,6 +8946,7 @@ function createImageView(ids, options) {
             denoise: false,
             denoiseBase: null,   // 啟用刪除雜點時的資料快照
             histLo: 0, histHi: 1,
+            histAuto: false,   // 刪除雜點是否以自動（IQR）方式套用
             history: [],         // 編輯歷史（資料集快照）
             histIndex: -1,       // 目前所在的歷史索引
             lastEditStep: null,  // 最近一次可加入批次檔的編輯步驟
@@ -9969,7 +10056,7 @@ function createImageView(ids, options) {
     }
 
     /* ---- 互動式刪除雜點（直方圖） ---- */
-    const HIST_BINS = 96;
+    const HIST_BINS = DENOISE_HIST_BINS;
     let histData = null, histRaf = false;
 
     function snapshotDenoiseBase() {
@@ -10012,6 +10099,18 @@ function createImageView(ids, options) {
     function histValAt(frac) {
         const base = st.edit.denoiseBase;
         return base.vmin + frac * ((base.vmax - base.vmin) || 1);
+    }
+
+    /** 依 IQR（四分位距）統計自動設定左右標籤，排除離群雜訊 */
+    function autoDenoiseBounds() {
+        if (!st.edit.denoise || !st.edit.denoiseBase || !histData || histData.total < 4) return;
+        const base = st.edit.denoiseBase;
+        const vals = base.scatter ? base.z : base.data;
+        const { lo, hi } = computeAutoDenoiseFracs(vals, base.vmin, base.vmax);
+        st.edit.histLo = lo;
+        st.edit.histHi = hi;
+        st.edit.histAuto = true;
+        scheduleDenoise();
     }
 
     function renderHist() {
@@ -10092,6 +10191,7 @@ function createImageView(ids, options) {
             if (st.edit.cropMode) exitCrop();
             st.edit.denoise = true;
             st.edit.histLo = 0; st.edit.histHi = 1;
+            st.edit.histAuto = false;
             snapshotDenoiseBase();
             computeHist();
             el.histPanel.classList.add('show');
@@ -10110,7 +10210,9 @@ function createImageView(ids, options) {
             st.edit.denoiseBase = null;
             histData = null;
             if (changed) {
-                setLastEditStep({ type: 'denoise', lo: st.edit.histLo, hi: st.edit.histHi });
+                setLastEditStep(st.edit.histAuto
+                    ? { type: 'denoise', auto: true }
+                    : { type: 'denoise', lo: st.edit.histLo, hi: st.edit.histHi });
                 pushHistory();  // 有實際篩除才記錄歷史
             }
         }
@@ -10157,6 +10259,7 @@ function createImageView(ids, options) {
             else st.edit.histHi = Math.max(f, st.edit.histLo + MIN_GAP);
             if (st.edit.histLo < 0) st.edit.histLo = 0;
             if (st.edit.histHi > 1) st.edit.histHi = 1;
+            st.edit.histAuto = false;
             scheduleDenoise();
         };
         const end = () => {
@@ -10197,6 +10300,7 @@ function createImageView(ids, options) {
         el.cropCancel.addEventListener('click', exitCrop);
         el.denoise.addEventListener('click', () => toggleDenoise());
         if (el.globalLevel) el.globalLevel.addEventListener('click', applyGlobalLeveling);
+        if (el.histAuto) el.histAuto.addEventListener('click', () => autoDenoiseBounds());
         if (el.histApply) el.histApply.addEventListener('click', () => toggleDenoise(false));
         if (el.sendToViewer) el.sendToViewer.addEventListener('click', sendToViewer);
         if (el.undo) el.undo.addEventListener('click', doUndo);
@@ -10268,7 +10372,7 @@ const editorView = createImageView({
     histHandleLo: 'edHistHandleLo', histHandleHi: 'edHistHandleHi',
     histValLo: 'edHistValLo', histValHi: 'edHistValHi',
     histStats: 'edHistStats', histAxisMin: 'edHistAxisMin', histAxisMax: 'edHistAxisMax',
-    histApply: 'edDenoiseApply',
+    histAuto: 'edDenoiseAuto', histApply: 'edDenoiseApply',
     sendToViewer: 'edSendToViewer', undo: 'edUndo', redo: 'edRedo',
     btnCalc: 'edBtnCalc',
 }, { editing: true });
