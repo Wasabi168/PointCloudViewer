@@ -1,0 +1,54 @@
+---
+description: WebViewer 點雲檢視器專案架構與拆檔慣例
+globs: index.html, css/**, js/**
+alwaysApply: false
+---
+
+# WebViewer 架構
+
+純靜態網頁（vanilla JS，無 bundler），部署於 GitHub Pages。所有模組透過傳統 `<script src>` 依序載入，共用**全域作用域**（不使用 ES modules）。
+
+## 目錄
+
+| 路徑 | 用途 |
+|------|------|
+| `index.html` | HTML 骨架與 `<script>` 載入順序（勿在此寫邏輯） |
+| `css/main.css` | 全部樣式 |
+| `js/*.js` | 依功能拆分的 JavaScript 模組 |
+
+## JS 載入順序（不可任意調換）
+
+1. `i18n.js` — 多語系
+2. `prefs.js` — localStorage 偏好
+3. `file-parse.js` — 讀檔解析
+4. `file-export.js` — 寫檔輸出
+5. `batch-pipeline.js` — 批次編輯步驟管線
+6. `colormap.js` — 色彩映射
+7. `render.js` — 2D canvas 繪製
+8. `viewer-ui.js` — 點雲檢視器 UI
+9. `calculator.js` — 編輯器計算機
+10. `webgl-3d.js` — 3D WebGL 渲染
+11. `image-view.js` — `createImageView()` 可重用元件
+12. `toolbar-responsive.js` — 工具列「更多」收納
+13. `batch-convert.js` — 批次轉檔頁
+14. `batch-file-manager.js` — 批次檔 (.wbatch) 管理
+15. `batch-edit.js` — 批次編輯頁
+16. `app.js` — 頁面切換與啟動初始化
+
+## 編輯慣例
+
+- 新功能請加到對應模組檔，不要寫回 `index.html`
+- 每個 `js/*.js` 頂部有 JSDoc 註解說明依賴與全域匯出
+- 跨模組共用狀態優先放在 `prefs.js` 或最早定義的模組，避免循環依賴
+- 路徑一律使用相對路徑（相容 GitHub Pages 專案站）
+
+## 常見修改對應
+
+- 讀檔格式 / 解析 → `file-parse.js`
+- 儲存 / 匯出 → `file-export.js`
+- 檢視器互動、縮放、色彩 → `viewer-ui.js`、`colormap.js`、`render.js`
+- 點雲編輯器 → `image-view.js`、`calculator.js`
+- 3D 顯示 → `webgl-3d.js`
+- 批次轉檔 → `batch-convert.js`
+- 批次編輯流程 → `batch-edit.js`、`batch-pipeline.js`、`batch-file-manager.js`
+- 翻譯字串 → `i18n.js`
