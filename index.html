@@ -516,6 +516,27 @@
 
     .info-row .k { color: var(--muted); }
     .info-row .v { color: var(--text); font-family: Consolas, monospace; }
+    .info-row .v.info-unit-editable {
+        cursor: pointer;
+        border-radius: 3px;
+        padding: 0 4px;
+        margin: -1px -4px;
+    }
+    .info-row .v.info-unit-editable:hover {
+        color: var(--accent);
+        background: rgba(255, 255, 255, 0.06);
+    }
+    .info-unit-input {
+        width: 4.5em;
+        padding: 1px 4px;
+        font: inherit;
+        color: var(--text);
+        background: var(--bg);
+        border: 1px solid var(--accent);
+        border-radius: 3px;
+        outline: none;
+        text-transform: lowercase;
+    }
 
     .progress {
         width: 100%;
@@ -2605,6 +2626,8 @@ const I18N = {
         zMinLabel: '最小值 (Min)',
         zMaxLabel: '最大值 (Max)',
         sideInfo: '檔案資訊',
+        unitEditTitle: '雙擊編輯單位（nm / um / mm / cm）',
+        unitInvalid: '單位僅允許 nm、um、mm、cm',
         infoSize: '影像尺寸',
         statusIdle: '尚未載入檔案',
         statusCleared: '已清除資料',
@@ -2894,6 +2917,8 @@ const I18N = {
         zMinLabel: 'Min',
         zMaxLabel: 'Max',
         sideInfo: 'File Info',
+        unitEditTitle: 'Double-click to edit unit (nm / um / mm / cm)',
+        unitInvalid: 'Unit must be one of: nm, um, mm, cm',
         infoSize: 'Image size',
         statusIdle: 'No file loaded',
         statusCleared: 'Data cleared',
@@ -9207,13 +9232,81 @@ function createImageView(ids, options) {
         syncColorbarHandles();
     }
 
+    const EDITABLE_UNIT_KEYS = new Set(['xunit', 'yunit', 'zunit', 'x-unit', 'y-unit', 'z-unit']);
+    const ALLOWED_HEADER_UNITS = new Set(['nm', 'um', 'mm', 'cm']);
+
+    function normalizeHeaderUnitInput(raw) {
+        return String(raw || '').trim().toLowerCase().replace(/µ/g, 'u').replace(/[\[\]]/g, '');
+    }
+
+    function isAllowedHeaderUnit(unit) {
+        return ALLOWED_HEADER_UNITS.has(normalizeHeaderUnitInput(unit));
+    }
+
+    function startHeaderUnitEdit(valSpan, headerKey, currentVal) {
+        if (valSpan.querySelector('input')) return;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'info-unit-input';
+        input.value = normalizeHeaderUnitInput(currentVal) || String(currentVal);
+        input.setAttribute('autocomplete', 'off');
+        input.setAttribute('spellcheck', 'false');
+
+        const finish = (commit) => {
+            if (!input.isConnected) return;
+            if (commit) {
+                const normalized = normalizeHeaderUnitInput(input.value);
+                if (!isAllowedHeaderUnit(normalized)) {
+                    showToast(t('unitInvalid'), 'error');
+                } else if (normalized !== normalizeHeaderUnitInput(currentVal) && st.dataset?.header) {
+                    st.dataset.header[headerKey] = normalized;
+                }
+            }
+            const ds = st.dataset;
+            if (!ds) return;
+            const infoExtra = isScatter(ds) ? { pointCount: ds.pointCount } : null;
+            renderInfo(ds.header, ds.width, ds.height, infoExtra);
+        };
+
+        valSpan.textContent = '';
+        valSpan.appendChild(input);
+        input.focus();
+        input.select();
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+        });
+        input.addEventListener('blur', () => finish(true));
+    }
+
     function renderInfo(header, width, height, extra) {
         const list = el.infoList;
         list.innerHTML = '';
+        const canEditUnits = editing && st.dataset && !isScatter(st.dataset);
         const addRow = (k, v) => {
             const row = document.createElement('div');
             row.className = 'info-row';
-            row.innerHTML = `<span class="k">${k}</span><span class="v">${v}</span>`;
+            const keySpan = document.createElement('span');
+            keySpan.className = 'k';
+            keySpan.textContent = k;
+            const valSpan = document.createElement('span');
+            valSpan.className = 'v';
+            const strVal = String(v);
+            const displayVal = strVal.length > 30 ? strVal.slice(0, 30) + '…' : v;
+            if (canEditUnits && EDITABLE_UNIT_KEYS.has(k)) {
+                valSpan.classList.add('info-unit-editable');
+                valSpan.title = t('unitEditTitle');
+                valSpan.textContent = displayVal;
+                valSpan.addEventListener('dblclick', (e) => {
+                    e.preventDefault();
+                    startHeaderUnitEdit(valSpan, k, strVal);
+                });
+            } else {
+                valSpan.textContent = displayVal;
+            }
+            row.appendChild(keySpan);
+            row.appendChild(valSpan);
             list.appendChild(row);
         };
         if (extra && extra.pointCount != null) {
@@ -9224,7 +9317,7 @@ function createImageView(ids, options) {
         }
         for (const [k, v] of Object.entries(header)) {
             if (v === '' || v == null) continue;
-            addRow(k, String(v).length > 30 ? String(v).slice(0, 30) + '…' : v);
+            addRow(k, v);
         }
     }
 
