@@ -2377,7 +2377,7 @@ function createImageView(ids, options) {
 
     /* ---- 互動式刪除雜點（直方圖） ---- */
     const HIST_BINS = DENOISE_HIST_BINS;
-    let histData = null, histRaf = false;
+    let histData = null, histRaf = false, denoiseSyncColorbar = false;
 
     function snapshotDenoiseBase() {
         const ds = st.dataset;
@@ -2430,7 +2430,7 @@ function createImageView(ids, options) {
         st.edit.histLo = lo;
         st.edit.histHi = hi;
         st.edit.histAuto = true;
-        scheduleDenoise();
+        scheduleDenoise(true);
     }
 
     function renderHist() {
@@ -2464,7 +2464,7 @@ function createImageView(ids, options) {
         el.histAxisMax.textContent = histData.vmax.toFixed(3);
     }
 
-    function applyDenoiseFilter() {
+    function applyDenoiseFilter(syncColorbar = false) {
         const base = st.edit.denoiseBase; if (!base) return;
         const loV = histValAt(st.edit.histLo), hiV = histValAt(st.edit.histHi);
         const ds = st.dataset;
@@ -2480,8 +2480,14 @@ function createImageView(ids, options) {
             let j = 0;
             for (let i = 0; i < total; i++) if (mask[i]) { nx[j] = bx[i]; ny[j] = by[i]; nz[j] = bz[i]; j++; }
             ds.x = nx; ds.y = ny; ds.z = nz; ds.pointCount = keep;
-            // 維持色彩與視埠穩定：沿用快照範圍
-            ds.vmin = base.vmin; ds.vmax = base.vmax;
+            if (syncColorbar) {
+                const { vmin, vmax } = computeRange(ds.z);
+                ds.vmin = vmin; ds.vmax = vmax;
+                st.colorClip.lo = 0; st.colorClip.hi = 1;
+            } else {
+                // 拖曳預覽時維持色彩穩定：沿用快照範圍
+                ds.vmin = base.vmin; ds.vmax = base.vmax;
+            }
             render(ds, el.colormap.value, false);
         } else {
             const bd = base.data, d = ds.data;
@@ -2490,17 +2496,29 @@ function createImageView(ids, options) {
                 if (Number.isFinite(v) && v >= loV && v <= hiV) { d[i] = v; keep++; }
                 else d[i] = NaN;
             }
-            ds.vmin = base.vmin; ds.vmax = base.vmax;
+            if (syncColorbar) {
+                const { vmin, vmax } = computeRange(d);
+                ds.vmin = vmin; ds.vmax = vmax;
+                st.colorClip.lo = 0; st.colorClip.hi = 1;
+            } else {
+                ds.vmin = base.vmin; ds.vmax = base.vmax;
+            }
             render(ds, el.colormap.value, false);
         }
         if (el.histStats) el.histStats.textContent = keep + ' / ' + histData.total;
     }
 
-    function scheduleDenoise() {
+    function scheduleDenoise(syncColorbar = false) {
+        if (syncColorbar) denoiseSyncColorbar = true;
         renderHist();
         if (histRaf) return;
         histRaf = true;
-        requestAnimationFrame(() => { histRaf = false; applyDenoiseFilter(); });
+        requestAnimationFrame(() => {
+            histRaf = false;
+            const sync = denoiseSyncColorbar;
+            denoiseSyncColorbar = false;
+            applyDenoiseFilter(sync);
+        });
     }
 
     function toggleDenoise(force) {
@@ -2530,6 +2548,7 @@ function createImageView(ids, options) {
             }
             st.edit.denoiseBase = null;
             histData = null;
+            denoiseSyncColorbar = false;
             if (changed) {
                 setLastEditStep(st.edit.histAuto
                     ? { type: 'denoise', auto: true }
@@ -2561,6 +2580,7 @@ function createImageView(ids, options) {
         }
         st.edit.denoiseBase = null;
         histData = null;
+        denoiseSyncColorbar = false;
     }
 
     function setupHistHandles() {
@@ -2589,6 +2609,7 @@ function createImageView(ids, options) {
             dragging = null;
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', end);
+            scheduleDenoise(true);
         };
         const start = (which, handle, e) => {
             dragging = which; handle.classList.add('dragging'); e.preventDefault();
