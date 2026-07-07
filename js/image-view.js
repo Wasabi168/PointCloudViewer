@@ -28,6 +28,16 @@ function createImageView(ids, options) {
             cropAction: null,    // 進行中的操作：{ type:'draw'|'move'|'resize', ... }
             denoise: false,
             denoiseBase: null,   // 啟用刪除雜點時的資料快照
+            segLevel: false,
+            segLevelBusy: false,
+            segLevelTuneBusy: false,
+            segLevelRunId: 0,
+            segLevelTuneRunId: 0,
+            segLevelBase: null,
+            segLevelResult: null,
+            segLevelViews: null,
+            segLevelPan: null,
+            segLevelShowBounds: true,
             histLo: 0, histHi: 1,
             histAuto: false,   // 刪除雜點是否以自動（IQR）方式套用
             history: [],         // 編輯歷史（資料集快照）
@@ -525,7 +535,10 @@ function createImageView(ids, options) {
     el.colormap.addEventListener('change', () => {
         setUserPref('edColormap', el.colormap.value);
         renderColorbar(el.colormap.value);
-        if (st.dataset) render(st.dataset, el.colormap.value, false);
+        if (st.dataset) {
+            if (st.edit.segLevel) renderSegLevelCompare();
+            else render(st.dataset, el.colormap.value, false);
+        }
     });
     if (el.saveFormat) {
         el.saveFormat.addEventListener('change', () => {
@@ -642,10 +655,18 @@ function createImageView(ids, options) {
     function updateEditButtons() {
         if (!editing) return;
         const has = !!st.dataset;
-        [el.cropRect, el.cropCircle, el.denoise, el.globalLevel, el.btnCalc, el.sendToViewer].forEach(b => { if (b) b.disabled = !has; });
+        [el.cropRect, el.cropCircle, el.denoise, el.segLevel, el.globalLevel, el.btnCalc, el.sendToViewer].forEach(b => { if (b) b.disabled = !has; });
         if (el.btnClear) el.btnClear.disabled = !has;
         if (el.cropApply) el.cropApply.disabled = !(has && st.edit.cropMode && st.edit.cropSel);
         if (el.cropCancel) el.cropCancel.disabled = !(has && st.edit.cropMode);
+        if (el.segLevelApply) el.segLevelApply.disabled = !(has && st.edit.segLevel && !st.edit.segLevelBusy && !st.edit.segLevelTuneBusy && st.edit.segLevelResult);
+        if (el.segLevelCancel) el.segLevelCancel.disabled = !(has && st.edit.segLevel);
+        if (el.segLevelShowBounds) {
+            el.segLevelShowBounds.disabled = !(has && st.edit.segLevel && !st.edit.segLevelBusy);
+        }
+        const segConfigLocked = !(has && st.edit.segLevel && !st.edit.segLevelBusy && !st.edit.segLevelTuneBusy && st.edit.segLevelResult);
+        if (el.segLevelDir) el.segLevelDir.disabled = segConfigLocked;
+        if (el.segLevelCount) el.segLevelCount.disabled = segConfigLocked;
         updateHistoryButtons();
     }
 
@@ -743,6 +764,7 @@ function createImageView(ids, options) {
         // undo/redo 前先結束進行中的暫態操作（不寫入歷史）
         if (st.edit.cropMode) exitCrop();
         if (st.edit.denoise) cancelDenoise();
+        if (st.edit.segLevel) cancelSegLevel();
     }
     function doUndo() {
         if (!editing || !st.dataset || st.edit.histIndex <= 0) return;
@@ -869,27 +891,27 @@ function createImageView(ids, options) {
         return { a: sol[0], b: sol[1], c: sol[2], n };
     }
 
-    /** 全域水平校正：扣除最佳擬合平面 */
+    /** 全域水平校正：僅扣除傾斜 ax+by，保留截距（數值區間維持接近原始） */
     function applyGlobalLeveling() {
         if (!editing || !st.dataset) { showToast(t('editNoData'), 'info'); return; }
         endTransientModes();
         const acc = planeFitAccessors(st.dataset);
         const plane = fitPlaneLeastSquares(acc);
         if (!plane) { showToast(t('globalLevelInsufficient'), 'info'); return; }
-        const { a, b, c, n } = plane;
+        const { a, b, n } = plane;
         const ds = st.dataset;
         if (isScatter(ds)) {
             const z = ds.z;
             for (let i = 0; i < z.length; i++) {
                 if (!acc.isValid(i)) continue;
-                z[i] -= a * ds.x[i] + b * ds.y[i] + c;
+                z[i] -= a * ds.x[i] + b * ds.y[i];
             }
         } else {
             ensureFloatPixels(ds);
             const data = ds.data;
             for (let i = 0; i < data.length; i++) {
                 if (!acc.isValid(i)) continue;
-                data[i] -= a * acc.getX(i) + b * acc.getY(i) + c;
+                data[i] -= a * acc.getX(i) + b * acc.getY(i);
             }
         }
         refreshAfterEdit(false);
@@ -899,10 +921,1156 @@ function createImageView(ids, options) {
         showToast(t('globalLevelDone', n), 'info');
     }
 
+    /* ---------- 分區校正模式（自動分割 + 各區水平校正） ---------- */
+
+    function segLevelDirLabel(direction) {
+        return direction === 'vertical' ? t('segLevelDirVertical') : t('segLevelDirHorizontal');
+    }
+
+    function segLevelConfigLimits(direction) {
+        if (!st.dataset || typeof segLevelBoundaryOptionsForDirection !== 'function') return null;
+        const { width, height } = st.dataset;
+        const dir = direction === 'vertical' ? 'vertical' : 'horizontal';
+        const opts = segLevelBoundaryOptionsForDirection(width, height, dir);
+        const maxBands = typeof segLevelMaxValidBandCount === 'function'
+            ? segLevelMaxValidBandCount(opts.axisLen, opts.minDist, opts.edgeMargin)
+            : 8;
+        return { ...opts, maxBands: Math.max(2, maxBands) };
+    }
+
+    function setSegLevelConfigUI(visible) {
+        if (el.segLevelConfig) el.segLevelConfig.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+
+    function syncSegLevelConfigUI() {
+        const result = st.edit.segLevelResult;
+        if (!result) return;
+        const limits = segLevelConfigLimits(result.direction);
+        if (el.segLevelDir) el.segLevelDir.value = result.direction;
+        if (el.segLevelCount && limits) {
+            el.segLevelCount.min = '2';
+            el.segLevelCount.max = String(limits.maxBands);
+            el.segLevelCount.value = String(result.segmentCount);
+        }
+    }
+
+    function readSegLevelConfigFromUI() {
+        const direction = el.segLevelDir?.value === 'vertical' ? 'vertical' : 'horizontal';
+        let segmentCount = parseInt(el.segLevelCount?.value, 10);
+        const limits = segLevelConfigLimits(direction);
+        const maxBands = limits ? limits.maxBands : 8;
+        if (!Number.isFinite(segmentCount)) segmentCount = 2;
+        if (segmentCount < 2) segmentCount = 2;
+        if (segmentCount > maxBands) segmentCount = maxBands;
+        if (el.segLevelCount) {
+            el.segLevelCount.min = '2';
+            el.segLevelCount.max = String(maxBands);
+            el.segLevelCount.value = String(segmentCount);
+        }
+        return { direction, segmentCount, maxBands };
+    }
+
+    function segLevelStatusText(result) {
+        if (!result) return '';
+        return t('segLevelMeta', segLevelDirLabel(result.direction), result.segmentCount);
+    }
+
+    function snapshotSegLevelBase() {
+        const ds = st.dataset;
+        const src = ds.data;
+        st.edit.segLevelBase = {
+            data: src instanceof Float32Array ? src.slice() : Float32Array.from(src),
+            vmin: ds.vmin,
+            vmax: ds.vmax,
+        };
+    }
+
+    function segLevelDisplayRange(vmin, vmax, clip) {
+        const span = (vmax - vmin) || 1;
+        const lo = clip && Number.isFinite(clip.lo) ? clip.lo : 0;
+        const hi = clip && Number.isFinite(clip.hi) ? clip.hi : 1;
+        const cmin = vmin + lo * span;
+        const cmax = vmin + hi * span;
+        return {
+            cmin,
+            cmax,
+            crange: (cmax > cmin) ? (cmax - cmin) : 1e-12,
+        };
+    }
+
+    function segLevelFmt(v) {
+        if (!Number.isFinite(v)) return '-';
+        const a = Math.abs(v);
+        if (a >= 1000 || (a > 0 && a < 0.001)) return v.toExponential(2);
+        return v.toFixed(2);
+    }
+
+    /** 水平分割 → 中央垂直剖線；垂直分割 → 中央水平剖線 */
+    function segLevelExtractProfile(data, width, height, direction) {
+        const vals = [];
+        if (direction === 'horizontal') {
+            const x = width >> 1;
+            for (let y = 0; y < height; y++) vals.push(data[y * width + x]);
+        } else {
+            const y = height >> 1;
+            const rowBase = y * width;
+            for (let x = 0; x < width; x++) vals.push(data[rowBase + x]);
+        }
+        return vals;
+    }
+
+    function clearSegLevelProfileCanvas(canvas) {
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const dpr = window.devicePixelRatio || 1;
+        const cw = canvas.clientWidth || 1;
+        const ch = canvas.clientHeight || 1;
+        canvas.width = Math.max(1, Math.round(cw * dpr));
+        canvas.height = Math.max(1, Math.round(ch * dpr));
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, cw, ch);
+        canvas.style.transform = '';
+        canvas.setAttribute('aria-hidden', 'true');
+    }
+
+    function segLevelDefaultView() {
+        return { scale: 1, tx: 0, ty: 0, minScale: 0.02, maxScale: 100, contentW: 1, contentH: 1 };
+    }
+
+    function segLevelEnsureViews() {
+        if (!st.edit.segLevelViews) {
+            st.edit.segLevelViews = {
+                beforeImg: segLevelDefaultView(),
+                afterImg: segLevelDefaultView(),
+                beforeProfile: segLevelDefaultView(),
+                afterProfile: segLevelDefaultView(),
+            };
+        }
+        return st.edit.segLevelViews;
+    }
+
+    function segLevelResetViews() {
+        st.edit.segLevelViews = null;
+        st.edit.segLevelPan = null;
+    }
+
+    function segLevelFitView(view, container, contentW, contentH) {
+        if (!container || !view) return;
+        const vw = Math.max(1, container.clientWidth);
+        const vh = Math.max(1, container.clientHeight);
+        const s = Math.min(vw / contentW, vh / contentH, 8);
+        view.scale = s > 0 ? s : 1;
+        view.contentW = contentW;
+        view.contentH = contentH;
+        view.tx = (vw - contentW * view.scale) / 2;
+        view.ty = (vh - contentH * view.scale) / 2;
+    }
+
+    function segLevelZoomPct(view) {
+        if (!view || !view.contentW) return '100%';
+        const pct = view.scale * 100;
+        return (pct >= 100 ? pct.toFixed(0) : pct.toFixed(1)) + '%';
+    }
+
+    function segLevelApplyViewTransform(canvas, view, wrap) {
+        if (!canvas || !view) return;
+        canvas.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
+        canvas.style.transformOrigin = '0 0';
+        if (wrap) {
+            const ind = wrap.querySelector('.seg-level-zoom-ind');
+            if (ind) ind.textContent = segLevelZoomPct(view);
+        }
+    }
+
+    function segLevelContentSize(canvas) {
+        const cw = parseFloat(canvas.style.width) || canvas.clientWidth || canvas.width;
+        const ch = parseFloat(canvas.style.height) || canvas.clientHeight || canvas.height;
+        return { cw: Math.max(1, cw), ch: Math.max(1, ch) };
+    }
+
+    function segLevelSyncViewTransform(zoomKey, canvas, resetView) {
+        if (!zoomKey || !canvas) return;
+        const wrap = canvas.parentElement;
+        if (!wrap) return;
+        const views = segLevelEnsureViews();
+        const view = views[zoomKey];
+        const { cw, ch } = segLevelContentSize(canvas);
+        const sizeChanged = view.contentW !== cw || view.contentH !== ch;
+        if (resetView || sizeChanged) segLevelFitView(view, wrap, cw, ch);
+        segLevelApplyViewTransform(canvas, view, wrap);
+    }
+
+    function segLevelZoomAt(zoomKey, wrap, canvas, screenX, screenY, zoomFactor) {
+        const views = segLevelEnsureViews();
+        const view = views[zoomKey];
+        let newScale = view.scale * zoomFactor;
+        if (newScale < view.minScale) newScale = view.minScale;
+        if (newScale > view.maxScale) newScale = view.maxScale;
+        const k = newScale / view.scale;
+        view.tx = screenX - (screenX - view.tx) * k;
+        view.ty = screenY - (screenY - view.ty) * k;
+        view.scale = newScale;
+        segLevelApplyViewTransform(canvas, view, wrap);
+    }
+
+    function setupSegLevelZoom() {
+        const targets = [
+            { wrap: el.segLevelBefore?.parentElement, canvas: el.segLevelBefore, key: 'beforeImg' },
+            { wrap: el.segLevelAfter?.parentElement, canvas: el.segLevelAfter, key: 'afterImg' },
+            { wrap: el.segLevelBeforeProfile?.parentElement, canvas: el.segLevelBeforeProfile, key: 'beforeProfile' },
+            { wrap: el.segLevelAfterProfile?.parentElement, canvas: el.segLevelAfterProfile, key: 'afterProfile' },
+        ];
+        for (const t of targets) {
+            if (!t.wrap || !t.canvas || t.wrap.dataset.segZoomBound) continue;
+            t.wrap.dataset.segZoomBound = '1';
+            t.wrap.classList.add('seg-level-zoomable');
+            if (!t.wrap.querySelector('.seg-level-zoom-ind')) {
+                const ind = document.createElement('div');
+                ind.className = 'seg-level-zoom-ind';
+                ind.setAttribute('aria-hidden', 'true');
+                t.wrap.appendChild(ind);
+            }
+
+            t.wrap.addEventListener('wheel', (e) => {
+                if (!st.edit.segLevel || st.edit.segLevelBusy) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const rect = t.wrap.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+                let dy = e.deltaY;
+                if (e.deltaMode === 1) dy *= 16;
+                else if (e.deltaMode === 2) dy *= t.wrap.clientHeight;
+                const zoomFactor = Math.pow(1.0015, -dy);
+                segLevelZoomAt(t.key, t.wrap, t.canvas, mx, my, zoomFactor);
+            }, { passive: false });
+
+            t.wrap.addEventListener('mousedown', (e) => {
+                if (!st.edit.segLevel || st.edit.segLevelBusy || e.button !== 0) return;
+                const views = segLevelEnsureViews();
+                const view = views[t.key];
+                st.edit.segLevelPan = {
+                    key: t.key,
+                    wrap: t.wrap,
+                    canvas: t.canvas,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    tx: view.tx,
+                    ty: view.ty,
+                };
+                t.wrap.classList.add('grabbing');
+                e.preventDefault();
+            });
+
+            t.wrap.addEventListener('dblclick', (e) => {
+                if (!st.edit.segLevel || st.edit.segLevelBusy) return;
+                e.preventDefault();
+                const views = segLevelEnsureViews();
+                const view = views[t.key];
+                segLevelFitView(view, t.wrap, view.contentW, view.contentH);
+                segLevelApplyViewTransform(t.canvas, view, t.wrap);
+            });
+        }
+
+        if (!st.edit.segLevelPanBound) {
+            st.edit.segLevelPanBound = true;
+            window.addEventListener('mousemove', (e) => {
+                const pan = st.edit.segLevelPan;
+                if (!pan) return;
+                const views = segLevelEnsureViews();
+                const view = views[pan.key];
+                view.tx = pan.tx + (e.clientX - pan.startX);
+                view.ty = pan.ty + (e.clientY - pan.startY);
+                segLevelApplyViewTransform(pan.canvas, view, pan.wrap);
+            });
+            window.addEventListener('mouseup', () => {
+                const pan = st.edit.segLevelPan;
+                if (!pan) return;
+                pan.wrap.classList.remove('grabbing');
+                st.edit.segLevelPan = null;
+            });
+        }
+    }
+
+    function segLevelFmtK(k) {
+        if (!Number.isFinite(k)) return '0';
+        if (Math.abs(k) < 0.01) return k.toFixed(4);
+        return (Math.round(k * 1000) / 1000).toFixed(3);
+    }
+
+    function segLevelProfileSplits(result, boundaries, profileLen) {
+        let splits;
+        if (result && result.plan && result.plan.splits && result.plan.splits.length >= 2) {
+            splits = result.plan.splits.slice();
+            splits[splits.length - 1] = profileLen;
+        } else {
+            splits = [0, ...(boundaries || []), profileLen];
+        }
+        return splits;
+    }
+
+    function segLevelProfileBoundaries(splits) {
+        if (!splits || splits.length <= 2) return [];
+        return splits.slice(1, -1);
+    }
+
+    function segLevelProfileBandFits(vals, splits, axisScale) {
+        if (typeof segLevelFitProfileBandsFromSplits === 'function' && Number.isFinite(axisScale)) {
+            return segLevelFitProfileBandsFromSplits(vals, splits, axisScale);
+        }
+        if (typeof segLevelFitProfileBands === 'function' && Number.isFinite(axisScale)) {
+            const bounds = splits.length > 2 ? splits.slice(1, -1) : [];
+            return segLevelFitProfileBands(vals, bounds, axisScale);
+        }
+        return [];
+    }
+
+    const SEG_LEVEL_BAND_FIT_COLORS = [
+        '#ff9f43', '#5cdba0', '#c77dff', '#5eb3ff', '#ff6b8a', '#f4e04d', '#88d8ff', '#ffb347',
+    ];
+
+    function segLevelBandFitColor(index) {
+        return SEG_LEVEL_BAND_FIT_COLORS[index % SEG_LEVEL_BAND_FIT_COLORS.length];
+    }
+
+    function segLevelProfilePlotY(z, cmin, yRange, y0, plotH) {
+        let t = (z - cmin) / yRange;
+        if (t < 0) t = 0;
+        else if (t > 1) t = 1;
+        return y0 + (1 - t) * plotH;
+    }
+
+    function segLevelProfilePlotX(i, distPx, x0, plotW) {
+        return x0 + (i / distPx) * plotW;
+    }
+
+    function segLevelEstimateFitScale(canvas, contentW, contentH) {
+        const wrap = canvas && canvas.parentElement;
+        if (!wrap || !contentW || !contentH) return 1;
+        const vw = Math.max(1, wrap.clientWidth);
+        const vh = Math.max(1, wrap.clientHeight);
+        return Math.min(vw / contentW, vh / contentH, 8) || 1;
+    }
+
+    /** 大圖縮放顯示時略為加粗，維持螢幕上約 2～3px */
+    function segLevelSplitLineStyle(canvas, contentW, contentH, targetScreenPx) {
+        const fitScale = segLevelEstimateFitScale(canvas, contentW, contentH);
+        const factor = Math.max(1, (targetScreenPx || 2.5) / fitScale);
+        return {
+            outer: factor * 1.35,
+            inner: factor * 0.8,
+            dash: [8, 5],
+        };
+    }
+
+    function segLevelDrawImageSplitLines(ctx, direction, boundaries, cw, ch, canvas) {
+        if (!boundaries || !boundaries.length) return;
+        const style = segLevelSplitLineStyle(canvas, cw, ch, 2.5);
+        const draw = () => {
+            for (const b of boundaries) {
+                ctx.beginPath();
+                if (direction === 'horizontal') {
+                    ctx.moveTo(0, b);
+                    ctx.lineTo(cw, b);
+                } else {
+                    ctx.moveTo(b, 0);
+                    ctx.lineTo(b, ch);
+                }
+                ctx.stroke();
+            }
+        };
+        ctx.save();
+        ctx.setLineDash(style.dash);
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.lineWidth = style.outer;
+        draw();
+        ctx.strokeStyle = '#fff44d';
+        ctx.lineWidth = style.inner;
+        draw();
+        ctx.restore();
+    }
+
+    function segLevelDrawProfileSplitLines(ctx, boundaries, distPx, x0, y0, plotW, plotH, canvas, cw, ch) {
+        if (!boundaries || !boundaries.length) return;
+        const style = segLevelSplitLineStyle(canvas, cw, ch, 2);
+        const draw = () => {
+            for (const b of boundaries) {
+                const frac = distPx > 0 ? (b - 0.5) / distPx : 0;
+                const px = x0 + Math.min(1, Math.max(0, frac)) * plotW;
+                ctx.beginPath();
+                ctx.moveTo(px, y0);
+                ctx.lineTo(px, y0 + plotH);
+                ctx.stroke();
+            }
+        };
+        ctx.save();
+        ctx.setLineDash([5, 4]);
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.lineWidth = style.outer;
+        draw();
+        ctx.strokeStyle = '#fff44d';
+        ctx.lineWidth = style.inner;
+        draw();
+        ctx.restore();
+    }
+
+    function segLevelShowBoundsEnabled() {
+        return !!st.edit.segLevelShowBounds;
+    }
+
+    function syncSegLevelBoundsToggle() {
+        if (!el.segLevelShowBounds) return;
+        el.segLevelShowBounds.checked = segLevelShowBoundsEnabled();
+    }
+
+    function onSegLevelBoundsToggle() {
+        if (!st.edit.segLevel || st.edit.segLevelBusy) return;
+        st.edit.segLevelShowBounds = !!el.segLevelShowBounds?.checked;
+        renderSegLevelCompare();
+    }
+
+    function drawSegLevelProfileBandFits(ctx, bandFits, axisScale, cmin, yRange, x0, y0, plotW, plotH, distPx) {
+        if (!bandFits || !bandFits.length || !Number.isFinite(axisScale)) return;
+        const labelPadX = 4;
+        const labelBoxH = 16;
+        const labelBoxY = y0 + 2;
+        const labelLayouts = [];
+
+        for (let bi = 0; bi < bandFits.length; bi++) {
+            const fit = bandFits[bi];
+            const { k, c, center, i0, i1 } = fit;
+            if (!Number.isFinite(k) || !Number.isFinite(c) || i1 <= i0) continue;
+            const color = segLevelBandFitColor(bi);
+            const bandX0 = segLevelProfilePlotX(i0, distPx, x0, plotW);
+            const bandX1 = segLevelProfilePlotX(Math.max(i0, i1 - 1), distPx, x0, plotW);
+            const clipX = Math.max(x0, bandX0);
+            const clipW = Math.min(x0 + plotW, bandX1 + 1) - clipX;
+            if (clipW <= 0) continue;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(clipX, y0, clipW, plotH);
+            ctx.clip();
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 3]);
+            ctx.beginPath();
+            let started = false;
+            for (let i = i0; i < i1; i++) {
+                const refZ = k * (i - center) * axisScale + c;
+                if (!Number.isFinite(refZ)) { started = false; continue; }
+                const px = segLevelProfilePlotX(i, distPx, x0, plotW);
+                const py = segLevelProfilePlotY(refZ, cmin, yRange, y0, plotH);
+                if (!started) { ctx.moveTo(px, py); started = true; }
+                else ctx.lineTo(px, py);
+            }
+            if (started) ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+
+            const labelX = (bandX0 + bandX1) * 0.5;
+            const label = `#${bi + 1} ` + segLevelFmtK(k) + ' µm/mm';
+            ctx.save();
+            ctx.font = '10px Consolas, monospace';
+            const tw = ctx.measureText(label).width;
+            ctx.restore();
+            const boxW = tw + labelPadX * 2;
+            let boxX = labelX - boxW * 0.5;
+            if (boxX < clipX) boxX = clipX;
+            if (boxX + boxW > clipX + clipW) boxX = clipX + clipW - boxW;
+            labelLayouts.push({ label, color, boxX, boxW });
+        }
+
+        ctx.save();
+        ctx.font = '10px Consolas, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const layout of labelLayouts) {
+            const { label, color, boxX, boxW } = layout;
+            ctx.fillStyle = 'rgba(18, 18, 28, 0.88)';
+            ctx.fillRect(boxX, labelBoxY, boxW, labelBoxH);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(boxX, labelBoxY, boxW, labelBoxH);
+            ctx.fillStyle = color;
+            ctx.fillText(label, boxX + boxW * 0.5, labelBoxY + labelBoxH * 0.5);
+        }
+        ctx.restore();
+    }
+
+    function renderSegLevelProfileChart(canvas, vals, cmin, crange, direction, boundaries, bandFits, axisScale, zoomKey, resetView) {
+        if (!canvas || !vals || !vals.length) {
+            clearSegLevelProfileCanvas(canvas);
+            return;
+        }
+        const wrap = canvas.parentElement;
+        const cw = Math.max(1, wrap?.clientWidth || canvas.clientWidth || 200);
+        const ch = Math.max(1, wrap?.clientHeight || canvas.clientHeight || 100);
+        const dpr = window.devicePixelRatio || 1;
+        const bw = Math.max(1, Math.round(cw * dpr));
+        const bh = Math.max(1, Math.round(ch * dpr));
+        canvas.width = bw;
+        canvas.height = bh;
+        canvas.style.width = cw + 'px';
+        canvas.style.height = ch + 'px';
+        canvas.setAttribute('aria-hidden', 'false');
+
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, cw, ch);
+
+        const padL = 48, padR = 8, padT = 8, padB = 22;
+        const plotW = Math.max(1, cw - padL - padR);
+        const plotH = Math.max(1, ch - padT - padB);
+        const x0 = padL, y0 = padT;
+        const cmax = cmin + crange;
+        const yRange = crange || 1e-12;
+        const n = vals.length;
+        const distPx = Math.max(1, n - 1);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.03)';
+        ctx.fillRect(x0, y0, plotW, plotH);
+
+        ctx.font = '10px Consolas, monospace';
+        ctx.lineWidth = 1;
+
+        const yticks = 4;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        for (let i = 0; i <= yticks; i++) {
+            const tt = i / yticks;
+            const py = y0 + plotH * tt;
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.beginPath();
+            ctx.moveTo(x0, py);
+            ctx.lineTo(x0 + plotW, py);
+            ctx.stroke();
+            const val = cmax - yRange * tt;
+            ctx.fillStyle = '#9a9ab0';
+            ctx.fillText(segLevelFmt(val), x0 - 5, py);
+        }
+
+        const xticks = 4;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        const axisX = direction === 'horizontal' ? t('segLevelProfileAxisY') : t('segLevelProfileAxisX');
+        for (let i = 0; i <= xticks; i++) {
+            const tt = i / xticks;
+            const px = x0 + plotW * tt;
+            ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+            ctx.beginPath();
+            ctx.moveTo(px, y0);
+            ctx.lineTo(px, y0 + plotH);
+            ctx.stroke();
+            ctx.fillStyle = '#9a9ab0';
+            ctx.fillText(String(Math.round(distPx * tt)), px, y0 + plotH + 4);
+        }
+        ctx.fillStyle = '#7a7a94';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(axisX, x0 + plotW * 0.5, ch - 2);
+
+        if (segLevelShowBoundsEnabled() && boundaries && boundaries.length) {
+            segLevelDrawProfileSplitLines(ctx, boundaries, distPx, x0, y0, plotW, plotH, canvas, cw, ch);
+        }
+
+        ctx.strokeStyle = '#4f8cff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < n; i++) {
+            const v = vals[i];
+            if (!Number.isFinite(v)) { started = false; continue; }
+            const px = x0 + (i / distPx) * plotW;
+            let t = (v - cmin) / yRange;
+            if (t < 0) t = 0;
+            else if (t > 1) t = 1;
+            const py = y0 + (1 - t) * plotH;
+            if (!started) { ctx.moveTo(px, py); started = true; }
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        drawSegLevelProfileBandFits(ctx, bandFits, axisScale, cmin, yRange, x0, y0, plotW, plotH, distPx);
+        segLevelSyncViewTransform(zoomKey, canvas, resetView);
+    }
+
+    function renderSegLevelPaneColorbar(canvas, loEl, hiEl, vmin, vmax, cmap, clip) {
+        if (!canvas) return;
+        const dr = segLevelDisplayRange(vmin, vmax, clip);
+        const wrap = canvas.parentElement;
+        const cssH = Math.max(72, (wrap?.clientHeight || 120) - 36);
+        const cssW = 14;
+        const dpr = window.devicePixelRatio || 1;
+        const bw = Math.max(1, Math.round(cssW * dpr));
+        const bh = Math.max(1, Math.round(cssH * dpr));
+        canvas.width = bw;
+        canvas.height = bh;
+        canvas.style.width = cssW + 'px';
+        canvas.style.height = cssH + 'px';
+
+        const ctx = canvas.getContext('2d');
+        const img = ctx.createImageData(bw, bh);
+        const px = img.data;
+        for (let y = 0; y < bh; y++) {
+            const t = bh > 1 ? 1 - y / (bh - 1) : 1;
+            const [r, g, b] = sampleColormap(cmap, t);
+            const cr = Math.round(r * 255);
+            const cg = Math.round(g * 255);
+            const cb = Math.round(b * 255);
+            for (let x = 0; x < bw; x++) {
+                const po = (y * bw + x) * 4;
+                px[po] = cr;
+                px[po + 1] = cg;
+                px[po + 2] = cb;
+                px[po + 3] = 255;
+            }
+        }
+        ctx.putImageData(img, 0, 0);
+        if (hiEl) hiEl.textContent = segLevelFmt(dr.cmax);
+        if (loEl) loEl.textContent = segLevelFmt(dr.cmin);
+    }
+
+    function renderSegLevelCanvas(canvas, data, width, height, cmin, crange, cmap, direction, boundaries, drawBounds, drawProfileLine, zoomKey, resetView) {
+        if (!canvas) return;
+        const cw = Math.max(1, width);
+        const ch = Math.max(1, height);
+        canvas.width = cw;
+        canvas.height = ch;
+        canvas.style.width = cw + 'px';
+        canvas.style.height = ch + 'px';
+
+        const ctx = canvas.getContext('2d');
+        const img = ctx.createImageData(cw, ch);
+        const px = img.data;
+        const lut = buildColormapLut(cmap);
+
+        for (let y = 0; y < ch; y++) {
+            const rowBase = y * width;
+            for (let x = 0; x < cw; x++) {
+                const v = data[rowBase + x];
+                const po = (y * cw + x) * 4;
+                if (!Number.isFinite(v)) {
+                    px[po] = px[po + 1] = px[po + 2] = 0;
+                    px[po + 3] = 255;
+                    continue;
+                }
+                let t = (v - cmin) / crange;
+                if (t < 0) t = 0; else if (t > 1) t = 1;
+                const lo = ((t * 255) | 0) * 3;
+                px[po] = lut[lo]; px[po + 1] = lut[lo + 1]; px[po + 2] = lut[lo + 2]; px[po + 3] = 255;
+            }
+        }
+        ctx.putImageData(img, 0, 0);
+
+        if (drawBounds && segLevelShowBoundsEnabled() && boundaries && boundaries.length) {
+            segLevelDrawImageSplitLines(ctx, direction, boundaries, cw, ch, canvas);
+        }
+
+        if (drawProfileLine) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(120, 220, 255, 0.92)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 4]);
+            if (direction === 'horizontal') {
+                const lx = (width >> 1) + 0.5;
+                ctx.beginPath();
+                ctx.moveTo(lx, 0);
+                ctx.lineTo(lx, ch);
+                ctx.stroke();
+            } else {
+                const ly = (height >> 1) + 0.5;
+                ctx.beginPath();
+                ctx.moveTo(0, ly);
+                ctx.lineTo(cw, ly);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+        segLevelSyncViewTransform(zoomKey, canvas, resetView);
+    }
+
+    function renderSegLevelCompare(opts) {
+        const resetView = !!(opts && opts.resetView);
+        const base = st.edit.segLevelBase;
+        const result = st.edit.segLevelResult;
+        if (!base || !result || !st.dataset) return;
+        const ds = st.dataset;
+        const cmap = el.colormap.value;
+        const { width, height } = ds;
+        const afterData = result.correctedData;
+        const afterStats = computeRange(afterData);
+        const beforeDr = segLevelDisplayRange(base.vmin, base.vmax, st.colorClip);
+        const afterDr = segLevelDisplayRange(afterStats.vmin, afterStats.vmax, st.colorClip);
+        const direction = result.direction;
+        const boundaries = result.boundaries;
+
+        renderSegLevelCanvas(
+            el.segLevelBefore, base.data, width, height,
+            beforeDr.cmin, beforeDr.crange, cmap, direction, boundaries, true, true,
+            'beforeImg', resetView,
+        );
+        renderSegLevelCanvas(
+            el.segLevelAfter, afterData, width, height,
+            afterDr.cmin, afterDr.crange, cmap, direction, boundaries, true, true,
+            'afterImg', resetView,
+        );
+
+        renderSegLevelPaneColorbar(
+            el.segLevelBeforeCb, el.segLevelBeforeCbLo, el.segLevelBeforeCbHi,
+            base.vmin, base.vmax, cmap, st.colorClip,
+        );
+        renderSegLevelPaneColorbar(
+            el.segLevelAfterCb, el.segLevelAfterCbLo, el.segLevelAfterCbHi,
+            afterStats.vmin, afterStats.vmax, cmap, st.colorClip,
+        );
+
+        const beforeProfile = segLevelExtractProfile(base.data, width, height, direction);
+        const afterProfile = segLevelExtractProfile(afterData, width, height, direction);
+        const axisScale = result.plan && result.plan.axisScale;
+        const beforeSplits = segLevelProfileSplits(result, boundaries, beforeProfile.length);
+        const afterSplits = segLevelProfileSplits(result, boundaries, afterProfile.length);
+        const chartBoundaries = segLevelProfileBoundaries(beforeSplits);
+        const beforeBandFits = segLevelProfileBandFits(beforeProfile, beforeSplits, axisScale);
+        const afterBandFits = segLevelProfileBandFits(afterProfile, afterSplits, axisScale);
+        renderSegLevelProfileChart(
+            el.segLevelBeforeProfile, beforeProfile,
+            beforeDr.cmin, beforeDr.crange, direction, chartBoundaries,
+            beforeBandFits, axisScale, 'beforeProfile', resetView,
+        );
+        renderSegLevelProfileChart(
+            el.segLevelAfterProfile, afterProfile,
+            afterDr.cmin, afterDr.crange, direction, chartBoundaries,
+            afterBandFits, axisScale, 'afterProfile', resetView,
+        );
+
+        syncSegLevelConfigUI();
+    }
+
+    /** 微調時只更新校正後面板（校正前與色階不變） */
+    function renderSegLevelAfterOnly() {
+        const base = st.edit.segLevelBase;
+        const result = st.edit.segLevelResult;
+        if (!base || !result || !st.dataset) return;
+        const ds = st.dataset;
+        const cmap = el.colormap.value;
+        const { width, height } = ds;
+        const afterData = result.correctedData;
+        const afterStats = computeRange(afterData);
+        const afterDr = segLevelDisplayRange(afterStats.vmin, afterStats.vmax, st.colorClip);
+        const direction = result.direction;
+        const boundaries = result.boundaries;
+
+        renderSegLevelCanvas(
+            el.segLevelAfter, afterData, width, height,
+            afterDr.cmin, afterDr.crange, cmap, direction, boundaries, true, true,
+            'afterImg', false,
+        );
+        renderSegLevelPaneColorbar(
+            el.segLevelAfterCb, el.segLevelAfterCbLo, el.segLevelAfterCbHi,
+            afterStats.vmin, afterStats.vmax, cmap, st.colorClip,
+        );
+        const afterProfile = segLevelExtractProfile(afterData, width, height, direction);
+        const axisScale = result.plan && result.plan.axisScale;
+        const afterSplits = segLevelProfileSplits(result, boundaries, afterProfile.length);
+        const chartBoundaries = segLevelProfileBoundaries(afterSplits);
+        const afterBandFits = segLevelProfileBandFits(afterProfile, afterSplits, axisScale);
+        renderSegLevelProfileChart(
+            el.segLevelAfterProfile, afterProfile,
+            afterDr.cmin, afterDr.crange, direction, chartBoundaries,
+            afterBandFits, axisScale, 'afterProfile', false,
+        );
+    }
+
+    let segLevelTuneRunId = 0;
+
+    function setSegLevelTuneUI(visible) {
+        if (el.segLevelTune) el.segLevelTune.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+
+    function readSegLevelTiltFromUI() {
+        const result = st.edit.segLevelResult;
+        if (!result || !el.segLevelTuneK) return;
+        const v = parseFloat(el.segLevelTuneK.value);
+        result.tiltK = Number.isFinite(v) ? v : result.autoTiltK;
+    }
+
+    function syncSegLevelTiltInput() {
+        const result = st.edit.segLevelResult;
+        if (!result || !el.segLevelTuneK) return;
+        el.segLevelTuneK.value = segLevelFmtK(result.tiltK);
+    }
+
+    function updateSegLevelTunePanel() {
+        const result = st.edit.segLevelResult;
+        if (!result) return;
+        if (el.segLevelTuneSlopeLabel) {
+            el.segLevelTuneSlopeLabel.textContent = result.direction === 'horizontal'
+                ? t('segLevelTuneSlopeY')
+                : t('segLevelTuneSlopeX');
+        }
+        syncSegLevelTiltInput();
+    }
+
+    function segLevelYieldFrame() {
+        return new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(resolve));
+        });
+    }
+
+    function setSegLevelTuneBusyUI(busy) {
+        st.edit.segLevelTuneBusy = !!busy;
+        if (el.segLevelCompare) el.segLevelCompare.classList.toggle('is-tune-busy', !!busy);
+        if (el.segLevelTune) el.segLevelTune.classList.toggle('is-busy', !!busy);
+        if (el.segLevelTuneBusy) {
+            el.segLevelTuneBusy.classList.toggle('show', !!busy);
+            el.segLevelTuneBusy.setAttribute('aria-hidden', busy ? 'false' : 'true');
+        }
+        if (el.segLevelTuneK) el.segLevelTuneK.disabled = !!busy;
+        if (el.segLevelTuneReset) el.segLevelTuneReset.disabled = !!busy;
+        updateEditButtons();
+    }
+
+    async function recomputeSegLevelPreview(options) {
+        const base = st.edit.segLevelBase;
+        const result = st.edit.segLevelResult;
+        if (!base || !result || !result.plan || !st.dataset) return;
+        const { width, height } = st.dataset;
+        const tuneRunId = ++st.edit.segLevelTuneRunId;
+        const outBuf = result.correctedData instanceof Float32Array
+            ? result.correctedData
+            : null;
+
+        setSegLevelTuneBusyUI(true);
+        await segLevelYieldFrame();
+        if (tuneRunId !== st.edit.segLevelTuneRunId) {
+            setSegLevelTuneBusyUI(false);
+            return;
+        }
+
+        try {
+            if (typeof applySegmentLevelPlanAsync === 'function') {
+                const out = await applySegmentLevelPlanAsync(
+                    base.data, width, height, result.plan, result.tiltK, outBuf,
+                    undefined,
+                    () => tuneRunId !== st.edit.segLevelTuneRunId,
+                );
+                if (!out || tuneRunId !== st.edit.segLevelTuneRunId) return;
+                result.correctedData = out;
+            } else {
+                result.correctedData = applySegmentLevelPlan(
+                    base.data, width, height, result.plan, result.tiltK, outBuf,
+                );
+                if (tuneRunId !== st.edit.segLevelTuneRunId) return;
+            }
+            renderSegLevelAfterOnly();
+        } finally {
+            if (tuneRunId === st.edit.segLevelTuneRunId) {
+                setSegLevelTuneBusyUI(false);
+            }
+        }
+    }
+
+    function commitSegLevelTune() {
+        if (!st.edit.segLevel || st.edit.segLevelBusy || st.edit.segLevelTuneBusy) return;
+        readSegLevelTiltFromUI();
+        recomputeSegLevelPreview({ fullQuality: true });
+    }
+
+    function onSegLevelTuneKeydown(e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        if (e.target && typeof e.target.blur === 'function') e.target.blur();
+        commitSegLevelTune();
+    }
+
+    function buildSegLevelTuneUI(result) {
+        if (!result) return;
+        setSegLevelTuneUI(true);
+        updateSegLevelTunePanel();
+    }
+
+    function resetSegLevelTilt() {
+        const result = st.edit.segLevelResult;
+        if (!result || !Number.isFinite(result.autoTiltK) || st.edit.segLevelTuneBusy) return;
+        result.tiltK = result.autoTiltK;
+        syncSegLevelTiltInput();
+        recomputeSegLevelPreview({ fullQuality: true });
+    }
+
+    function setSegLevelBusyUI(busy, progress) {
+        if (el.segLevelCompare) el.segLevelCompare.classList.toggle('is-busy', !!busy);
+        if (el.segLevelBusy) {
+            el.segLevelBusy.classList.toggle('show', !!busy);
+            el.segLevelBusy.setAttribute('aria-hidden', busy ? 'false' : 'true');
+        }
+        if (el.segLevelBusyText && busy) {
+            const pct = Math.round((progress || 0) * 100);
+            el.segLevelBusyText.textContent = pct > 0 && pct < 100
+                ? t('segLevelProgress', pct)
+                : t('segLevelProcessing');
+        }
+        updateEditButtons();
+    }
+
+    async function recomputeSegLevelWithConfig(options) {
+        options = options || {};
+        if (!st.edit.segLevel || st.edit.segLevelBusy || st.edit.segLevelTuneBusy || !st.dataset) return;
+        if (typeof analyzeSegmentLevelingWithParamsAsync !== 'function') return;
+
+        const prev = st.edit.segLevelResult;
+        const { direction, segmentCount, maxBands } = readSegLevelConfigFromUI();
+        if (prev
+            && prev.direction === direction
+            && prev.segmentCount === segmentCount
+            && !options.force) {
+            syncSegLevelConfigUI();
+            return;
+        }
+
+        const rawCount = parseInt(el.segLevelCount?.value, 10);
+        if (Number.isFinite(rawCount) && rawCount > maxBands) {
+            showToast(t('segLevelInvalidCount', maxBands), 'info');
+        }
+
+        st.edit.segLevelBusy = true;
+        st.edit.segLevelTuneRunId++;
+        const runId = ++st.edit.segLevelRunId;
+        setSegLevelBusyUI(true, 0);
+        el.status.textContent = t('segLevelProcessing');
+
+        await segLevelYield();
+
+        try {
+            const analysis = await analyzeSegmentLevelingWithParamsAsync(
+                st.dataset,
+                direction,
+                segmentCount,
+                (p) => {
+                    if (runId !== st.edit.segLevelRunId) return;
+                    setSegLevelBusyUI(true, p);
+                },
+                () => runId !== st.edit.segLevelRunId,
+            );
+
+            if (runId !== st.edit.segLevelRunId) return;
+
+            if (!analysis.ok) {
+                if (analysis.reason !== 'cancelled') {
+                    if (analysis.reason === 'invalidParams') {
+                        showToast(t('segLevelInvalidCount', maxBands), 'info');
+                    } else if (analysis.reason === 'scatter') {
+                        showToast(t('segLevelScatter'), 'info');
+                    } else if (analysis.reason === 'tooSmall') {
+                        showToast(t('segLevelTooSmall'), 'error');
+                    } else {
+                        showToast(t('segLevelInsufficient'), 'error');
+                    }
+                }
+                syncSegLevelConfigUI();
+                return;
+            }
+
+            st.edit.segLevelResult = analysis;
+            st.edit.segLevelBusy = false;
+            setSegLevelBusyUI(false);
+            buildSegLevelTuneUI(analysis);
+            if (options.resetView) segLevelResetViews();
+            renderSegLevelCompare({ resetView: !!options.resetView });
+            updateEditButtons();
+            el.status.textContent = segLevelStatusText(analysis);
+        } catch (err) {
+            console.error(err);
+            if (runId === st.edit.segLevelRunId) {
+                showToast(String(err.message || err), 'error');
+                syncSegLevelConfigUI();
+            }
+        } finally {
+            if (runId === st.edit.segLevelRunId && st.edit.segLevelBusy) {
+                st.edit.segLevelBusy = false;
+                setSegLevelBusyUI(false);
+                updateEditButtons();
+            }
+        }
+    }
+
+    function onSegLevelConfigChange() {
+        if (!st.edit.segLevel || st.edit.segLevelBusy || st.edit.segLevelTuneBusy || !st.edit.segLevelResult) return;
+        recomputeSegLevelWithConfig({ resetView: true });
+    }
+
+    function onSegLevelCountKeydown(e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        if (e.target && typeof e.target.blur === 'function') e.target.blur();
+        onSegLevelConfigChange();
+    }
+
+    function enterSegLevelUI(active) {
+        if (el.viewer) el.viewer.classList.toggle('seg-level-active', active);
+        if (el.segLevelPanel) el.segLevelPanel.setAttribute('aria-hidden', active ? 'false' : 'true');
+        if (el.segLevel) el.segLevel.classList.toggle('tool-active', active);
+        if (active && !st.edit.segLevelBusy && st.edit.segLevelResult) {
+            requestAnimationFrame(() => renderSegLevelCompare({ resetView: true }));
+        }
+    }
+
+    function exitSegLevelMode() {
+        st.edit.segLevel = false;
+        st.edit.segLevelBusy = false;
+        st.edit.segLevelTuneBusy = false;
+        st.edit.segLevelRunId++;
+        st.edit.segLevelBase = null;
+        st.edit.segLevelResult = null;
+        st.edit.segLevelTuneRunId++;
+        st.edit.segLevelShowBounds = true;
+        segLevelResetViews();
+        setSegLevelTuneBusyUI(false);
+        setSegLevelTuneUI(false);
+        setSegLevelConfigUI(false);
+        setSegLevelBusyUI(false);
+        enterSegLevelUI(false);
+        updateEditButtons();
+    }
+
+    function cancelSegLevel() {
+        if (!st.edit.segLevel) return;
+        st.edit.segLevelRunId++;
+        const base = st.edit.segLevelBase;
+        if (base && st.dataset && !st.edit.segLevelBusy) {
+            st.dataset.data = base.data.slice();
+            st.dataset.vmin = base.vmin;
+            st.dataset.vmax = base.vmax;
+            resetColorClip(false);
+            render(st.dataset, el.colormap.value, false);
+        }
+        exitSegLevelMode();
+    }
+
+    async function startSegLevelMode() {
+        if (!editing || !st.dataset) { showToast(t('editNoData'), 'info'); return; }
+        if (isScatter(st.dataset)) { showToast(t('segLevelScatter'), 'info'); return; }
+        if (st.edit.segLevel) {
+            if (st.edit.segLevelBusy) {
+                st.edit.segLevelRunId++;
+                exitSegLevelMode();
+            } else {
+                cancelSegLevel();
+            }
+            return;
+        }
+
+        endTransientModes();
+
+        snapshotSegLevelBase();
+        segLevelResetViews();
+        st.edit.segLevel = true;
+        st.edit.segLevelShowBounds = true;
+        st.edit.segLevelBusy = true;
+        st.edit.segLevelResult = null;
+        const runId = ++st.edit.segLevelRunId;
+
+        enterSegLevelUI(true);
+        syncSegLevelBoundsToggle();
+        setSegLevelBusyUI(true, 0);
+        setSegLevelTuneUI(false);
+        setSegLevelConfigUI(false);
+        if (st.edit.segLevelBase && st.dataset) {
+            const { data, vmin, vmax } = st.edit.segLevelBase;
+            const dr = segLevelDisplayRange(vmin, vmax, st.colorClip);
+            renderSegLevelCanvas(
+                el.segLevelBefore, data, st.dataset.width, st.dataset.height,
+                dr.cmin, dr.crange, el.colormap.value, 'horizontal', [], false, false,
+                'beforeImg', true,
+            );
+            renderSegLevelPaneColorbar(
+                el.segLevelBeforeCb, el.segLevelBeforeCbLo, el.segLevelBeforeCbHi,
+                vmin, vmax, el.colormap.value, st.colorClip,
+            );
+            if (el.segLevelAfter) {
+                const c = el.segLevelAfter;
+                const ctx = c.getContext('2d');
+                if (ctx) { ctx.clearRect(0, 0, c.width, c.height); }
+            }
+            clearSegLevelProfileCanvas(el.segLevelBeforeProfile);
+            clearSegLevelProfileCanvas(el.segLevelAfterProfile);
+        }
+        updateEditButtons();
+        el.status.textContent = t('segLevelAnalyzing');
+
+        await segLevelYield();
+
+        try {
+            const analysis = await analyzeSegmentLevelingAsync(
+                st.dataset,
+                (p) => {
+                    if (runId !== st.edit.segLevelRunId) return;
+                    setSegLevelBusyUI(true, p);
+                },
+                () => runId !== st.edit.segLevelRunId,
+            );
+
+            if (runId !== st.edit.segLevelRunId) return;
+
+            if (!analysis.ok) {
+                const reason = analysis.reason;
+                if (reason !== 'cancelled') {
+                    if (reason === 'scatter') showToast(t('segLevelScatter'), 'info');
+                    else if (reason === 'tooSmall') showToast(t('segLevelTooSmall'), 'error');
+                    else showToast(t('segLevelInsufficient'), 'error');
+                }
+                st.edit.segLevelBase = null;
+                exitSegLevelMode();
+                if (st.dataset) {
+                    el.status.textContent = t('statusLoaded', st.dataset.filename, st.dataset.width, st.dataset.height);
+                }
+                return;
+            }
+
+            st.edit.segLevelResult = analysis;
+            st.edit.segLevelBusy = false;
+            setSegLevelBusyUI(false);
+            setSegLevelConfigUI(true);
+            buildSegLevelTuneUI(analysis);
+            renderSegLevelCompare({ resetView: true });
+            updateEditButtons();
+            el.status.textContent = segLevelStatusText(analysis);
+        } catch (err) {
+            console.error(err);
+            if (runId === st.edit.segLevelRunId) {
+                showToast(String(err.message || err), 'error');
+                exitSegLevelMode();
+            }
+        }
+    }
+
+    function applySegLevel() {
+        if (!st.edit.segLevel || st.edit.segLevelBusy || !st.edit.segLevelResult || !st.dataset) return;
+        const result = st.edit.segLevelResult;
+        ensureFloatPixels(st.dataset);
+        st.dataset.data = result.correctedData.slice();
+        exitSegLevelMode();
+        refreshAfterEdit(false);
+        pushHistory();
+        setLastEditStep({
+            type: 'segmentLevel',
+            direction: result.direction,
+            boundaries: result.boundaries.slice(),
+            tiltK: result.tiltK,
+        });
+        const msg = t('segLevelDone', result.segmentCount, segLevelDirLabel(result.direction));
+        el.status.textContent = msg;
+        showToast(msg, 'info');
+    }
+
     /* 複製目前資料集（深拷貝陣列、移除畫布參照）以便安全傳送到檢視器 */
     function sendToViewer() {
         if (!st.dataset) { showToast(t('sendNoData'), 'info'); return; }
         if (st.edit.denoise) toggleDenoise(false); // 先套用雜點篩除結果
+        if (st.edit.segLevel) cancelSegLevel();
         const clone = cloneDatasetForTransfer(st.dataset);
         // 先切到檢視器頁面，讓畫布有正確尺寸後再載入，避免 fit 計算到 0
         if (typeof switchPage === 'function') switchPage('viewer');
@@ -985,6 +2153,7 @@ function createImageView(ids, options) {
     function setCropMode(mode) {
         if (!editing || !st.dataset) return;
         if (st.edit.denoise) toggleDenoise(false);
+        if (st.edit.segLevel) cancelSegLevel();
         // 點擊已啟用的模式 → 關閉
         if (st.edit.cropMode === mode) { exitCrop(); return; }
         st.edit.cropMode = mode;
@@ -1340,6 +2509,7 @@ function createImageView(ids, options) {
         if (want && !st.dataset) { showToast(t('editNoData'), 'info'); return; }
         if (want) {
             if (st.edit.cropMode) exitCrop();
+            if (st.edit.segLevel) cancelSegLevel();
             st.edit.denoise = true;
             st.edit.histLo = 0; st.edit.histHi = 1;
             st.edit.histAuto = false;
@@ -1438,6 +2608,7 @@ function createImageView(ids, options) {
             el.denoise.classList.remove('tool-active');
             st.edit.denoiseBase = null; histData = null;
         }
+        if (st.edit.segLevel) exitSegLevelMode();
         resetHistory();          // 以新載入的資料作為歷史起點
         updateEditButtons();
     }
@@ -1450,6 +2621,20 @@ function createImageView(ids, options) {
         el.cropApply.addEventListener('click', applyCrop);
         el.cropCancel.addEventListener('click', exitCrop);
         el.denoise.addEventListener('click', () => toggleDenoise());
+        if (el.segLevel) el.segLevel.addEventListener('click', startSegLevelMode);
+        if (el.segLevelApply) el.segLevelApply.addEventListener('click', applySegLevel);
+        if (el.segLevelCancel) el.segLevelCancel.addEventListener('click', cancelSegLevel);
+        if (el.segLevelTuneK) {
+            el.segLevelTuneK.addEventListener('keydown', onSegLevelTuneKeydown);
+        }
+        if (el.segLevelTuneReset) el.segLevelTuneReset.addEventListener('click', resetSegLevelTilt);
+        if (el.segLevelShowBounds) el.segLevelShowBounds.addEventListener('change', onSegLevelBoundsToggle);
+        if (el.segLevelDir) el.segLevelDir.addEventListener('change', onSegLevelConfigChange);
+        if (el.segLevelCount) {
+            el.segLevelCount.addEventListener('change', onSegLevelConfigChange);
+            el.segLevelCount.addEventListener('keydown', onSegLevelCountKeydown);
+        }
+        setupSegLevelZoom();
         if (el.globalLevel) el.globalLevel.addEventListener('click', applyGlobalLeveling);
         if (el.histAuto) el.histAuto.addEventListener('click', () => autoDenoiseBounds());
         if (el.histApply) el.histApply.addEventListener('click', () => toggleDenoise(false));
@@ -1468,7 +2653,10 @@ function createImageView(ids, options) {
             if (k === 'z' && !e.shiftKey) { e.preventDefault(); doUndo(); }
             else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); doRedo(); }
         });
-        window.addEventListener('resize', () => { if (st.edit.denoise) renderHist(); });
+        window.addEventListener('resize', () => {
+            if (st.edit.denoise) renderHist();
+            if (st.edit.segLevel) renderSegLevelCompare({ resetView: true });
+        });
         updateEditButtons();
     }
 
@@ -1487,7 +2675,13 @@ function createImageView(ids, options) {
         getDatasetSignature: () => st.dataset ? getDatasetSignature(st.dataset) : null,
         getLastEditStep: () => st.edit.lastEditStep,
         clearLastEditStep: () => { setLastEditStep(null); },
-        refit: () => { if (st.dataset && el.viewer.clientWidth > 0) { fitImage(); if (st.edit.denoise) renderHist(); } },
+        refit: () => {
+            if (st.dataset && el.viewer.clientWidth > 0) {
+                fitImage();
+                if (st.edit.denoise) renderHist();
+                if (st.edit.segLevel) renderSegLevelCompare({ resetView: true });
+            }
+        },
         syncLang: () => {
             const ds = st.dataset;
             if (!ds) el.status.textContent = t('statusIdle');
@@ -1518,7 +2712,25 @@ const editorView = createImageView({
     zMin: 'edZMin', zMax: 'edZMax',
     cropRect: 'edCropRect', cropCircle: 'edCropCircle', cropApply: 'edCropApply',
     cropCancel: 'edCropCancel', cropOverlay: 'edCropOverlay', cropShape: 'edCropShape',
-    cropHint: 'edCropHint', denoise: 'edDenoise', globalLevel: 'edGlobalLevel',
+    cropHint: 'edCropHint', denoise: 'edDenoise', segLevel: 'edSegLevel',
+    segLevelPanel: 'edSegLevelPanel', segLevelConfig: 'edSegLevelConfig',
+    segLevelDir: 'edSegLevelDir', segLevelCount: 'edSegLevelCount',
+    segLevelCompare: 'edSegLevelCompare', segLevelBusy: 'edSegLevelBusy',
+    segLevelBusyText: 'edSegLevelBusyText',
+    segLevelBefore: 'edSegLevelBefore', segLevelAfter: 'edSegLevelAfter',
+    segLevelBeforeCb: 'edSegLevelBeforeCb', segLevelBeforeCbLo: 'edSegLevelBeforeCbLo',
+    segLevelBeforeCbHi: 'edSegLevelBeforeCbHi',
+    segLevelAfterCb: 'edSegLevelAfterCb', segLevelAfterCbLo: 'edSegLevelAfterCbLo',
+    segLevelAfterCbHi: 'edSegLevelAfterCbHi',
+    segLevelBeforeProfile: 'edSegLevelBeforeProfile', segLevelAfterProfile: 'edSegLevelAfterProfile',
+    segLevelTune: 'edSegLevelTune',
+    segLevelTuneK: 'edSegLevelTuneK',
+    segLevelTuneSlopeLabel: 'edSegLevelTuneSlopeLabel',
+    segLevelTuneReset: 'edSegLevelTuneReset', segLevelTuneHint: 'edSegLevelTuneHint',
+    segLevelTuneBusy: 'edSegLevelTuneBusy', segLevelTuneBusyText: 'edSegLevelTuneBusyText',
+    segLevelShowBounds: 'edSegLevelShowBounds', segLevelBoundsWrap: 'edSegLevelBoundsWrap',
+    segLevelApply: 'edSegLevelApply', segLevelCancel: 'edSegLevelCancel',
+    globalLevel: 'edGlobalLevel',
     histPanel: 'edHistPanel', histWrap: 'edHistWrap', histCanvas: 'edHistCanvas',
     histHandleLo: 'edHistHandleLo', histHandleHi: 'edHistHandleHi',
     histValLo: 'edHistValLo', histValHi: 'edHistValHi',

@@ -22,18 +22,19 @@ alwaysApply: false
 2. `prefs.js` — localStorage 偏好
 3. `file-parse.js` — 讀檔解析
 4. `file-export.js` — 寫檔輸出
-5. `batch-pipeline.js` — 批次編輯步驟管線
-6. `colormap.js` — 色彩映射
-7. `render.js` — 2D canvas 繪製
-8. `viewer-ui.js` — 點雲檢視器 UI
-9. `calculator.js` — 編輯器計算機
-10. `webgl-3d.js` — 3D WebGL 渲染
-11. `image-view.js` — `createImageView()` 可重用元件
-12. `toolbar-responsive.js` — 工具列「更多」收納
-13. `batch-convert.js` — 批次轉檔頁
-14. `batch-file-manager.js` — 批次檔 (.wbatch) 管理
-15. `batch-edit.js` — 批次編輯頁
-16. `app.js` — 頁面切換與啟動初始化
+5. `segment-level.js` — 自動分區水平校正演算法
+6. `batch-pipeline.js` — 批次編輯步驟管線
+7. `colormap.js` — 色彩映射
+8. `render.js` — 2D canvas 繪製
+9. `viewer-ui.js` — 點雲檢視器 UI
+10. `calculator.js` — 編輯器計算機
+11. `webgl-3d.js` — 3D WebGL 渲染
+12. `image-view.js` — `createImageView()` 可重用元件
+13. `toolbar-responsive.js` — 工具列「更多」收納
+14. `batch-convert.js` — 批次轉檔頁
+15. `batch-file-manager.js` — 批次檔 (.wbatch) 管理
+16. `batch-edit.js` — 批次編輯頁
+17. `app.js` — 頁面切換與啟動初始化
 
 ## 編輯慣例
 
@@ -51,4 +52,5 @@ alwaysApply: false
 - 3D 顯示 → `webgl-3d.js`
 - 批次轉檔 → `batch-convert.js`
 - 批次編輯流程 → `batch-edit.js`、`batch-pipeline.js`、`batch-file-manager.js`
+- 自動分區校正 → `segment-level.js`、`image-view.js`
 - 翻譯字串 → `i18n.js`

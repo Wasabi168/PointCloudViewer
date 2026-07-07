@@ -201,19 +201,19 @@ function batchApplyGlobalLevel(ds) {
     const acc = batchPlaneFitAccessors(ds);
     const plane = batchFitPlaneLeastSquares(acc);
     if (!plane) return { ok: false, reason: 'insufficient' };
-    const { a, b, c } = plane;
+    const { a, b } = plane;
     if (isPcdScatterDataset(ds)) {
         const z = ds.z;
         for (let i = 0; i < z.length; i++) {
             if (!acc.isValid(i)) continue;
-            z[i] -= a * ds.x[i] + b * ds.y[i] + c;
+            z[i] -= a * ds.x[i] + b * ds.y[i];
         }
     } else {
         batchEnsureFloatPixels(ds);
         const data = ds.data;
         for (let i = 0; i < data.length; i++) {
             if (!acc.isValid(i)) continue;
-            data[i] -= a * acc.getX(i) + b * acc.getY(i) + c;
+            data[i] -= a * acc.getX(i) + b * acc.getY(i);
         }
     }
     batchRefreshRange(ds);
@@ -344,10 +344,21 @@ function batchApplyCrop(ds, step) {
     return { ok: true };
 }
 
+function batchApplySegmentLevel(ds) {
+    if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
+    const analysis = analyzeSegmentLeveling(ds);
+    if (!analysis.ok) return { ok: false, reason: analysis.reason || 'insufficient' };
+    batchEnsureFloatPixels(ds);
+    ds.data = analysis.correctedData.slice();
+    batchRefreshRange(ds);
+    return { ok: true };
+}
+
 function batchApplyStep(ds, step) {
     if (!step || !step.type) return { ok: false, reason: 'invalid' };
     switch (step.type) {
         case 'globalLevel': return batchApplyGlobalLevel(ds);
+        case 'segmentLevel': return batchApplySegmentLevel(ds);
         case 'denoise': return batchApplyDenoiseFromStep(ds, step);
         case 'calc': return batchApplyCalc(ds, step.op, step.operand);
         case 'cropRect':
@@ -369,6 +380,7 @@ function describeBatchStep(step) {
     if (!step) return '';
     switch (step.type) {
         case 'globalLevel': return t('bfmStepGlobalLevel');
+        case 'segmentLevel': return t('bfmStepSegmentLevel');
         case 'denoise':
             if (step.auto) return t('bfmStepDenoiseAuto');
             return t('bfmStepDenoise', (step.lo * 100).toFixed(0) + '%', (step.hi * 100).toFixed(0) + '%');

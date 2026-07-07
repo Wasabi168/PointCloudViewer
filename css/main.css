@@ -1358,6 +1358,425 @@
         margin: 0 6px;
     }
 
+    /* 分區校正模式：校正前後並排預覽 */
+    #edViewer.seg-level-active #edCanvas,
+    #edViewer.seg-level-active #edZoomHint,
+    #edViewer.seg-level-active #edZoomIndicator,
+    #edViewer.seg-level-active #edCropOverlay,
+    #edViewer.seg-level-active #edDropHint {
+        display: none !important;
+    }
+    #edViewer.seg-level-active .seg-level-panel {
+        display: flex;
+    }
+    .seg-level-panel {
+        position: absolute;
+        inset: 0;
+        z-index: 50;
+        display: none;
+        flex-direction: column;
+        background: var(--bg);
+        padding: 12px 14px;
+        gap: 10px;
+        min-height: 0;
+    }
+    .seg-level-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        flex-shrink: 0;
+    }
+    .seg-level-mode-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+        padding: 4px 10px;
+        border: 1px solid rgba(79, 140, 255, 0.45);
+        border-radius: 6px;
+        background: rgba(79, 140, 255, 0.12);
+    }
+    .seg-level-mode-badge::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 6px var(--accent);
+    }
+    .seg-level-config {
+        display: none;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .seg-level-config[aria-hidden="false"] {
+        display: flex;
+    }
+    .seg-level-config-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text);
+    }
+    .seg-level-config-item > span {
+        color: var(--muted);
+        white-space: nowrap;
+    }
+    #edSegLevelDir,
+    #edSegLevelCount {
+        padding: 4px 6px;
+        font-size: 12px;
+        font-family: Consolas, monospace;
+        background: #15151d;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+    }
+    #edSegLevelDir {
+        min-width: 7.5em;
+    }
+    #edSegLevelCount {
+        width: 56px;
+    }
+    #edSegLevelDir:focus,
+    #edSegLevelCount:focus {
+        border-color: var(--accent);
+        outline: none;
+    }
+    #edSegLevelDir:disabled,
+    #edSegLevelCount:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+    .seg-level-bounds-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text);
+        cursor: pointer;
+        user-select: none;
+        padding: 4px 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .seg-level-bounds-toggle:hover:not(:has(input:disabled)) {
+        border-color: rgba(79, 140, 255, 0.45);
+        background: rgba(79, 140, 255, 0.08);
+    }
+    .seg-level-bounds-toggle input {
+        width: 14px;
+        height: 14px;
+        margin: 0;
+        accent-color: var(--accent);
+        cursor: pointer;
+    }
+    .seg-level-bounds-toggle input:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+    }
+    .seg-level-actions {
+        display: flex;
+        gap: 8px;
+        margin-left: auto;
+    }
+    .seg-level-tune {
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+        flex-shrink: 0;
+        padding: 10px 12px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+    }
+    .seg-level-tune[aria-hidden="false"] {
+        display: flex;
+    }
+    .seg-level-tune-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .seg-level-tune-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text);
+    }
+    .seg-level-tune-hint {
+        font-size: 11px;
+        color: var(--muted);
+        flex: 1;
+        min-width: 160px;
+    }
+    .seg-level-tune-control {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+    .seg-level-tune-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .seg-level-tune-band {
+        min-width: 72px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: Consolas, monospace;
+        color: var(--text);
+    }
+    .seg-level-tune-slope {
+        font-size: 11px;
+        color: var(--muted);
+        white-space: nowrap;
+        font-family: Consolas, monospace;
+    }
+    #edSegLevelTuneK {
+        width: 96px;
+        padding: 4px 6px;
+        font-size: 12px;
+        font-family: Consolas, monospace;
+        background: #15151d;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+    }
+    #edSegLevelTuneK:focus {
+        border-color: var(--accent);
+        outline: none;
+    }
+    .btn-small {
+        padding: 4px 10px;
+        font-size: 11px;
+    }
+    .seg-level-compare {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        position: relative;
+    }
+    .seg-level-compare.is-busy .seg-level-pane {
+        opacity: 0.35;
+        pointer-events: none;
+    }
+    .seg-level-compare.is-tune-busy {
+        cursor: progress;
+    }
+    .seg-level-compare.is-tune-busy .seg-level-pane-after .seg-level-image-row,
+    .seg-level-compare.is-tune-busy .seg-level-pane-after .seg-level-profile-wrap {
+        opacity: 0.55;
+        pointer-events: none;
+    }
+    .seg-level-pane-after {
+        position: relative;
+    }
+    .seg-level-tune-busy {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 6;
+        background: rgba(21, 21, 29, 0.42);
+        border-radius: 8px;
+        pointer-events: none;
+    }
+    .seg-level-tune-busy.show {
+        display: flex;
+    }
+    .seg-level-tune-busy-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 20px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+    }
+    .seg-level-tune-busy-text {
+        font-size: 12px;
+        color: var(--text);
+        text-align: center;
+    }
+    .seg-level-tune.is-busy .seg-level-tune-control input {
+        opacity: 0.55;
+        pointer-events: none;
+    }
+    .seg-level-busy {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        background: rgba(21, 21, 29, 0.55);
+        border-radius: 8px;
+    }
+    .seg-level-busy.show { display: flex; }
+    .seg-level-busy-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        padding: 22px 28px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+        max-width: min(360px, 90%);
+    }
+    .seg-level-busy-text {
+        font-size: 13px;
+        color: var(--text);
+        text-align: center;
+        line-height: 1.5;
+    }
+    .seg-level-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid rgba(79, 140, 255, 0.2);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: seg-level-spin 0.75s linear infinite;
+    }
+    @keyframes seg-level-spin {
+        to { transform: rotate(360deg); }
+    }
+    .seg-level-pane {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        gap: 6px;
+    }
+    .seg-level-pane-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        letter-spacing: 0.03em;
+    }
+    .seg-level-image-row {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+    }
+    .seg-level-cbar {
+        flex-shrink: 0;
+        width: 42px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 4px 0;
+    }
+    .seg-level-cbar-val {
+        font-size: 10px;
+        line-height: 1.2;
+        font-family: Consolas, monospace;
+        color: var(--muted);
+        text-align: center;
+        max-width: 100%;
+        word-break: break-all;
+    }
+    .seg-level-cbar-canvas {
+        display: block;
+        width: 14px;
+        flex: 1;
+        min-height: 72px;
+        max-height: 100%;
+        border-radius: 3px;
+        border: 1px solid var(--border);
+    }
+    .seg-level-canvas-wrap {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-start;
+        background: #15151d;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+        padding: 0;
+    }
+    .seg-level-canvas-wrap.seg-level-zoomable {
+        cursor: grab;
+    }
+    .seg-level-canvas-wrap.seg-level-zoomable.grabbing {
+        cursor: grabbing;
+    }
+    .seg-level-canvas-wrap canvas {
+        display: block;
+        max-width: none;
+        max-height: none;
+    }
+    .seg-level-profile-wrap {
+        flex-shrink: 0;
+        height: 118px;
+        min-height: 96px;
+        position: relative;
+        background: #15151d;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+        padding: 0;
+    }
+    .seg-level-profile-wrap.seg-level-zoomable {
+        cursor: grab;
+    }
+    .seg-level-profile-wrap.seg-level-zoomable.grabbing {
+        cursor: grabbing;
+    }
+    .seg-level-profile {
+        display: block;
+        max-width: none;
+        max-height: none;
+    }
+    .seg-level-zoom-ind {
+        position: absolute;
+        right: 8px;
+        bottom: 6px;
+        z-index: 2;
+        padding: 2px 7px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-family: Consolas, monospace;
+        color: #c8c8dc;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+    }
+    .seg-level-zoomable:hover .seg-level-zoom-ind,
+    .seg-level-zoomable.grabbing .seg-level-zoom-ind {
+        opacity: 1;
+    }
+    #edSegLevel.tool-active {
+        background: rgba(79, 140, 255, 0.2);
+        border-color: var(--accent);
+        color: var(--accent-hover);
+    }
+
     /* ===== 批次轉檔 ===== */
     .batch-page main {
         grid-template-columns: 1fr 300px;
