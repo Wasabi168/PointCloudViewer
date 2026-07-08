@@ -713,10 +713,12 @@ const canvasEl = document.getElementById('canvas');
 let panning = false;
 let panStart = null;
 
-canvasEl.addEventListener('mousedown', (e) => {
-    if (!currentDataset) return;
-    if (e.button !== 0) return; // 只處理左鍵
-    if (cursorMode !== 'pan') return;   // 數值模式下不啟動平移
+/** 剖面 / 距離 / 區域模式：左鍵量測，中鍵拖曳平移 */
+function isOverlayMeasureMode() {
+    return cursorMode === 'profile' || cursorMode === 'measure' || cursorMode === 'area';
+}
+
+function startCanvasPan(e) {
     panning = true;
     panStart = {
         x: e.clientX,
@@ -729,6 +731,18 @@ canvasEl.addEventListener('mousedown', (e) => {
     canvasEl.classList.add('grabbing');
     try { canvasEl.setPointerCapture && canvasEl.setPointerCapture(e.pointerId); } catch (_) {}
     e.preventDefault();
+}
+
+canvasEl.addEventListener('mousedown', (e) => {
+    if (!currentDataset || view3dActive) return;
+    const leftPan = e.button === 0 && cursorMode === 'pan';
+    const middlePan = e.button === 1 && isOverlayMeasureMode();
+    if (!leftPan && !middlePan) return;
+    startCanvasPan(e);
+});
+
+canvasEl.addEventListener('auxclick', (e) => {
+    if (e.button === 1 && isOverlayMeasureMode()) e.preventDefault();
 });
 
 window.addEventListener('mousemove', (e) => {
@@ -2187,8 +2201,8 @@ function applyCursorMode(mode, opts) {
         valueIndicator.classList.remove('show');
     }
 
-    // 若切到 pan，結束任何尚未結束的拖曳狀態
-    if (mode === 'pan' && panning) {
+    // 切換模式時結束任何尚未結束的平移
+    if (panning) {
         panning = false;
         canvasEl.classList.remove('grabbing');
     }
