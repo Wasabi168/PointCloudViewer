@@ -936,6 +936,15 @@
         width: 100%;
         height: 160px;
     }
+    .profile-plot.measure-mode,
+    .profile-plot.measure-mode #profileCanvas {
+        cursor: crosshair;
+    }
+    .profile-measure-btn.active {
+        background: #4f8cff;
+        border-color: #4f8cff;
+        color: #fff;
+    }
     .profile-tip {
         position: absolute;
         pointer-events: none;

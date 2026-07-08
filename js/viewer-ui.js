@@ -854,6 +854,7 @@ const profileClearBtn = document.getElementById('profileClear');
 const profileBandWrap = document.getElementById('profileBandWrap');
 const profileBandInput = document.getElementById('profileBand');
 const profileChartStyleWrap = document.getElementById('profileChartStyleWrap');
+const profileMeasureBtn = document.getElementById('profileMeasureBtn');
 
 let profileChartStyle = getUserPref('profileChartStyle');
 if (profileChartStyle !== 'line' && profileChartStyle !== 'dots') profileChartStyle = 'line';
@@ -898,9 +899,41 @@ const profileState = {
     geom: null,
     hoverIndex: null,
     halfW: 0,
+    measureMode: false,
+    measurePts: [],   // 圖表上選取的資料索引（最多 2 個）
 };
 
 const PROFILE_HIT_RADIUS = 10;
+const PROFILE_CHART_PICK_RADIUS = 22;
+const PROFILE_MEASURE_COLORS = ['#ff6b6b', '#51cf66'];
+const PROFILE_MEASURE_DIST_COLOR = '#ffd24a';
+const PROFILE_MEASURE_STEP_COLOR = '#ff7b72';
+const PROFILE_MEASURE_FILL = 'rgba(255,210,74,0.12)';
+
+function syncProfileMeasureUI() {
+    if (profileMeasureBtn) {
+        profileMeasureBtn.classList.toggle('active', profileState.measureMode);
+    }
+    const plot = profileCanvas && profileCanvas.parentElement;
+    if (plot) plot.classList.toggle('measure-mode', profileState.measureMode);
+}
+
+function clearProfileMeasurePts() {
+    profileState.measurePts = [];
+    profileState.hoverIndex = null;
+}
+
+if (profileMeasureBtn) {
+    profileMeasureBtn.addEventListener('click', () => {
+        profileState.measureMode = !profileState.measureMode;
+        clearProfileMeasurePts();
+        profileTip.classList.remove('show');
+        syncProfileMeasureUI();
+        renderProfileChart();
+        drawProfileOverlay();
+    });
+}
+syncProfileMeasureUI();
 
 /** 在已排序(遞增)的 dist 陣列中找最接近 target 的索引 */
 function nearestDistIndex(dist, target) {
@@ -1162,9 +1195,9 @@ function drawProfileOverlay() {
         ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
     }
 
-    // hover 標記（與圖表連動）
+    // hover 標記（與圖表連動；測量模式改由 measurePts 顯示）
     const d = profileState.data;
-    if (profileState.hoverIndex != null && d && d.N > 0) {
+    if (!profileState.measureMode && profileState.hoverIndex != null && d && d.N > 0) {
         const i = profileState.hoverIndex;
         let hx, hy;
         if (d.scatter) {
@@ -1178,6 +1211,43 @@ function drawProfileOverlay() {
         ctx.beginPath(); ctx.arc(hp.x, hp.y, 5, 0, Math.PI * 2);
         ctx.fillStyle = '#ffd24a'; ctx.fill();
         ctx.lineWidth = 1.5; ctx.strokeStyle = '#000'; ctx.stroke();
+    }
+
+    // 剖面圖測量點（連動主視圖標記）
+    if (d && profileState.measurePts.length > 0) {
+        for (let k = 0; k < profileState.measurePts.length; k++) {
+            const i = profileState.measurePts[k];
+            let hx, hy;
+            if (d.scatter) {
+                hx = d.wx[i]; hy = d.wy[i];
+            } else {
+                const tt = d.N > 1 ? i / (d.N - 1) : 0;
+                hx = L.x0 + (L.x1 - L.x0) * tt;
+                hy = L.y0 + (L.y1 - L.y0) * tt;
+            }
+            const hp = profilePtToScreen(hx, hy);
+            ctx.beginPath(); ctx.arc(hp.x, hp.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = PROFILE_MEASURE_COLORS[k]; ctx.fill();
+            ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+        }
+    }
+
+    // 測量模式：預覽下一個選點
+    if (profileState.measureMode && profileState.hoverIndex != null && d && d.N > 0
+        && !profileState.measurePts.includes(profileState.hoverIndex)) {
+        const i = profileState.hoverIndex;
+        let hx, hy;
+        if (d.scatter) {
+            hx = d.wx[i]; hy = d.wy[i];
+        } else {
+            const tt = d.N > 1 ? i / (d.N - 1) : 0;
+            hx = L.x0 + (L.x1 - L.x0) * tt;
+            hy = L.y0 + (L.y1 - L.y0) * tt;
+        }
+        const hp = profilePtToScreen(hx, hy);
+        ctx.beginPath(); ctx.arc(hp.x, hp.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,210,74,0.55)'; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#ffd24a'; ctx.stroke();
     }
 }
 
@@ -1254,28 +1324,110 @@ function sampleProfileScatter(line, halfW) {
     return { dist, vals, wx, wy, vmin, vmax, distPx: len, N, anyValid, scatter: true, halfW };
 }
 
+/** 剖面圖座標：資料索引 → 繪圖區像素座標 */
+function profileChartPointPx(d, g, i) {
+    const v = d.vals[i];
+    if (!Number.isFinite(v)) return null;
+    const distPx = d.distPx || 1;
+    const range = (d.vmax - d.vmin) || 1;
+    return {
+        px: g.padL + (d.dist[i] / distPx) * g.plotW,
+        py: g.padT + (1 - (v - d.vmin) / range) * g.plotH,
+    };
+}
+
+/** 在剖面圖上依滑鼠位置選取最近的資料點 */
+function profileChartPickIndex(mx, my) {
+    const d = profileState.data, g = profileState.geom;
+    if (!d || !g || d.N === 0) return null;
+    let bestIdx = -1, bestDist2 = Infinity;
+    const r2 = PROFILE_CHART_PICK_RADIUS * PROFILE_CHART_PICK_RADIUS;
+    for (let i = 0; i < d.N; i++) {
+        const p = profileChartPointPx(d, g, i);
+        if (!p) continue;
+        const dx = mx - p.px, dy = my - p.py;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestDist2) { bestDist2 = d2; bestIdx = i; }
+    }
+    return bestDist2 <= r2 ? bestIdx : null;
+}
+
+/** 剖面圖兩點測量結果 */
+function profileMeasureResult() {
+    const pts = profileState.measurePts;
+    const d = profileState.data;
+    if (!d || pts.length < 2) return null;
+    const i0 = pts[0], i1 = pts[1];
+    if (!Number.isFinite(d.vals[i0]) || !Number.isFinite(d.vals[i1])) return null;
+    return {
+        i0, i1,
+        dist: Math.abs(d.dist[i1] - d.dist[i0]),
+        step: d.vals[i1] - d.vals[i0],
+    };
+}
+
+function headerUnit(key) {
+    if (!currentDataset || !currentDataset.header) return '';
+    const h = currentDataset.header;
+    const hyphen = key.replace('unit', '-unit');
+    const raw = h[key] ?? h[hyphen] ?? '';
+    return String(raw).replace(/[\[\]]/g, '').trim();
+}
+
+/** 剖面測量：距離單位（影像 px；點雲取 header xunit） */
+function profileMeasureDistUnit(d) {
+    if (d && d.scatter) {
+        return headerUnit('xunit') || t('measureUnitWorld');
+    }
+    return t('measureUnitPx');
+}
+
+/** 剖面測量：階高單位（取 header zunit） */
+function profileMeasureStepUnit() {
+    return headerUnit('zunit') || headerUnit('z-unit') || '';
+}
+
+function formatProfileMeasureDist(mr, d) {
+    const unit = profileMeasureDistUnit(d);
+    return `${t('measureDist')} ${formatValue(mr.dist)} ${unit}`;
+}
+
+function formatProfileMeasureStep(mr) {
+    const unit = profileMeasureStepUnit();
+    const val = formatValue(mr.step);
+    return unit ? `${t('profileMeasureStep')} ${val} ${unit}` : `${t('profileMeasureStep')} ${val}`;
+}
+
+function formatProfileMetaLine(d) {
+    if (d.scatter) {
+        return `${t('profileLength')}: ${formatValue(d.distPx)} · ` +
+            `${t('profilePointsInBand')}: ${d.N} · ` +
+            `${t('profileRange')}: ${formatValue(d.vmin)} ~ ${formatValue(d.vmax)}`;
+    }
+    return `${t('profileLength')}: ${d.distPx.toFixed(1)} px · ` +
+        `${t('profileSamples')}: ${d.N} · ` +
+        `${t('profileRange')}: ${formatValue(d.vmin)} ~ ${formatValue(d.vmax)}`;
+}
+
 /** 繪製剖面圖（座標軸、格線、折線/散點），並更新面板資訊 */
 function renderProfileChart() {
     const d = profileState.data;
     if (!d) { profilePanel.classList.remove('show'); return; }
     profilePanel.classList.add('show');
 
-    // 點雲模式顯示帶寬輸入框；圖表樣式切換一律顯示
+    // 點雲模式顯示帶寬輸入框；圖表樣式切換與測量按鈕一律顯示
     profileBandWrap.style.display = d.scatter ? 'inline-flex' : 'none';
     if (profileChartStyleWrap) profileChartStyleWrap.style.display = 'inline-flex';
+    if (profileMeasureBtn) profileMeasureBtn.style.display = 'inline-flex';
     syncProfileChartStyleUI();
+    syncProfileMeasureUI();
 
-    if (d.scatter) {
-        profileMeta.textContent =
-            `${t('profileLength')}: ${formatValue(d.distPx)} · ` +
-            `${t('profilePointsInBand')}: ${d.N} · ` +
-            `${t('profileRange')}: ${formatValue(d.vmin)} ~ ${formatValue(d.vmax)}`;
-    } else {
-        profileMeta.textContent =
-            `${t('profileLength')}: ${d.distPx.toFixed(1)} px · ` +
-            `${t('profileSamples')}: ${d.N} · ` +
-            `${t('profileRange')}: ${formatValue(d.vmin)} ~ ${formatValue(d.vmax)}`;
+    let meta = formatProfileMetaLine(d);
+    const mr = profileMeasureResult();
+    if (mr) {
+        meta += ` · ${formatProfileMeasureDist(mr, d)} · ${formatProfileMeasureStep(mr)}`;
     }
+    profileMeta.textContent = meta;
 
     const canvas = profileCanvas;
     const dpr = window.devicePixelRatio || 1;
@@ -1358,7 +1510,294 @@ function renderProfileChart() {
         ctx.stroke();
     }
 
-    if (profileState.hoverIndex != null) drawProfileChartCrosshair();
+    if (profileState.hoverIndex != null && !profileState.measureMode) drawProfileChartCrosshair();
+    drawProfileChartMeasure();
+}
+
+/** 在剖面圖上繪製測量標記（直角標註：水平距離 + 垂直階高） */
+function profileMeasureLabelBox(ctx, text, anchorX, anchorY, align, baseline) {
+    const font = '10px Consolas, monospace';
+    const pad = 4;
+    const boxH = 14;
+    ctx.font = font;
+    const tw = ctx.measureText(text).width;
+    const boxW = tw + pad * 2;
+    let bx = anchorX;
+    if (align === 'center') bx -= boxW / 2;
+    else if (align === 'right') bx -= boxW;
+    let by = anchorY;
+    if (baseline === 'middle') by -= boxH / 2;
+    else if (baseline === 'bottom' || baseline === 'alphabetic') by -= boxH;
+    return { text, anchorX, anchorY, align, baseline, bx, by, boxW, boxH, pad, tw };
+}
+
+function profileMeasureBoxesOverlap(a, b, gap) {
+    const g = gap ?? 5;
+    return !(a.bx + a.boxW + g <= b.bx || b.bx + b.boxW + g <= a.bx
+        || a.by + a.boxH + g <= b.by || b.by + b.boxH + g <= a.by);
+}
+
+function profileMeasureBoxInPlot(box, geom, margin) {
+    const m = margin ?? 2;
+    const x0 = geom.padL + m;
+    const y0 = geom.padT + m;
+    const x1 = geom.padL + geom.plotW - m;
+    const y1 = geom.padT + geom.plotH - m;
+    return box.bx >= x0 && box.by >= y0 && box.bx + box.boxW <= x1 && box.by + box.boxH <= y1;
+}
+
+function profileMeasureLabelScore(dist, step, geom) {
+    let score = 0;
+    if (profileMeasureBoxInPlot(dist, geom)) score += 10; else score -= 50;
+    if (profileMeasureBoxInPlot(step, geom)) score += 10; else score -= 50;
+    if (!profileMeasureBoxesOverlap(dist, step)) score += 100;
+    // 偏好標籤靠近各自量測線中點
+    const distMidDy = Math.abs((dist.by + dist.boxH / 2) - dist.anchorY);
+    const stepMidDx = Math.abs((step.bx + step.boxW / 2) - step.anchorX);
+    score -= distMidDy * 0.15 + stepMidDx * 0.15;
+    return score;
+}
+
+/** 選擇距離／階高標籤位置，避免重疊 */
+function profileMeasurePickLabels(ctx, mr, d, g, p0, p1, corner) {
+    const distText = formatProfileMeasureDist(mr, d);
+    const stepText = formatProfileMeasureStep(mr);
+    const distMidX = (p0.px + corner.px) / 2;
+    const stepMidY = (corner.py + p1.py) / 2;
+    const sgnX = p1.px >= p0.px ? 1 : -1;
+    const sgnY = p1.py >= p0.py ? 1 : -1;
+    const horizLen = Math.abs(corner.px - p0.px);
+    const vertLen = Math.abs(p1.py - corner.py);
+
+    const distCandidates = [];
+    const stepCandidates = [];
+    const distPerps = [-sgnY, sgnY];
+    const stepPerps = [sgnX, -sgnX];
+    const offsets = [10, 18, 26, 34];
+
+    for (const perp of distPerps) {
+        for (const off of offsets) {
+            const ay = p0.py + perp * off;
+            distCandidates.push(profileMeasureLabelBox(
+                ctx, distText, distMidX, ay, 'center', perp < 0 ? 'bottom' : 'top',
+            ));
+        }
+    }
+    // 水平段很短時，改放在遠離轉角的一端
+    if (horizLen < 72) {
+        const farX = sgnX > 0 ? p0.px + 4 : p0.px - 4;
+        for (const perp of distPerps) {
+            for (const off of offsets) {
+                distCandidates.push(profileMeasureLabelBox(
+                    ctx, distText, farX, p0.py + perp * off,
+                    sgnX > 0 ? 'left' : 'right', perp < 0 ? 'bottom' : 'top',
+                ));
+            }
+        }
+    }
+
+    for (const perp of stepPerps) {
+        for (const off of offsets) {
+            const ax = corner.px + perp * off;
+            stepCandidates.push(profileMeasureLabelBox(
+                ctx, stepText, ax, stepMidY, perp > 0 ? 'left' : 'right', 'middle',
+            ));
+        }
+    }
+    // 垂直段很短時，改放在遠離轉角的一端
+    if (vertLen < 36) {
+        const farY = sgnY > 0 ? p1.py - 4 : p1.py + 4;
+        for (const perp of stepPerps) {
+            for (const off of offsets) {
+                stepCandidates.push(profileMeasureLabelBox(
+                    ctx, stepText, corner.px + perp * off, farY,
+                    perp > 0 ? 'left' : 'right', sgnY > 0 ? 'bottom' : 'top',
+                ));
+            }
+        }
+    }
+
+    let best = null;
+    for (const dist of distCandidates) {
+        for (const step of stepCandidates) {
+            const score = profileMeasureLabelScore(dist, step, g);
+            if (!best || score > best.score) best = { dist, step, score };
+        }
+    }
+
+    // 仍重疊或分數過低：在轉角外側垂直堆疊兩行標籤
+    if (!best || best.score < 100 || profileMeasureBoxesOverlap(best.dist, best.step)) {
+        const outX = corner.px + sgnX * 14;
+        let outY = corner.py - sgnY * 14;
+        const dist = profileMeasureLabelBox(
+            ctx, distText, outX, outY, sgnX > 0 ? 'left' : 'right', sgnY > 0 ? 'bottom' : 'top',
+        );
+        outY += sgnY > 0 ? -(dist.boxH + 5) : (dist.boxH + 5);
+        const step = profileMeasureLabelBox(
+            ctx, stepText, outX, outY, sgnX > 0 ? 'left' : 'right', sgnY > 0 ? 'bottom' : 'top',
+        );
+        if (!profileMeasureBoxInPlot(dist, g) || !profileMeasureBoxInPlot(step, g)) {
+            // 改放到圖表內側空白處垂直堆疊
+            const cx = Math.min(g.padL + g.plotW - 4, Math.max(g.padL + 4, corner.px));
+            let cy = Math.min(g.padT + g.plotH - 4, Math.max(g.padT + 4, corner.py - sgnY * 20));
+            const dBox = profileMeasureLabelBox(ctx, distText, cx, cy, 'center', 'bottom');
+            cy += sgnY > 0 ? -(dBox.boxH + 5) : (dBox.boxH + 5);
+            const sBox = profileMeasureLabelBox(ctx, stepText, cx, cy, 'center', sgnY > 0 ? 'bottom' : 'top');
+            return { dist: dBox, step: sBox, stacked: true };
+        }
+        return { dist, step, stacked: true };
+    }
+    return { dist: best.dist, step: best.step, stacked: false };
+}
+
+function drawProfileMeasureDimLabel(ctx, box, color) {
+    const { text, bx, by, boxW, boxH, pad, tw, align } = box;
+    ctx.font = '10px Consolas, monospace';
+    ctx.fillStyle = 'rgba(0,0,0,0.78)';
+    ctx.fillRect(bx, by, boxW, boxH);
+    ctx.fillStyle = color;
+    ctx.fillRect(bx, by, 2, boxH);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = align;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, bx + pad + (align === 'center' ? tw / 2 : align === 'right' ? tw : 0), by + boxH / 2 + 0.5);
+}
+
+function drawProfileMeasureLabelLeader(ctx, box, color, targetX, targetY) {
+    const cx = box.bx + box.boxW / 2;
+    const cy = box.by + box.boxH / 2;
+    const dx = targetX - cx, dy = targetY - cy;
+    if (Math.hypot(dx, dy) < 24) return;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(targetX, targetY);
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawProfileChartMeasure() {
+    const pts = profileState.measurePts;
+    const d = profileState.data, g = profileState.geom;
+    if (!d || !g || pts.length === 0) return;
+    const ctx = profileCanvas.getContext('2d');
+    const coords = [];
+    for (let k = 0; k < pts.length; k++) {
+        const p = profileChartPointPx(d, g, pts[k]);
+        if (!p) continue;
+        coords.push({ ...p, color: PROFILE_MEASURE_COLORS[k] });
+    }
+
+    if (coords.length === 2) {
+        const p0 = coords[0], p1 = coords[1];
+        const corner = { px: p1.px, py: p0.py };
+        const mr = profileMeasureResult();
+        const distColor = PROFILE_MEASURE_DIST_COLOR;
+        const stepColor = PROFILE_MEASURE_STEP_COLOR;
+
+        ctx.save();
+        // 直角三角形淡色填充，強調量測區域
+        ctx.beginPath();
+        ctx.moveTo(p0.px, p0.py);
+        ctx.lineTo(corner.px, corner.py);
+        ctx.lineTo(p1.px, p1.py);
+        ctx.closePath();
+        ctx.fillStyle = PROFILE_MEASURE_FILL;
+        ctx.fill();
+
+        // 水平線：距離（虛線 + 描邊，與剖面藍線區隔）
+        ctx.setLineDash([5, 4]);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(p0.px, p0.py);
+        ctx.lineTo(corner.px, corner.py);
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.strokeStyle = distColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 垂直線：階高（實線 + 描邊）
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(corner.px, corner.py);
+        ctx.lineTo(p1.px, p1.py);
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.strokeStyle = stepColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 直角記號
+        const tick = 6;
+        const sgnX = p1.px >= p0.px ? 1 : -1;
+        const sgnY = p1.py >= p0.py ? 1 : -1;
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.moveTo(corner.px, corner.py);
+        ctx.lineTo(corner.px - sgnX * tick, corner.py);
+        ctx.moveTo(corner.px, corner.py);
+        ctx.lineTo(corner.px, corner.py - sgnY * tick);
+        ctx.stroke();
+
+        // 端點短劃線（標尺刻度）
+        const cap = 4;
+        ctx.strokeStyle = distColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(p0.px, p0.py - cap); ctx.lineTo(p0.px, p0.py + cap);
+        ctx.moveTo(corner.px, corner.py - cap); ctx.lineTo(corner.px, corner.py + cap);
+        ctx.stroke();
+        ctx.strokeStyle = stepColor;
+        ctx.beginPath();
+        ctx.moveTo(corner.px - cap, corner.py); ctx.lineTo(corner.px + cap, corner.py);
+        ctx.moveTo(p1.px - cap, p1.py); ctx.lineTo(p1.px + cap, p1.py);
+        ctx.stroke();
+
+        if (mr) {
+            const distMidX = (p0.px + corner.px) / 2;
+            const stepMidY = (corner.py + p1.py) / 2;
+            const layout = profileMeasurePickLabels(ctx, mr, d, g, p0, p1, corner);
+            if (!layout.stacked) {
+                drawProfileMeasureLabelLeader(ctx, layout.dist, distColor, distMidX, p0.py);
+                drawProfileMeasureLabelLeader(ctx, layout.step, stepColor, corner.px, stepMidY);
+            }
+            drawProfileMeasureDimLabel(ctx, layout.dist, distColor);
+            drawProfileMeasureDimLabel(ctx, layout.step, stepColor);
+        }
+        ctx.setLineDash([]);
+        ctx.restore();
+    }
+
+    for (const c of coords) {
+        ctx.beginPath();
+        ctx.arc(c.px, c.py, 5, 0, Math.PI * 2);
+        ctx.fillStyle = c.color;
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+    }
+    if (profileState.measureMode && profileState.hoverIndex != null
+        && !pts.includes(profileState.hoverIndex)) {
+        const p = profileChartPointPx(d, g, profileState.hoverIndex);
+        if (p) {
+            ctx.beginPath();
+            ctx.arc(p.px, p.py, 4, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,210,74,0.55)';
+            ctx.fill();
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#ffd24a';
+            ctx.stroke();
+        }
+    }
 }
 
 /** 在剖面圖上畫 hover 垂直線與點 */
@@ -1391,34 +1830,19 @@ function clearProfile() {
     profileState.data = null;
     profileState.geom = null;
     profileState.hoverIndex = null;
+    clearProfileMeasurePts();
     profileTip.classList.remove('show');
     profilePanel.classList.remove('show');
     if (profileBandWrap) profileBandWrap.style.display = 'none';
     if (profileChartStyleWrap) profileChartStyleWrap.style.display = 'none';
+    if (profileMeasureBtn) profileMeasureBtn.style.display = 'none';
     drawProfileOverlay();
 }
 
-// 在圖表上 hover：顯示對應距離/數值，並連動影像上的標記
-profileCanvas.addEventListener('mousemove', (e) => {
-    const d = profileState.data, g = profileState.geom;
-    if (!d || !g) return;
-    if (d.N === 0) return;
-    const rect = profileCanvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    let frac = (mx - g.padL) / g.plotW;
-    if (frac < 0) frac = 0; else if (frac > 1) frac = 1;
-    const idx = nearestDistIndex(d.dist, frac * d.distPx);
-    profileState.hoverIndex = idx;
-    renderProfileChart();
-    drawProfileOverlay();
-
-    const v = d.vals[idx];
-    const distLabel = d.scatter ? t('profileAxisDistWorld') : t('profileAxisDist');
-    profileTip.innerHTML =
-        `<div><span class="k">${distLabel}:</span>${formatValue(d.dist[idx])}</div>` +
-        `<div><span class="k">${t('valueLabel')}:</span>${formatValue(v)}</div>`;
+// 在圖表上 hover / 測量：顯示對應距離/數值，並連動影像上的標記
+function showProfileChartTip(e, html) {
+    profileTip.innerHTML = html;
     profileTip.classList.add('show');
-
     const plotRect = profileCanvas.parentElement.getBoundingClientRect();
     const tw = profileTip.offsetWidth, th = profileTip.offsetHeight;
     let left = (e.clientX - plotRect.left) + 12;
@@ -1429,6 +1853,73 @@ profileCanvas.addEventListener('mousemove', (e) => {
     if (top  < 2) top  = 2;
     profileTip.style.left = left + 'px';
     profileTip.style.top  = top + 'px';
+}
+
+function updateProfileMeasureTip(e) {
+    const d = profileState.data;
+    if (!d) return;
+    const n = profileState.measurePts.length;
+    if (n < 2) {
+        const hint = n === 0 ? t('profileMeasurePick1') : t('profileMeasurePick2');
+        showProfileChartTip(e, `<div>${hint}</div>`);
+        return;
+    }
+    const mr = profileMeasureResult();
+    if (!mr) return;
+    showProfileChartTip(e,
+        `<div><span class="k">${t('measureDist')}:</span>${formatValue(mr.dist)} ${profileMeasureDistUnit(d)}</div>` +
+        `<div><span class="k">${t('profileMeasureStep')}:</span>${formatValue(mr.step)}${profileMeasureStepUnit() ? ' ' + profileMeasureStepUnit() : ''}</div>`);
+}
+
+profileCanvas.addEventListener('click', (e) => {
+    if (!profileState.measureMode) return;
+    const d = profileState.data, g = profileState.geom;
+    if (!d || !g || d.N === 0) return;
+    const rect = profileCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const idx = profileChartPickIndex(mx, my);
+    if (idx == null) return;
+    if (profileState.measurePts.length >= 2) {
+        profileState.measurePts = [idx];
+    } else {
+        profileState.measurePts.push(idx);
+    }
+    profileState.hoverIndex = null;
+    renderProfileChart();
+    drawProfileOverlay();
+    updateProfileMeasureTip(e);
+});
+
+profileCanvas.addEventListener('mousemove', (e) => {
+    const d = profileState.data, g = profileState.geom;
+    if (!d || !g) return;
+    if (d.N === 0) return;
+    const rect = profileCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+
+    if (profileState.measureMode) {
+        const my = e.clientY - rect.top;
+        const idx = profileChartPickIndex(mx, my);
+        profileState.hoverIndex = idx;
+        renderProfileChart();
+        drawProfileOverlay();
+        if (idx != null) updateProfileMeasureTip(e);
+        else profileTip.classList.remove('show');
+        return;
+    }
+
+    let frac = (mx - g.padL) / g.plotW;
+    if (frac < 0) frac = 0; else if (frac > 1) frac = 1;
+    const idx = nearestDistIndex(d.dist, frac * d.distPx);
+    profileState.hoverIndex = idx;
+    renderProfileChart();
+    drawProfileOverlay();
+
+    const v = d.vals[idx];
+    const distLabel = d.scatter ? t('profileAxisDistWorld') : t('profileAxisDist');
+    showProfileChartTip(e,
+        `<div><span class="k">${distLabel}:</span>${formatValue(d.dist[idx])}</div>` +
+        `<div><span class="k">${t('valueLabel')}:</span>${formatValue(v)}</div>`);
 });
 
 profileCanvas.addEventListener('mouseleave', () => {
@@ -1465,6 +1956,7 @@ function recomputeProfile() {
     if (profileState.hoverIndex != null && profileState.hoverIndex >= profileState.data.N) {
         profileState.hoverIndex = null;
     }
+    clearProfileMeasurePts();
     renderProfileChart();
     drawProfileOverlay();
 }
@@ -1512,6 +2004,7 @@ viewerEl.addEventListener('mousedown', (e) => {
     profileState.data = null;
     profileState.geom = null;
     profileState.hoverIndex = null;
+    clearProfileMeasurePts();
     profileTip.classList.remove('show');
     drawProfileOverlay();
     e.preventDefault();
