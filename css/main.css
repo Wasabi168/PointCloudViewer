@@ -1259,7 +1259,26 @@
     .ed-icon-group button:disabled { opacity: 0.35; cursor: not-allowed; }
 
     /* 裁切模式切換（方形 / 圓形） */
-    .ed-crop-toggle button { padding: 6px 14px; font-size: 13px; }
+    .ed-crop-toggle button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 10px;
+        min-width: 36px;
+    }
+    .ed-crop-toggle button svg {
+        width: 18px;
+        height: 18px;
+        display: block;
+        flex-shrink: 0;
+    }
+    .ed-crop-toggle button.btn-secondary {
+        border: none;
+        background: transparent;
+        border-radius: 0;
+    }
+    .ed-crop-toggle button.btn-secondary:hover:not(:disabled) { background: transparent; color: var(--text); }
+    .ed-crop-toggle button:disabled { opacity: 0.35; cursor: not-allowed; }
 
     /* 裁切動作按鈕 */
     .ed-crop-actions button {

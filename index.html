@@ -351,8 +351,16 @@
                     <span class="ed-toolbar-label" data-i18n="toolGroupCrop">裁切</span>
                     <div class="ed-toolbar-block-row">
                         <div class="cursor-toggle ed-crop-toggle" id="edCropModeToggle">
-                            <button type="button" id="edCropRect" data-i18n="cropRectShort" data-i18n-title="cropRectTitle">方形</button>
-                            <button type="button" id="edCropCircle" data-i18n="cropCircleShort" data-i18n-title="cropCircleTitle">圓形</button>
+                            <button type="button" id="edCropRect" data-i18n-title="cropRectTitle" data-i18n-aria="cropRect" title="方形裁切" aria-label="方形裁切">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                                    <rect x="5" y="5" width="14" height="14" rx="1" stroke-dasharray="4 3"/>
+                                </svg>
+                            </button>
+                            <button type="button" id="edCropCircle" data-i18n-title="cropCircleTitle" data-i18n-aria="cropCircle" title="圓形裁切" aria-label="圓形裁切">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                    <circle cx="12" cy="12" r="7" stroke-dasharray="4 3"/>
+                                </svg>
+                            </button>
                         </div>
                         <div class="ctrl-group ed-crop-actions" id="edCropActions">
                             <button type="button" id="edCropApply" data-i18n="cropApplyBtn" disabled>套用</button>
@@ -677,9 +685,21 @@
                         <div class="seg-level-config-item nan-patch-roi-tools">
                             <span data-i18n="nanPatchRoiLabel">修補範圍</span>
                             <div class="cursor-toggle ed-crop-toggle" id="edNanPatchRoiToggle">
-                                <button type="button" id="edNanPatchRoiRect" data-i18n="cropRectShort" data-i18n-title="nanPatchRoiRectTitle">方形</button>
-                                <button type="button" id="edNanPatchRoiCircle" data-i18n="cropCircleShort" data-i18n-title="nanPatchRoiCircleTitle">圓形</button>
-                                <button type="button" id="edNanPatchRoiClear" class="btn-secondary" data-i18n="nanPatchRoiClear" data-i18n-title="nanPatchRoiClearTitle">清除</button>
+                                <button type="button" id="edNanPatchRoiRect" data-i18n-title="nanPatchRoiRectTitle" data-i18n-aria="cropRectShort" title="方形修補範圍" aria-label="方形">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                                        <rect x="5" y="5" width="14" height="14" rx="1" stroke-dasharray="4 3"/>
+                                    </svg>
+                                </button>
+                                <button type="button" id="edNanPatchRoiCircle" data-i18n-title="nanPatchRoiCircleTitle" data-i18n-aria="cropCircleShort" title="圓形修補範圍" aria-label="圓形">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                        <circle cx="12" cy="12" r="7" stroke-dasharray="4 3"/>
+                                    </svg>
+                                </button>
+                                <button type="button" id="edNanPatchRoiClear" class="btn-secondary" data-i18n-title="nanPatchRoiClearTitle" data-i18n-aria="nanPatchRoiClear" title="清除框選範圍" aria-label="清除">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                                        <path d="M6 6l12 12M18 6L6 18"/>
+                                    </svg>
+                                </button>
                             </div>
                         </div>
                     </div>
