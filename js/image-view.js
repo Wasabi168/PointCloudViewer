@@ -48,6 +48,24 @@ function createImageView(ids, options) {
             segSkewViews: null,
             segSkewPan: null,
             segSkewShowBounds: true,
+            medianFilter: false,
+            medianFilterBusy: false,
+            medianFilterRunId: 0,
+            medianFilterBase: null,
+            medianFilterResult: null,
+            medianFilterViews: null,
+            medianFilterPan: null,
+            nanPatch: false,
+            nanPatchBusy: false,
+            nanPatchRunId: 0,
+            nanPatchBase: null,
+            nanPatchResult: null,
+            nanPatchViews: null,
+            nanPatchPan: null,
+            nanPatchRoiMode: null,
+            nanPatchRoi: null,
+            nanPatchRoiSel: null,
+            nanPatchRoiAction: null,
             histLo: 0, histHi: 1,
             histAuto: false,   // 刪除雜點是否以自動（IQR）方式套用
             history: [],         // 編輯歷史（資料集快照）
@@ -547,7 +565,9 @@ function createImageView(ids, options) {
         renderColorbar(el.colormap.value);
         if (st.dataset) {
             if (st.edit.segLevel) renderSegLevelCompare();
-            if (st.edit.segSkew) renderSegSkewCompare();
+            else if (st.edit.segSkew) renderSegSkewCompare();
+            else if (st.edit.medianFilter) renderMedianFilterCompare();
+            else if (st.edit.nanPatch) renderNanPatchCompare();
             else render(st.dataset, el.colormap.value, false);
         }
     });
@@ -666,7 +686,7 @@ function createImageView(ids, options) {
     function updateEditButtons() {
         if (!editing) return;
         const has = !!st.dataset;
-        [el.cropRect, el.cropCircle, el.denoise, el.segLevel, el.segSkew, el.globalLevel, el.btnCalc, el.sendToViewer].forEach(b => { if (b) b.disabled = !has; });
+        [el.cropRect, el.cropCircle, el.denoise, el.medianFilter, el.nanPatch, el.segLevel, el.segSkew, el.globalLevel, el.btnCalc, el.sendToViewer].forEach(b => { if (b) b.disabled = !has; });
         if (el.btnClear) el.btnClear.disabled = !has;
         if (el.cropApply) el.cropApply.disabled = !(has && st.edit.cropMode && st.edit.cropSel);
         if (el.cropCancel) el.cropCancel.disabled = !(has && st.edit.cropMode);
@@ -686,6 +706,14 @@ function createImageView(ids, options) {
         const segSkewConfigLocked = !(has && st.edit.segSkew && !st.edit.segSkewBusy && !st.edit.segSkewTuneBusy && st.edit.segSkewResult);
         if (el.segSkewDir) el.segSkewDir.disabled = segSkewConfigLocked;
         if (el.segSkewCount) el.segSkewCount.disabled = segSkewConfigLocked;
+        if (el.medianFilterApply) el.medianFilterApply.disabled = !(has && st.edit.medianFilter && !st.edit.medianFilterBusy && st.edit.medianFilterResult);
+        if (el.medianFilterCancel) el.medianFilterCancel.disabled = !(has && st.edit.medianFilter);
+        const medianFilterConfigLocked = !(has && st.edit.medianFilter && !st.edit.medianFilterBusy && st.edit.medianFilterResult);
+        if (el.medianFilterKernel) el.medianFilterKernel.disabled = medianFilterConfigLocked;
+        if (el.nanPatchApply) el.nanPatchApply.disabled = !(has && st.edit.nanPatch && !st.edit.nanPatchBusy && st.edit.nanPatchResult);
+        if (el.nanPatchCancel) el.nanPatchCancel.disabled = !(has && st.edit.nanPatch);
+        const nanPatchConfigLocked = !(has && st.edit.nanPatch && !st.edit.nanPatchBusy && st.edit.nanPatchResult);
+        if (el.nanPatchKernel) el.nanPatchKernel.disabled = nanPatchConfigLocked;
         updateHistoryButtons();
     }
 
@@ -785,6 +813,8 @@ function createImageView(ids, options) {
         if (st.edit.denoise) cancelDenoise();
         if (st.edit.segLevel) cancelSegLevel();
         if (st.edit.segSkew) cancelSegSkew();
+        if (st.edit.medianFilter) cancelMedianFilter();
+        if (st.edit.nanPatch) cancelNanPatch();
     }
     function doUndo() {
         if (!editing || !st.dataset || st.edit.histIndex <= 0) return;
@@ -2707,12 +2737,1076 @@ function createImageView(ids, options) {
         showToast(msg, 'info');
     }
 
+    /* ---- 中值濾波模式 ---- */
+
+    function medianFilterStatusText(result) {
+        if (!result) return '';
+        return t('medianFilterMeta', result.kernelSize);
+    }
+
+    function snapshotMedianFilterBase() {
+        const ds = st.dataset;
+        ensureFloatPixels(ds);
+        st.edit.medianFilterBase = {
+            data: ds.data.slice(0),
+            vmin: ds.vmin,
+            vmax: ds.vmax,
+            width: ds.width,
+            height: ds.height,
+            header: ds.header,
+        };
+    }
+
+    function medianFilterEnsureViews() {
+        if (!st.edit.medianFilterViews) {
+            st.edit.medianFilterViews = {
+                beforeImg: segLevelDefaultView(),
+                afterImg: segLevelDefaultView(),
+            };
+        }
+        return st.edit.medianFilterViews;
+    }
+
+    function medianFilterResetViews() {
+        st.edit.medianFilterViews = null;
+        st.edit.medianFilterPan = null;
+    }
+
+    function medianFilterSyncViewTransform(zoomKey, canvas, resetView) {
+        if (!zoomKey || !canvas) return;
+        const wrap = canvas.parentElement;
+        if (!wrap) return;
+        const views = medianFilterEnsureViews();
+        const view = views[zoomKey];
+        const { cw, ch } = segLevelContentSize(canvas);
+        const sizeChanged = view.contentW !== cw || view.contentH !== ch;
+        if (resetView || sizeChanged) segLevelFitView(view, wrap, cw, ch);
+        segLevelApplyViewTransform(canvas, view, wrap);
+    }
+
+    function medianFilterZoomAt(zoomKey, wrap, canvas, screenX, screenY, zoomFactor) {
+        const views = medianFilterEnsureViews();
+        const view = views[zoomKey];
+        let newScale = view.scale * zoomFactor;
+        if (newScale < view.minScale) newScale = view.minScale;
+        if (newScale > view.maxScale) newScale = view.maxScale;
+        const k = newScale / view.scale;
+        view.tx = screenX - (screenX - view.tx) * k;
+        view.ty = screenY - (screenY - view.ty) * k;
+        view.scale = newScale;
+        segLevelApplyViewTransform(canvas, view, wrap);
+    }
+
+    function setupMedianFilterZoom() {
+        const targets = [
+            { wrap: el.medianFilterBefore?.parentElement, canvas: el.medianFilterBefore, key: 'beforeImg' },
+            { wrap: el.medianFilterAfter?.parentElement, canvas: el.medianFilterAfter, key: 'afterImg' },
+        ];
+        for (const tgt of targets) {
+            if (!tgt.wrap || !tgt.canvas || tgt.wrap.dataset.medianFilterZoomBound) continue;
+            tgt.wrap.dataset.medianFilterZoomBound = '1';
+            tgt.wrap.classList.add('seg-level-zoomable');
+            if (!tgt.wrap.querySelector('.seg-level-zoom-ind')) {
+                const ind = document.createElement('div');
+                ind.className = 'seg-level-zoom-ind';
+                ind.setAttribute('aria-hidden', 'true');
+                tgt.wrap.appendChild(ind);
+            }
+            tgt.wrap.addEventListener('wheel', (e) => {
+                if (!st.edit.medianFilter || st.edit.medianFilterBusy) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const rect = tgt.wrap.getBoundingClientRect();
+                medianFilterZoomAt(tgt.key, tgt.wrap, tgt.canvas, e.clientX - rect.left, e.clientY - rect.top,
+                    Math.pow(1.0015, -(e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * tgt.wrap.clientHeight : e.deltaY)));
+            }, { passive: false });
+            tgt.wrap.addEventListener('mousedown', (e) => {
+                if (!st.edit.medianFilter || st.edit.medianFilterBusy || e.button !== 0) return;
+                const views = medianFilterEnsureViews();
+                const view = views[tgt.key];
+                st.edit.medianFilterPan = {
+                    key: tgt.key,
+                    wrap: tgt.wrap,
+                    canvas: tgt.canvas,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    tx: view.tx,
+                    ty: view.ty,
+                };
+                tgt.wrap.classList.add('grabbing');
+                e.preventDefault();
+            });
+            tgt.wrap.addEventListener('dblclick', (e) => {
+                if (!st.edit.medianFilter || st.edit.medianFilterBusy) return;
+                e.preventDefault();
+                const views = medianFilterEnsureViews();
+                const view = views[tgt.key];
+                segLevelFitView(view, tgt.wrap, view.contentW, view.contentH);
+                segLevelApplyViewTransform(tgt.canvas, view, tgt.wrap);
+            });
+        }
+        if (!st.edit.medianFilterPanBound) {
+            st.edit.medianFilterPanBound = true;
+            window.addEventListener('mousemove', (e) => {
+                const pan = st.edit.medianFilterPan;
+                if (!pan) return;
+                const views = medianFilterEnsureViews();
+                const view = views[pan.key];
+                view.tx = pan.tx + (e.clientX - pan.startX);
+                view.ty = pan.ty + (e.clientY - pan.startY);
+                segLevelApplyViewTransform(pan.canvas, view, pan.wrap);
+            });
+            window.addEventListener('mouseup', () => {
+                const pan = st.edit.medianFilterPan;
+                if (!pan) return;
+                pan.wrap.classList.remove('grabbing');
+                st.edit.medianFilterPan = null;
+            });
+        }
+    }
+
+    function renderMedianFilterCanvas(canvas, data, width, height, cmin, crange, cmap, zoomKey, resetView) {
+        if (!canvas) return;
+        const cw = Math.max(1, width);
+        const ch = Math.max(1, height);
+        canvas.width = cw;
+        canvas.height = ch;
+        canvas.style.width = cw + 'px';
+        canvas.style.height = ch + 'px';
+        const ctx = canvas.getContext('2d');
+        const img = ctx.createImageData(cw, ch);
+        const px = img.data;
+        const lut = buildColormapLut(cmap);
+        for (let y = 0; y < ch; y++) {
+            const rowBase = y * width;
+            for (let x = 0; x < cw; x++) {
+                const v = data[rowBase + x];
+                const po = (y * cw + x) * 4;
+                if (!Number.isFinite(v)) {
+                    px[po] = px[po + 1] = px[po + 2] = 0;
+                    px[po + 3] = 255;
+                    continue;
+                }
+                let t = (v - cmin) / crange;
+                if (t < 0) t = 0; else if (t > 1) t = 1;
+                const lo = ((t * 255) | 0) * 3;
+                px[po] = lut[lo]; px[po + 1] = lut[lo + 1]; px[po + 2] = lut[lo + 2]; px[po + 3] = 255;
+            }
+        }
+        ctx.putImageData(img, 0, 0);
+        medianFilterSyncViewTransform(zoomKey, canvas, resetView);
+    }
+
+    function readMedianFilterKernelFromUI() {
+        const raw = parseInt(el.medianFilterKernel?.value, 10);
+        if (typeof normalizeMedianKernelSize === 'function') return normalizeMedianKernelSize(raw);
+        let k = raw || 3;
+        if (k % 2 === 0) k++;
+        return k;
+    }
+
+    function syncMedianFilterKernelUI(kernelSize) {
+        if (!el.medianFilterKernel) return;
+        el.medianFilterKernel.value = String(kernelSize);
+    }
+
+    function setMedianFilterConfigUI(visible) {
+        if (el.medianFilterConfig) el.medianFilterConfig.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+
+    function setMedianFilterBusyUI(busy, progress) {
+        st.edit.medianFilterBusy = !!busy;
+        if (el.medianFilterCompare) el.medianFilterCompare.classList.toggle('is-tune-busy', !!busy);
+        if (el.medianFilterBusy) {
+            el.medianFilterBusy.classList.toggle('show', !!busy);
+            el.medianFilterBusy.setAttribute('aria-hidden', busy ? 'false' : 'true');
+        }
+        if (el.medianFilterBusyText && busy) {
+            const pct = Math.round((progress || 0) * 100);
+            el.medianFilterBusyText.textContent = pct > 0 && pct < 100
+                ? t('medianFilterProgress', pct)
+                : t('medianFilterUpdating');
+        }
+        updateEditButtons();
+    }
+
+    function renderMedianFilterCompare(opts) {
+        const resetView = !!(opts && opts.resetView);
+        const base = st.edit.medianFilterBase;
+        const result = st.edit.medianFilterResult;
+        if (!base || !result || !st.dataset) return;
+        const ds = st.dataset;
+        const cmap = el.colormap.value;
+        const { width, height } = ds;
+        const afterData = result.filteredData;
+        const afterStats = computeRange(afterData);
+        const beforeDr = segLevelDisplayRange(base.vmin, base.vmax, st.colorClip);
+        const afterDr = segLevelDisplayRange(afterStats.vmin, afterStats.vmax, st.colorClip);
+        renderMedianFilterCanvas(
+            el.medianFilterBefore, base.data, width, height,
+            beforeDr.cmin, beforeDr.crange, cmap, 'beforeImg', resetView,
+        );
+        renderMedianFilterCanvas(
+            el.medianFilterAfter, afterData, width, height,
+            afterDr.cmin, afterDr.crange, cmap, 'afterImg', resetView,
+        );
+        renderSegLevelPaneColorbar(
+            el.medianFilterBeforeCb, el.medianFilterBeforeCbLo, el.medianFilterBeforeCbHi,
+            base.vmin, base.vmax, cmap, st.colorClip,
+        );
+        renderSegLevelPaneColorbar(
+            el.medianFilterAfterCb, el.medianFilterAfterCbLo, el.medianFilterAfterCbHi,
+            afterStats.vmin, afterStats.vmax, cmap, st.colorClip,
+        );
+        syncMedianFilterKernelUI(result.kernelSize);
+    }
+
+    function renderMedianFilterBeforeOnly() {
+        const base = st.edit.medianFilterBase;
+        if (!base || !st.dataset) return;
+        const cmap = el.colormap.value;
+        const { width, height } = st.dataset;
+        const dr = segLevelDisplayRange(base.vmin, base.vmax, st.colorClip);
+        renderMedianFilterCanvas(
+            el.medianFilterBefore, base.data, width, height,
+            dr.cmin, dr.crange, cmap, 'beforeImg', true,
+        );
+        renderSegLevelPaneColorbar(
+            el.medianFilterBeforeCb, el.medianFilterBeforeCbLo, el.medianFilterBeforeCbHi,
+            base.vmin, base.vmax, cmap, st.colorClip,
+        );
+        if (el.medianFilterAfter) {
+            const c = el.medianFilterAfter;
+            const ctx = c.getContext('2d');
+            if (ctx) ctx.clearRect(0, 0, c.width, c.height);
+        }
+    }
+
+    async function recomputeMedianFilterPreview(options) {
+        options = options || {};
+        const base = st.edit.medianFilterBase;
+        if (!st.edit.medianFilter || !base || !st.dataset) return;
+
+        const kernelSize = readMedianFilterKernelFromUI();
+        const prev = st.edit.medianFilterResult;
+        if (prev && prev.kernelSize === kernelSize && !options.force) {
+            renderMedianFilterCompare({ resetView: !!options.resetView });
+            return;
+        }
+
+        const runId = ++st.edit.medianFilterRunId;
+        const outBuf = prev?.filteredData instanceof Float32Array ? prev.filteredData : null;
+        setMedianFilterBusyUI(true, 0);
+        await segLevelYield();
+        if (runId !== st.edit.medianFilterRunId) {
+            setMedianFilterBusyUI(false);
+            return;
+        }
+
+        try {
+            let filtered;
+            if (typeof applyMedianFilterAsync === 'function') {
+                const { width, height } = st.dataset;
+                const totalRows = height;
+                let lastPct = 0;
+                filtered = await applyMedianFilterAsync(
+                    base.data, width, height, kernelSize, outBuf, 64,
+                    () => runId !== st.edit.medianFilterRunId,
+                );
+                if (!filtered || runId !== st.edit.medianFilterRunId) return;
+                if (totalRows > 0) lastPct = 1;
+                setMedianFilterBusyUI(true, lastPct);
+            } else if (typeof applyMedianFilter === 'function') {
+                const { width, height } = st.dataset;
+                filtered = applyMedianFilter(base.data, width, height, kernelSize, outBuf);
+            } else {
+                return;
+            }
+
+            if (runId !== st.edit.medianFilterRunId) return;
+            st.edit.medianFilterResult = { kernelSize, filteredData: filtered };
+            renderMedianFilterCompare({ resetView: !!options.resetView });
+            el.status.textContent = medianFilterStatusText(st.edit.medianFilterResult);
+        } finally {
+            if (runId === st.edit.medianFilterRunId) setMedianFilterBusyUI(false);
+        }
+    }
+
+    function enterMedianFilterUI(active) {
+        if (el.viewer) el.viewer.classList.toggle('median-filter-active', active);
+        if (el.medianFilterPanel) el.medianFilterPanel.setAttribute('aria-hidden', active ? 'false' : 'true');
+        if (el.medianFilter) el.medianFilter.classList.toggle('tool-active', active);
+        if (active && !st.edit.medianFilterBusy && st.edit.medianFilterResult) {
+            requestAnimationFrame(() => renderMedianFilterCompare({ resetView: true }));
+        }
+    }
+
+    function exitMedianFilterMode() {
+        st.edit.medianFilter = false;
+        st.edit.medianFilterBusy = false;
+        st.edit.medianFilterRunId++;
+        st.edit.medianFilterBase = null;
+        st.edit.medianFilterResult = null;
+        medianFilterResetViews();
+        setMedianFilterBusyUI(false);
+        setMedianFilterConfigUI(false);
+        enterMedianFilterUI(false);
+        updateEditButtons();
+    }
+
+    function cancelMedianFilter() {
+        if (!st.edit.medianFilter) return;
+        st.edit.medianFilterRunId++;
+        const base = st.edit.medianFilterBase;
+        if (base && st.dataset && !st.edit.medianFilterBusy) {
+            st.dataset.data = base.data.slice();
+            st.dataset.vmin = base.vmin;
+            st.dataset.vmax = base.vmax;
+            resetColorClip(false);
+            render(st.dataset, el.colormap.value, false);
+        }
+        exitMedianFilterMode();
+    }
+
+    async function startMedianFilterMode() {
+        if (!editing || !st.dataset) { showToast(t('editNoData'), 'info'); return; }
+        if (isScatter(st.dataset)) { showToast(t('medianFilterScatter'), 'info'); return; }
+        if (st.edit.medianFilter) {
+            if (st.edit.medianFilterBusy) {
+                st.edit.medianFilterRunId++;
+                exitMedianFilterMode();
+            } else {
+                cancelMedianFilter();
+            }
+            return;
+        }
+
+        endTransientModes();
+
+        snapshotMedianFilterBase();
+        medianFilterResetViews();
+        st.edit.medianFilter = true;
+        st.edit.medianFilterResult = null;
+        if (el.medianFilterKernel) el.medianFilterKernel.value = '3';
+
+        enterMedianFilterUI(true);
+        setMedianFilterConfigUI(true);
+        renderMedianFilterBeforeOnly();
+        updateEditButtons();
+        el.status.textContent = t('medianFilterProcessing');
+
+        await recomputeMedianFilterPreview({ resetView: true, force: true });
+    }
+
+    function onMedianFilterKernelChange() {
+        if (!st.edit.medianFilter || st.edit.medianFilterBusy) return;
+        recomputeMedianFilterPreview({ resetView: false, force: true });
+    }
+
+    function applyMedianFilterEdit() {
+        if (!st.edit.medianFilter || st.edit.medianFilterBusy || !st.edit.medianFilterResult || !st.dataset) return;
+        const result = st.edit.medianFilterResult;
+        ensureFloatPixels(st.dataset);
+        st.dataset.data = result.filteredData.slice();
+        exitMedianFilterMode();
+        refreshAfterEdit(false);
+        pushHistory();
+        setLastEditStep({ type: 'medianFilter', kernelSize: result.kernelSize });
+        const msg = t('medianFilterDone', result.kernelSize);
+        el.status.textContent = msg;
+        showToast(msg, 'info');
+    }
+
+    /* ---- 區域框選（裁切 / NaN 修補 ROI 共用）---- */
+    function normSel(s) {
+        return {
+            x0: Math.min(s.x0, s.x1), y0: Math.min(s.y0, s.y1),
+            x1: Math.max(s.x0, s.x1), y1: Math.max(s.y0, s.y1),
+        };
+    }
+    const CROP_HRES = {
+        nw: { x: 'x0', y: 'y0' }, n: { y: 'y0' }, ne: { x: 'x1', y: 'y0' },
+        e: { x: 'x1' }, se: { x: 'x1', y: 'y1' }, s: { y: 'y1' },
+        sw: { x: 'x0', y: 'y1' }, w: { x: 'x0' },
+    };
+    const CROP_MIN = 4;
+
+    function drawRegionShape(shapeEl, sel) {
+        if (!shapeEl) return;
+        if (!sel) { shapeEl.style.display = 'none'; return; }
+        const n = normSel(sel);
+        shapeEl.style.display = 'block';
+        shapeEl.style.left = n.x0 + 'px';
+        shapeEl.style.top = n.y0 + 'px';
+        shapeEl.style.width = (n.x1 - n.x0) + 'px';
+        shapeEl.style.height = (n.y1 - n.y0) + 'px';
+    }
+
+    function setupRegionSelectOverlay(opts) {
+        const { overlay, shape, container, isActive, getSel, setSel, getAction, setAction, onEnd } = opts;
+        if (!overlay || !shape || !container || overlay.dataset.regionSelectBound) return;
+        overlay.dataset.regionSelectBound = '1';
+        const draw = () => drawRegionShape(shape, getSel());
+        const ptInContainer = (e) => {
+            const r = container.getBoundingClientRect();
+            return {
+                x: Math.min(r.width, Math.max(0, e.clientX - r.left)),
+                y: Math.min(r.height, Math.max(0, e.clientY - r.top)),
+            };
+        };
+        overlay.addEventListener('pointerdown', (e) => {
+            if (!isActive()) return;
+            if (e.button === 1) return;
+            e.preventDefault();
+            e.stopPropagation();
+            overlay.setPointerCapture(e.pointerId);
+            const p = ptInContainer(e);
+            const handle = (e.target && e.target.classList && e.target.classList.contains('crop-handle'))
+                ? e.target.getAttribute('data-h') : null;
+            const sel = getSel();
+            if (handle && sel) {
+                setSel(normSel(sel));
+                setAction({ type: 'resize', handle });
+            } else if (sel && e.target === shape) {
+                setSel(normSel(sel));
+                setAction({ type: 'move', start: p, orig: { ...getSel() } });
+            } else {
+                setAction({ type: 'draw' });
+                setSel({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+            }
+            draw();
+        });
+        overlay.addEventListener('pointermove', (e) => {
+            const act = getAction();
+            if (!act || !getSel()) return;
+            const p = ptInContainer(e);
+            const s = getSel();
+            const vw = container.clientWidth, vh = container.clientHeight;
+            if (act.type === 'draw') {
+                s.x1 = p.x; s.y1 = p.y;
+            } else if (act.type === 'resize') {
+                const dir = CROP_HRES[act.handle];
+                if (dir.x === 'x0') s.x0 = Math.min(p.x, s.x1 - CROP_MIN);
+                if (dir.x === 'x1') s.x1 = Math.max(p.x, s.x0 + CROP_MIN);
+                if (dir.y === 'y0') s.y0 = Math.min(p.y, s.y1 - CROP_MIN);
+                if (dir.y === 'y1') s.y1 = Math.max(p.y, s.y0 + CROP_MIN);
+            } else if (act.type === 'move') {
+                const o = act.orig, w = o.x1 - o.x0, h = o.y1 - o.y0;
+                let nx0 = o.x0 + (p.x - act.start.x), ny0 = o.y0 + (p.y - act.start.y);
+                if (nx0 < 0) nx0 = 0; if (nx0 + w > vw) nx0 = vw - w;
+                if (ny0 < 0) ny0 = 0; if (ny0 + h > vh) ny0 = vh - h;
+                s.x0 = nx0; s.y0 = ny0; s.x1 = nx0 + w; s.y1 = ny0 + h;
+            }
+            draw();
+        });
+        const endAction = (e) => {
+            const act = getAction();
+            if (!act) return;
+            setAction(null);
+            try { overlay.releasePointerCapture(e.pointerId); } catch (_) {}
+            if (getSel()) {
+                const s = normSel(getSel());
+                if (act.type === 'draw' && (s.x1 - s.x0 < CROP_MIN || s.y1 - s.y0 < CROP_MIN)) {
+                    setSel(null);
+                } else {
+                    setSel(s);
+                }
+                draw();
+            }
+            if (onEnd) onEnd(act);
+        };
+        overlay.addEventListener('pointerup', endAction);
+        overlay.addEventListener('pointercancel', endAction);
+    }
+
+    /* ---- NaN 修補模式 ---- */
+
+    function nanPatchStatusText(result) {
+        if (!result) return '';
+        return result.roi ? t('nanPatchMetaRoi', result.kernelSize) : t('nanPatchMeta', result.kernelSize);
+    }
+
+    function nanPatchRoiKey(roi) {
+        if (!roi) return '';
+        return `${roi.shape}:${roi.x0},${roi.y0},${roi.x1},${roi.y1}`;
+    }
+
+    function captureNanPatchRoi() {
+        return st.edit.nanPatchRoi ? { ...st.edit.nanPatchRoi } : null;
+    }
+
+    function nanPatchRoiNormToWrapSel(roi) {
+        if (!roi || !st.dataset) return null;
+        const views = nanPatchEnsureViews();
+        const view = views.beforeImg;
+        const { width, height } = st.dataset;
+        const ix0 = roi.x0 * width, ix1 = roi.x1 * width;
+        const iy0 = roi.y0 * height, iy1 = roi.y1 * height;
+        return {
+            x0: ix0 * view.scale + view.tx,
+            y0: iy0 * view.scale + view.ty,
+            x1: ix1 * view.scale + view.tx,
+            y1: iy1 * view.scale + view.ty,
+        };
+    }
+
+    function nanPatchWrapSelToNorm(sel, shape) {
+        if (!sel || !st.dataset) return null;
+        const views = nanPatchEnsureViews();
+        const view = views.beforeImg;
+        const { width, height } = st.dataset;
+        const n = normSel(sel);
+        const ix0 = (n.x0 - view.tx) / view.scale;
+        const iy0 = (n.y0 - view.ty) / view.scale;
+        const ix1 = (n.x1 - view.tx) / view.scale;
+        const iy1 = (n.y1 - view.ty) / view.scale;
+        return {
+            shape,
+            x0: Math.max(0, Math.min(1, ix0 / width)),
+            y0: Math.max(0, Math.min(1, iy0 / height)),
+            x1: Math.max(0, Math.min(1, ix1 / width)),
+            y1: Math.max(0, Math.min(1, iy1 / height)),
+        };
+    }
+
+    function drawNanPatchRoiShape() {
+        const sh = el.nanPatchCropShape;
+        if (!sh) return;
+        const mode = st.edit.nanPatchRoiMode;
+        const circle = mode === 'circle' || st.edit.nanPatchRoi?.shape === 'circle';
+        sh.classList.toggle('circle', !!circle);
+        const sel = st.edit.nanPatchRoiSel || nanPatchRoiNormToWrapSel(st.edit.nanPatchRoi);
+        if (!sel || !st.edit.nanPatch) {
+            drawRegionShape(sh, null);
+            return;
+        }
+        drawRegionShape(sh, sel);
+    }
+
+    function updateNanPatchRoiUI() {
+        const mode = st.edit.nanPatchRoiMode;
+        const hasRoi = !!st.edit.nanPatchRoi;
+        const wrap = el.nanPatchBeforeWrap || el.nanPatchBefore?.parentElement;
+        if (el.nanPatchRoiRect) el.nanPatchRoiRect.classList.toggle('active', mode === 'rect');
+        if (el.nanPatchRoiCircle) el.nanPatchRoiCircle.classList.toggle('active', mode === 'circle');
+        const roiLocked = !st.edit.nanPatch || st.edit.nanPatchBusy;
+        if (el.nanPatchRoiRect) el.nanPatchRoiRect.disabled = roiLocked;
+        if (el.nanPatchRoiCircle) el.nanPatchRoiCircle.disabled = roiLocked;
+        if (el.nanPatchRoiClear) el.nanPatchRoiClear.disabled = roiLocked || !(hasRoi || !!st.edit.nanPatchRoiSel || !!mode);
+        if (wrap) {
+            wrap.classList.toggle('crop-active', !!mode);
+            wrap.classList.toggle('nan-patch-roi-show', !!(mode || hasRoi || st.edit.nanPatchRoiSel));
+        }
+        if (el.nanPatchCropOverlay) {
+            el.nanPatchCropOverlay.setAttribute('aria-hidden', (mode || hasRoi) ? 'false' : 'true');
+        }
+        if (el.nanPatchCropHint) {
+            el.nanPatchCropHint.style.display = mode ? '' : 'none';
+        }
+        drawNanPatchRoiShape();
+    }
+
+    function setNanPatchRoiMode(mode) {
+        if (!st.edit.nanPatch || st.edit.nanPatchBusy) return;
+        if (st.edit.nanPatchRoiMode === mode) {
+            st.edit.nanPatchRoiMode = null;
+            st.edit.nanPatchRoiSel = null;
+            st.edit.nanPatchRoiAction = null;
+        } else {
+            if (mode && st.edit.nanPatchRoi && st.edit.nanPatchRoi.shape !== mode) {
+                st.edit.nanPatchRoi = null;
+            }
+            st.edit.nanPatchRoiMode = mode;
+            st.edit.nanPatchRoiSel = st.edit.nanPatchRoi ? nanPatchRoiNormToWrapSel(st.edit.nanPatchRoi) : null;
+            st.edit.nanPatchRoiAction = null;
+            if (el.nanPatchCropShape) el.nanPatchCropShape.classList.toggle('circle', mode === 'circle');
+        }
+        updateNanPatchRoiUI();
+    }
+
+    function clearNanPatchRoi() {
+        if (!st.edit.nanPatch || st.edit.nanPatchBusy) return;
+        st.edit.nanPatchRoiMode = null;
+        st.edit.nanPatchRoi = null;
+        st.edit.nanPatchRoiSel = null;
+        st.edit.nanPatchRoiAction = null;
+        updateNanPatchRoiUI();
+        recomputeNanPatchPreview({ force: true });
+    }
+
+    function startNanPatchBeforePan(e) {
+        if (!st.edit.nanPatch || st.edit.nanPatchBusy || !st.edit.nanPatchRoiMode) return;
+        const wrap = el.nanPatchBeforeWrap || el.nanPatchBefore?.parentElement;
+        const canvas = el.nanPatchBefore;
+        if (!wrap || !canvas) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const views = nanPatchEnsureViews();
+        const view = views.beforeImg;
+        st.edit.nanPatchPan = {
+            key: 'beforeImg',
+            wrap,
+            canvas,
+            startX: e.clientX,
+            startY: e.clientY,
+            tx: view.tx,
+            ty: view.ty,
+        };
+        wrap.classList.add('grabbing');
+    }
+
+    function setupNanPatchMiddlePan() {
+        const wrap = el.nanPatchBeforeWrap || el.nanPatchBefore?.parentElement;
+        const overlay = el.nanPatchCropOverlay;
+        const bind = (node) => {
+            if (!node || node.dataset.nanPatchMidPanBound) return;
+            node.dataset.nanPatchMidPanBound = '1';
+            node.addEventListener('mousedown', (e) => {
+                if (e.button !== 1) return;
+                startNanPatchBeforePan(e);
+            });
+        };
+        bind(wrap);
+        bind(overlay);
+    }
+
+    function onNanPatchRoiSelectEnd(act) {
+        const mode = st.edit.nanPatchRoiMode;
+        if (!mode) return;
+        if (st.edit.nanPatchRoiSel) {
+            st.edit.nanPatchRoi = nanPatchWrapSelToNorm(st.edit.nanPatchRoiSel, mode);
+        } else if (act.type === 'draw' && st.edit.nanPatchRoi) {
+            st.edit.nanPatchRoiSel = nanPatchRoiNormToWrapSel(st.edit.nanPatchRoi);
+        } else {
+            st.edit.nanPatchRoi = null;
+        }
+        recomputeNanPatchPreview({ force: true });
+        updateNanPatchRoiUI();
+    }
+
+    function setupNanPatchCropOverlay() {
+        const wrap = el.nanPatchBeforeWrap || el.nanPatchBefore?.parentElement;
+        setupRegionSelectOverlay({
+            overlay: el.nanPatchCropOverlay,
+            shape: el.nanPatchCropShape,
+            container: wrap,
+            isActive: () => st.edit.nanPatch && st.edit.nanPatchRoiMode && !st.edit.nanPatchBusy,
+            getSel: () => st.edit.nanPatchRoiSel,
+            setSel: (v) => { st.edit.nanPatchRoiSel = v; },
+            getAction: () => st.edit.nanPatchRoiAction,
+            setAction: (v) => { st.edit.nanPatchRoiAction = v; },
+            onEnd: onNanPatchRoiSelectEnd,
+        });
+    }
+
+    function snapshotNanPatchBase() {
+        const ds = st.dataset;
+        ensureFloatPixels(ds);
+        st.edit.nanPatchBase = {
+            data: ds.data.slice(0),
+            vmin: ds.vmin,
+            vmax: ds.vmax,
+            width: ds.width,
+            height: ds.height,
+            header: ds.header,
+        };
+    }
+
+    function nanPatchEnsureViews() {
+        if (!st.edit.nanPatchViews) {
+            st.edit.nanPatchViews = {
+                beforeImg: segLevelDefaultView(),
+                afterImg: segLevelDefaultView(),
+            };
+        }
+        return st.edit.nanPatchViews;
+    }
+
+    function nanPatchResetViews() {
+        st.edit.nanPatchViews = null;
+        st.edit.nanPatchPan = null;
+    }
+
+    function nanPatchSyncViewTransform(zoomKey, canvas, resetView) {
+        if (!zoomKey || !canvas) return;
+        const wrap = canvas.parentElement;
+        if (!wrap) return;
+        const views = nanPatchEnsureViews();
+        const view = views[zoomKey];
+        const { cw, ch } = segLevelContentSize(canvas);
+        const sizeChanged = view.contentW !== cw || view.contentH !== ch;
+        if (resetView || sizeChanged) segLevelFitView(view, wrap, cw, ch);
+        segLevelApplyViewTransform(canvas, view, wrap);
+    }
+
+    function nanPatchZoomAt(zoomKey, wrap, canvas, screenX, screenY, zoomFactor) {
+        const views = nanPatchEnsureViews();
+        const view = views[zoomKey];
+        let newScale = view.scale * zoomFactor;
+        if (newScale < view.minScale) newScale = view.minScale;
+        if (newScale > view.maxScale) newScale = view.maxScale;
+        const k = newScale / view.scale;
+        view.tx = screenX - (screenX - view.tx) * k;
+        view.ty = screenY - (screenY - view.ty) * k;
+        view.scale = newScale;
+        segLevelApplyViewTransform(canvas, view, wrap);
+    }
+
+    function setupNanPatchZoom() {
+        const beforeWrap = el.nanPatchBeforeWrap || el.nanPatchBefore?.parentElement;
+        const targets = [
+            { wrap: beforeWrap, canvas: el.nanPatchBefore, key: 'beforeImg' },
+            { wrap: el.nanPatchAfter?.parentElement, canvas: el.nanPatchAfter, key: 'afterImg' },
+        ];
+        for (const tgt of targets) {
+            if (!tgt.wrap || !tgt.canvas || tgt.wrap.dataset.nanPatchZoomBound) continue;
+            tgt.wrap.dataset.nanPatchZoomBound = '1';
+            tgt.wrap.classList.add('seg-level-zoomable');
+            if (!tgt.wrap.querySelector('.seg-level-zoom-ind')) {
+                const ind = document.createElement('div');
+                ind.className = 'seg-level-zoom-ind';
+                ind.setAttribute('aria-hidden', 'true');
+                tgt.wrap.appendChild(ind);
+            }
+            tgt.wrap.addEventListener('wheel', (e) => {
+                if (!st.edit.nanPatch || st.edit.nanPatchBusy) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const rect = tgt.wrap.getBoundingClientRect();
+                nanPatchZoomAt(tgt.key, tgt.wrap, tgt.canvas, e.clientX - rect.left, e.clientY - rect.top,
+                    Math.pow(1.0015, -(e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * tgt.wrap.clientHeight : e.deltaY)));
+                if (tgt.key === 'beforeImg') drawNanPatchRoiShape();
+            }, { passive: false });
+            tgt.wrap.addEventListener('mousedown', (e) => {
+                if (!st.edit.nanPatch || st.edit.nanPatchBusy) return;
+                const isMid = e.button === 1;
+                if (e.button !== 0 && !isMid) return;
+                if (tgt.key === 'beforeImg' && tgt.wrap.classList.contains('crop-active')) {
+                    if (!isMid) return;
+                    startNanPatchBeforePan(e);
+                    return;
+                }
+                const views = nanPatchEnsureViews();
+                const view = views[tgt.key];
+                st.edit.nanPatchPan = {
+                    key: tgt.key,
+                    wrap: tgt.wrap,
+                    canvas: tgt.canvas,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    tx: view.tx,
+                    ty: view.ty,
+                };
+                tgt.wrap.classList.add('grabbing');
+                e.preventDefault();
+            });
+            tgt.wrap.addEventListener('dblclick', (e) => {
+                if (!st.edit.nanPatch || st.edit.nanPatchBusy) return;
+                e.preventDefault();
+                const views = nanPatchEnsureViews();
+                const view = views[tgt.key];
+                segLevelFitView(view, tgt.wrap, view.contentW, view.contentH);
+                segLevelApplyViewTransform(tgt.canvas, view, tgt.wrap);
+                if (tgt.key === 'beforeImg') drawNanPatchRoiShape();
+            });
+        }
+        if (!st.edit.nanPatchPanBound) {
+            st.edit.nanPatchPanBound = true;
+            window.addEventListener('mousemove', (e) => {
+                const pan = st.edit.nanPatchPan;
+                if (!pan) return;
+                const views = nanPatchEnsureViews();
+                const view = views[pan.key];
+                view.tx = pan.tx + (e.clientX - pan.startX);
+                view.ty = pan.ty + (e.clientY - pan.startY);
+                segLevelApplyViewTransform(pan.canvas, view, pan.wrap);
+                if (pan.key === 'beforeImg') drawNanPatchRoiShape();
+            });
+            window.addEventListener('mouseup', () => {
+                const pan = st.edit.nanPatchPan;
+                if (!pan) return;
+                pan.wrap.classList.remove('grabbing');
+                st.edit.nanPatchPan = null;
+            });
+        }
+    }
+
+    function renderNanPatchCanvas(canvas, data, width, height, cmin, crange, cmap, zoomKey, resetView) {
+        if (!canvas) return;
+        const cw = Math.max(1, width);
+        const ch = Math.max(1, height);
+        canvas.width = cw;
+        canvas.height = ch;
+        canvas.style.width = cw + 'px';
+        canvas.style.height = ch + 'px';
+        const ctx = canvas.getContext('2d');
+        const img = ctx.createImageData(cw, ch);
+        const px = img.data;
+        const lut = buildColormapLut(cmap);
+        for (let y = 0; y < ch; y++) {
+            const rowBase = y * width;
+            for (let x = 0; x < cw; x++) {
+                const v = data[rowBase + x];
+                const po = (y * cw + x) * 4;
+                if (!Number.isFinite(v)) {
+                    px[po] = px[po + 1] = px[po + 2] = 0;
+                    px[po + 3] = 255;
+                    continue;
+                }
+                let t = (v - cmin) / crange;
+                if (t < 0) t = 0; else if (t > 1) t = 1;
+                const lo = ((t * 255) | 0) * 3;
+                px[po] = lut[lo]; px[po + 1] = lut[lo + 1]; px[po + 2] = lut[lo + 2]; px[po + 3] = 255;
+            }
+        }
+        ctx.putImageData(img, 0, 0);
+        nanPatchSyncViewTransform(zoomKey, canvas, resetView);
+        if (zoomKey === 'beforeImg') drawNanPatchRoiShape();
+    }
+
+    function readNanPatchKernelFromUI() {
+        const raw = parseInt(el.nanPatchKernel?.value, 10);
+        if (typeof normalizeNanPatchKernelSize === 'function') return normalizeNanPatchKernelSize(raw);
+        let k = raw || 3;
+        if (k % 2 === 0) k++;
+        return k;
+    }
+
+    function syncNanPatchKernelUI(kernelSize) {
+        if (!el.nanPatchKernel) return;
+        el.nanPatchKernel.value = String(kernelSize);
+    }
+
+    function setNanPatchConfigUI(visible) {
+        if (el.nanPatchConfig) el.nanPatchConfig.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+
+    function setNanPatchBusyUI(busy, progress) {
+        st.edit.nanPatchBusy = !!busy;
+        if (el.nanPatchCompare) el.nanPatchCompare.classList.toggle('is-tune-busy', !!busy);
+        if (el.nanPatchBusy) {
+            el.nanPatchBusy.classList.toggle('show', !!busy);
+            el.nanPatchBusy.setAttribute('aria-hidden', busy ? 'false' : 'true');
+        }
+        if (el.nanPatchBusyText && busy) {
+            const pct = Math.round((progress || 0) * 100);
+            el.nanPatchBusyText.textContent = pct > 0 && pct < 100
+                ? t('nanPatchProgress', pct)
+                : t('nanPatchUpdating');
+        }
+        updateNanPatchRoiUI();
+        updateEditButtons();
+    }
+
+    function renderNanPatchCompare(opts) {
+        const resetView = !!(opts && opts.resetView);
+        const base = st.edit.nanPatchBase;
+        const result = st.edit.nanPatchResult;
+        if (!base || !result || !st.dataset) return;
+        const ds = st.dataset;
+        const cmap = el.colormap.value;
+        const { width, height } = ds;
+        const afterData = result.patchedData;
+        const afterStats = computeRange(afterData);
+        const beforeDr = segLevelDisplayRange(base.vmin, base.vmax, st.colorClip);
+        const afterDr = segLevelDisplayRange(afterStats.vmin, afterStats.vmax, st.colorClip);
+        renderNanPatchCanvas(
+            el.nanPatchBefore, base.data, width, height,
+            beforeDr.cmin, beforeDr.crange, cmap, 'beforeImg', resetView,
+        );
+        renderNanPatchCanvas(
+            el.nanPatchAfter, afterData, width, height,
+            afterDr.cmin, afterDr.crange, cmap, 'afterImg', resetView,
+        );
+        renderSegLevelPaneColorbar(
+            el.nanPatchBeforeCb, el.nanPatchBeforeCbLo, el.nanPatchBeforeCbHi,
+            base.vmin, base.vmax, cmap, st.colorClip,
+        );
+        renderSegLevelPaneColorbar(
+            el.nanPatchAfterCb, el.nanPatchAfterCbLo, el.nanPatchAfterCbHi,
+            afterStats.vmin, afterStats.vmax, cmap, st.colorClip,
+        );
+        syncNanPatchKernelUI(result.kernelSize);
+        drawNanPatchRoiShape();
+    }
+
+    function renderNanPatchBeforeOnly() {
+        const base = st.edit.nanPatchBase;
+        if (!base || !st.dataset) return;
+        const cmap = el.colormap.value;
+        const { width, height } = st.dataset;
+        const dr = segLevelDisplayRange(base.vmin, base.vmax, st.colorClip);
+        renderNanPatchCanvas(
+            el.nanPatchBefore, base.data, width, height,
+            dr.cmin, dr.crange, cmap, 'beforeImg', true,
+        );
+        renderSegLevelPaneColorbar(
+            el.nanPatchBeforeCb, el.nanPatchBeforeCbLo, el.nanPatchBeforeCbHi,
+            base.vmin, base.vmax, cmap, st.colorClip,
+        );
+        if (el.nanPatchAfter) {
+            const c = el.nanPatchAfter;
+            const ctx = c.getContext('2d');
+            if (ctx) ctx.clearRect(0, 0, c.width, c.height);
+        }
+    }
+
+    async function recomputeNanPatchPreview(options) {
+        options = options || {};
+        const base = st.edit.nanPatchBase;
+        if (!st.edit.nanPatch || !base || !st.dataset) return;
+
+        const kernelSize = readNanPatchKernelFromUI();
+        const roi = captureNanPatchRoi();
+        const roiKey = nanPatchRoiKey(roi);
+        const prev = st.edit.nanPatchResult;
+        if (prev && prev.kernelSize === kernelSize && prev.roiKey === roiKey && !options.force) {
+            renderNanPatchCompare({ resetView: !!options.resetView });
+            return;
+        }
+
+        const runId = ++st.edit.nanPatchRunId;
+        const outBuf = (prev?.patchedData instanceof Float32Array && prev.kernelSize === kernelSize && prev.roiKey === roiKey)
+            ? prev.patchedData : null;
+        setNanPatchBusyUI(true, 0);
+        await segLevelYield();
+        if (runId !== st.edit.nanPatchRunId) {
+            setNanPatchBusyUI(false);
+            return;
+        }
+
+        try {
+            let patched;
+            if (typeof applyNanPatchAsync === 'function') {
+                const { width, height } = st.dataset;
+                patched = await applyNanPatchAsync(
+                    base.data, width, height, kernelSize, outBuf, 64,
+                    () => runId !== st.edit.nanPatchRunId,
+                    roi,
+                );
+                if (!patched || runId !== st.edit.nanPatchRunId) return;
+                setNanPatchBusyUI(true, 1);
+            } else if (typeof applyNanPatch === 'function') {
+                const { width, height } = st.dataset;
+                patched = applyNanPatch(base.data, width, height, kernelSize, outBuf, roi);
+            } else {
+                return;
+            }
+
+            if (runId !== st.edit.nanPatchRunId) return;
+            st.edit.nanPatchResult = { kernelSize, patchedData: patched, roi, roiKey };
+            renderNanPatchCompare({ resetView: !!options.resetView });
+            el.status.textContent = nanPatchStatusText(st.edit.nanPatchResult);
+        } finally {
+            if (runId === st.edit.nanPatchRunId) setNanPatchBusyUI(false);
+        }
+    }
+
+    function enterNanPatchUI(active) {
+        if (el.viewer) el.viewer.classList.toggle('nan-patch-active', active);
+        if (el.nanPatchPanel) el.nanPatchPanel.setAttribute('aria-hidden', active ? 'false' : 'true');
+        if (el.nanPatch) el.nanPatch.classList.toggle('tool-active', active);
+        if (active && !st.edit.nanPatchBusy && st.edit.nanPatchResult) {
+            requestAnimationFrame(() => renderNanPatchCompare({ resetView: true }));
+        }
+    }
+
+    function exitNanPatchMode() {
+        st.edit.nanPatch = false;
+        st.edit.nanPatchBusy = false;
+        st.edit.nanPatchRunId++;
+        st.edit.nanPatchBase = null;
+        st.edit.nanPatchResult = null;
+        st.edit.nanPatchRoiMode = null;
+        st.edit.nanPatchRoi = null;
+        st.edit.nanPatchRoiSel = null;
+        st.edit.nanPatchRoiAction = null;
+        nanPatchResetViews();
+        setNanPatchBusyUI(false);
+        setNanPatchConfigUI(false);
+        enterNanPatchUI(false);
+        updateNanPatchRoiUI();
+        updateEditButtons();
+    }
+
+    function cancelNanPatch() {
+        if (!st.edit.nanPatch) return;
+        st.edit.nanPatchRunId++;
+        const base = st.edit.nanPatchBase;
+        if (base && st.dataset && !st.edit.nanPatchBusy) {
+            st.dataset.data = base.data.slice();
+            st.dataset.vmin = base.vmin;
+            st.dataset.vmax = base.vmax;
+            resetColorClip(false);
+            render(st.dataset, el.colormap.value, false);
+        }
+        exitNanPatchMode();
+    }
+
+    async function startNanPatchMode() {
+        if (!editing || !st.dataset) { showToast(t('editNoData'), 'info'); return; }
+        if (isScatter(st.dataset)) { showToast(t('nanPatchScatter'), 'info'); return; }
+        if (st.edit.nanPatch) {
+            if (st.edit.nanPatchBusy) {
+                st.edit.nanPatchRunId++;
+                exitNanPatchMode();
+            } else {
+                cancelNanPatch();
+            }
+            return;
+        }
+
+        endTransientModes();
+
+        snapshotNanPatchBase();
+        nanPatchResetViews();
+        st.edit.nanPatch = true;
+        st.edit.nanPatchResult = null;
+        st.edit.nanPatchRoiMode = null;
+        st.edit.nanPatchRoi = null;
+        st.edit.nanPatchRoiSel = null;
+        st.edit.nanPatchRoiAction = null;
+        if (el.nanPatchKernel) el.nanPatchKernel.value = '3';
+
+        enterNanPatchUI(true);
+        setNanPatchConfigUI(true);
+        updateNanPatchRoiUI();
+        renderNanPatchBeforeOnly();
+        updateEditButtons();
+        el.status.textContent = t('nanPatchProcessing');
+
+        await recomputeNanPatchPreview({ resetView: true, force: true });
+    }
+
+    function onNanPatchKernelChange() {
+        if (!st.edit.nanPatch || st.edit.nanPatchBusy) return;
+        recomputeNanPatchPreview({ resetView: false, force: true });
+    }
+
+    function applyNanPatchEdit() {
+        if (!st.edit.nanPatch || st.edit.nanPatchBusy || !st.edit.nanPatchResult || !st.dataset) return;
+        const result = st.edit.nanPatchResult;
+        ensureFloatPixels(st.dataset);
+        st.dataset.data = result.patchedData.slice();
+        exitNanPatchMode();
+        refreshAfterEdit(false);
+        pushHistory();
+        const step = { type: 'nanPatch', kernelSize: result.kernelSize };
+        if (result.roi) step.roi = { ...result.roi };
+        setLastEditStep(step);
+        const msg = result.roi ? t('nanPatchDoneRoi', result.kernelSize) : t('nanPatchDone', result.kernelSize);
+        el.status.textContent = msg;
+        showToast(msg, 'info');
+    }
+
     /* 複製目前資料集（深拷貝陣列、移除畫布參照）以便安全傳送到檢視器 */
     function sendToViewer() {
         if (!st.dataset) { showToast(t('sendNoData'), 'info'); return; }
         if (st.edit.denoise) toggleDenoise(false); // 先套用雜點篩除結果
         if (st.edit.segLevel) cancelSegLevel();
         if (st.edit.segSkew) cancelSegSkew();
+        if (st.edit.medianFilter) cancelMedianFilter();
+        if (st.edit.nanPatch) cancelNanPatch();
         const clone = cloneDatasetForTransfer(st.dataset);
         // 先切到檢視器頁面，讓畫布有正確尺寸後再載入，避免 fit 計算到 0
         if (typeof switchPage === 'function') switchPage('viewer');
@@ -2797,6 +3891,8 @@ function createImageView(ids, options) {
         if (st.edit.denoise) toggleDenoise(false);
         if (st.edit.segLevel) cancelSegLevel();
         if (st.edit.segSkew) cancelSegSkew();
+        if (st.edit.medianFilter) cancelMedianFilter();
+        if (st.edit.nanPatch) cancelNanPatch();
         // 點擊已啟用的模式 → 關閉
         if (st.edit.cropMode === mode) { exitCrop(); return; }
         st.edit.cropMode = mode;
@@ -2816,101 +3912,21 @@ function createImageView(ids, options) {
         el.cropCircle.classList.remove('active');
         updateEditButtons();
     }
-    function normSel(s) {
-        return {
-            x0: Math.min(s.x0, s.x1), y0: Math.min(s.y0, s.y1),
-            x1: Math.max(s.x0, s.x1), y1: Math.max(s.y0, s.y1),
-        };
-    }
     function drawCropShape() {
-        const sh = el.cropShape; if (!sh) return;
-        const s = st.edit.cropSel;
-        if (!s) { sh.style.display = 'none'; return; }
-        const n = normSel(s);
-        sh.style.display = 'block';
-        sh.style.left = n.x0 + 'px';
-        sh.style.top = n.y0 + 'px';
-        sh.style.width = (n.x1 - n.x0) + 'px';
-        sh.style.height = (n.y1 - n.y0) + 'px';
+        drawRegionShape(el.cropShape, st.edit.cropSel);
     }
-    // 各控點對應要調整的邊
-    const CROP_HRES = {
-        nw: { x: 'x0', y: 'y0' }, n: { y: 'y0' }, ne: { x: 'x1', y: 'y0' },
-        e: { x: 'x1' }, se: { x: 'x1', y: 'y1' }, s: { y: 'y1' },
-        sw: { x: 'x0', y: 'y1' }, w: { x: 'x0' },
-    };
-    const CROP_MIN = 4;
     function setupCropOverlay() {
-        const ov = el.cropOverlay; if (!ov) return;
-        const ptInViewer = (e) => {
-            const r = el.viewer.getBoundingClientRect();
-            return {
-                x: Math.min(r.width, Math.max(0, e.clientX - r.left)),
-                y: Math.min(r.height, Math.max(0, e.clientY - r.top)),
-            };
-        };
-        ov.addEventListener('pointerdown', (e) => {
-            if (!st.edit.cropMode || !st.dataset) return;
-            e.preventDefault();
-            ov.setPointerCapture(e.pointerId);
-            const p = ptInViewer(e);
-            const handle = (e.target && e.target.classList && e.target.classList.contains('crop-handle'))
-                ? e.target.getAttribute('data-h') : null;
-            if (handle && st.edit.cropSel) {
-                // 調整大小 / 形狀
-                st.edit.cropSel = normSel(st.edit.cropSel);
-                st.edit.cropAction = { type: 'resize', handle };
-            } else if (st.edit.cropSel && e.target === el.cropShape) {
-                // 移動整個框
-                st.edit.cropSel = normSel(st.edit.cropSel);
-                st.edit.cropAction = { type: 'move', start: p, orig: { ...st.edit.cropSel } };
-            } else {
-                // 在空白處拉出新的框
-                st.edit.cropAction = { type: 'draw' };
-                st.edit.cropSel = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
-            }
-            drawCropShape();
+        setupRegionSelectOverlay({
+            overlay: el.cropOverlay,
+            shape: el.cropShape,
+            container: el.viewer,
+            isActive: () => st.edit.cropMode && !!st.dataset,
+            getSel: () => st.edit.cropSel,
+            setSel: (v) => { st.edit.cropSel = v; },
+            getAction: () => st.edit.cropAction,
+            setAction: (v) => { st.edit.cropAction = v; },
+            onEnd: () => updateEditButtons(),
         });
-        ov.addEventListener('pointermove', (e) => {
-            const act = st.edit.cropAction; if (!act) return;
-            const p = ptInViewer(e);
-            const s = st.edit.cropSel;
-            const vw = el.viewer.clientWidth, vh = el.viewer.clientHeight;
-            if (act.type === 'draw') {
-                s.x1 = p.x; s.y1 = p.y;
-            } else if (act.type === 'resize') {
-                const dir = CROP_HRES[act.handle];
-                if (dir.x === 'x0') s.x0 = Math.min(p.x, s.x1 - CROP_MIN);
-                if (dir.x === 'x1') s.x1 = Math.max(p.x, s.x0 + CROP_MIN);
-                if (dir.y === 'y0') s.y0 = Math.min(p.y, s.y1 - CROP_MIN);
-                if (dir.y === 'y1') s.y1 = Math.max(p.y, s.y0 + CROP_MIN);
-            } else if (act.type === 'move') {
-                const o = act.orig, w = o.x1 - o.x0, h = o.y1 - o.y0;
-                let nx0 = o.x0 + (p.x - act.start.x), ny0 = o.y0 + (p.y - act.start.y);
-                if (nx0 < 0) nx0 = 0; if (nx0 + w > vw) nx0 = vw - w;
-                if (ny0 < 0) ny0 = 0; if (ny0 + h > vh) ny0 = vh - h;
-                s.x0 = nx0; s.y0 = ny0; s.x1 = nx0 + w; s.y1 = ny0 + h;
-            }
-            drawCropShape();
-        });
-        const endAction = (e) => {
-            const act = st.edit.cropAction; if (!act) return;
-            st.edit.cropAction = null;
-            try { ov.releasePointerCapture(e.pointerId); } catch (_) {}
-            if (st.edit.cropSel) {
-                const s = normSel(st.edit.cropSel);
-                // 拉出的新框過小則視為取消
-                if (act.type === 'draw' && (s.x1 - s.x0 < CROP_MIN || s.y1 - s.y0 < CROP_MIN)) {
-                    st.edit.cropSel = null;
-                } else {
-                    st.edit.cropSel = s;
-                }
-                drawCropShape();
-            }
-            updateEditButtons();
-        };
-        ov.addEventListener('pointerup', endAction);
-        ov.addEventListener('pointercancel', endAction);
     }
     function pointInSel(px, py, n, circle) {
         if (!circle) return px >= n.x0 && px <= n.x1 && py >= n.y0 && py <= n.y1;
@@ -3171,6 +4187,8 @@ function createImageView(ids, options) {
         if (want) {
             if (st.edit.cropMode) exitCrop();
             if (st.edit.segLevel) cancelSegLevel();
+            if (st.edit.medianFilter) cancelMedianFilter();
+            if (st.edit.nanPatch) cancelNanPatch();
             st.edit.denoise = true;
             st.edit.histLo = 0; st.edit.histHi = 1;
             st.edit.histAuto = false;
@@ -3274,6 +4292,8 @@ function createImageView(ids, options) {
         }
         if (st.edit.segLevel) exitSegLevelMode();
         if (st.edit.segSkew) exitSegSkewMode();
+        if (st.edit.medianFilter) exitMedianFilterMode();
+        if (st.edit.nanPatch) exitNanPatchMode();
         resetHistory();          // 以新載入的資料作為歷史起點
         updateEditButtons();
     }
@@ -3312,6 +4332,21 @@ function createImageView(ids, options) {
             el.segSkewCount.addEventListener('keydown', onSegSkewCountKeydown);
         }
         setupSegSkewZoom();
+        if (el.medianFilter) el.medianFilter.addEventListener('click', startMedianFilterMode);
+        if (el.medianFilterApply) el.medianFilterApply.addEventListener('click', applyMedianFilterEdit);
+        if (el.medianFilterCancel) el.medianFilterCancel.addEventListener('click', cancelMedianFilter);
+        if (el.medianFilterKernel) el.medianFilterKernel.addEventListener('change', onMedianFilterKernelChange);
+        setupMedianFilterZoom();
+        if (el.nanPatch) el.nanPatch.addEventListener('click', startNanPatchMode);
+        if (el.nanPatchApply) el.nanPatchApply.addEventListener('click', applyNanPatchEdit);
+        if (el.nanPatchCancel) el.nanPatchCancel.addEventListener('click', cancelNanPatch);
+        if (el.nanPatchKernel) el.nanPatchKernel.addEventListener('change', onNanPatchKernelChange);
+        setupNanPatchZoom();
+        setupNanPatchCropOverlay();
+        setupNanPatchMiddlePan();
+        if (el.nanPatchRoiRect) el.nanPatchRoiRect.addEventListener('click', () => setNanPatchRoiMode('rect'));
+        if (el.nanPatchRoiCircle) el.nanPatchRoiCircle.addEventListener('click', () => setNanPatchRoiMode('circle'));
+        if (el.nanPatchRoiClear) el.nanPatchRoiClear.addEventListener('click', clearNanPatchRoi);
         if (el.globalLevel) el.globalLevel.addEventListener('click', applyGlobalLeveling);
         if (el.histAuto) el.histAuto.addEventListener('click', () => autoDenoiseBounds());
         if (el.histApply) el.histApply.addEventListener('click', () => toggleDenoise(false));
@@ -3334,6 +4369,8 @@ function createImageView(ids, options) {
             if (st.edit.denoise) renderHist();
             if (st.edit.segLevel) renderSegLevelCompare({ resetView: true });
             if (st.edit.segSkew) renderSegSkewCompare({ resetView: true });
+            if (st.edit.medianFilter) renderMedianFilterCompare({ resetView: true });
+            if (st.edit.nanPatch) renderNanPatchCompare({ resetView: true });
         });
         updateEditButtons();
     }
@@ -3359,6 +4396,8 @@ function createImageView(ids, options) {
                 if (st.edit.denoise) renderHist();
                 if (st.edit.segLevel) renderSegLevelCompare({ resetView: true });
                 if (st.edit.segSkew) renderSegSkewCompare({ resetView: true });
+                if (st.edit.medianFilter) renderMedianFilterCompare({ resetView: true });
+                if (st.edit.nanPatch) renderNanPatchCompare({ resetView: true });
             }
         },
         syncLang: () => {
@@ -3391,7 +4430,8 @@ const editorView = createImageView({
     zMin: 'edZMin', zMax: 'edZMax',
     cropRect: 'edCropRect', cropCircle: 'edCropCircle', cropApply: 'edCropApply',
     cropCancel: 'edCropCancel', cropOverlay: 'edCropOverlay', cropShape: 'edCropShape',
-    cropHint: 'edCropHint', denoise: 'edDenoise', segLevel: 'edSegLevel',
+    cropHint: 'edCropHint', denoise: 'edDenoise', medianFilter: 'edMedianFilter', nanPatch: 'edNanPatch',
+    segLevel: 'edSegLevel',
     segLevelPanel: 'edSegLevelPanel', segLevelConfig: 'edSegLevelConfig',
     segLevelDir: 'edSegLevelDir', segLevelCount: 'edSegLevelCount',
     segLevelCompare: 'edSegLevelCompare', segLevelBusy: 'edSegLevelBusy',
@@ -3425,6 +4465,31 @@ const editorView = createImageView({
     segSkewTuneBusy: 'edSegSkewTuneBusy', segSkewTuneBusyText: 'edSegSkewTuneBusyText',
     segSkewShowBounds: 'edSegSkewShowBounds', segSkewBoundsWrap: 'edSegSkewBoundsWrap',
     segSkewApply: 'edSegSkewApply', segSkewCancel: 'edSegSkewCancel',
+    medianFilterPanel: 'edMedianFilterPanel', medianFilterConfig: 'edMedianFilterConfig',
+    medianFilterKernel: 'edMedianFilterKernel',
+    medianFilterCompare: 'edMedianFilterCompare', medianFilterBusy: 'edMedianFilterBusy',
+    medianFilterBusyText: 'edMedianFilterBusyText',
+    medianFilterBefore: 'edMedianFilterBefore', medianFilterAfter: 'edMedianFilterAfter',
+    medianFilterBeforeCb: 'edMedianFilterBeforeCb', medianFilterBeforeCbLo: 'edMedianFilterBeforeCbLo',
+    medianFilterBeforeCbHi: 'edMedianFilterBeforeCbHi',
+    medianFilterAfterCb: 'edMedianFilterAfterCb', medianFilterAfterCbLo: 'edMedianFilterAfterCbLo',
+    medianFilterAfterCbHi: 'edMedianFilterAfterCbHi',
+    medianFilterApply: 'edMedianFilterApply', medianFilterCancel: 'edMedianFilterCancel',
+    nanPatchPanel: 'edNanPatchPanel', nanPatchConfig: 'edNanPatchConfig',
+    nanPatchKernel: 'edNanPatchKernel',
+    nanPatchBeforeWrap: 'edNanPatchBeforeWrap',
+    nanPatchCropOverlay: 'edNanPatchCropOverlay', nanPatchCropShape: 'edNanPatchCropShape',
+    nanPatchCropHint: 'edNanPatchCropHint',
+    nanPatchRoiRect: 'edNanPatchRoiRect', nanPatchRoiCircle: 'edNanPatchRoiCircle',
+    nanPatchRoiClear: 'edNanPatchRoiClear',
+    nanPatchCompare: 'edNanPatchCompare', nanPatchBusy: 'edNanPatchBusy',
+    nanPatchBusyText: 'edNanPatchBusyText',
+    nanPatchBefore: 'edNanPatchBefore', nanPatchAfter: 'edNanPatchAfter',
+    nanPatchBeforeCb: 'edNanPatchBeforeCb', nanPatchBeforeCbLo: 'edNanPatchBeforeCbLo',
+    nanPatchBeforeCbHi: 'edNanPatchBeforeCbHi',
+    nanPatchAfterCb: 'edNanPatchAfterCb', nanPatchAfterCbLo: 'edNanPatchAfterCbLo',
+    nanPatchAfterCbHi: 'edNanPatchAfterCbHi',
+    nanPatchApply: 'edNanPatchApply', nanPatchCancel: 'edNanPatchCancel',
     globalLevel: 'edGlobalLevel',
     histPanel: 'edHistPanel', histWrap: 'edHistWrap', histCanvas: 'edHistCanvas',
     histHandleLo: 'edHistHandleLo', histHandleHi: 'edHistHandleHi',

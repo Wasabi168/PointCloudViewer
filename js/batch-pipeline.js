@@ -265,6 +265,30 @@ function batchApplyDenoiseFromStep(ds, step) {
     return batchApplyDenoise(ds, loFrac, hiFrac);
 }
 
+function batchApplyMedianFilter(ds, kernelSize) {
+    if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
+    if (typeof applyMedianFilter !== 'function') return { ok: false, reason: 'invalid' };
+    batchEnsureFloatPixels(ds);
+    const k = typeof normalizeMedianKernelSize === 'function'
+        ? normalizeMedianKernelSize(kernelSize)
+        : (kernelSize | 0) || 3;
+    ds.data = applyMedianFilter(ds.data, ds.width, ds.height, k);
+    batchRefreshRange(ds);
+    return { ok: true };
+}
+
+function batchApplyNanPatch(ds, kernelSize, roi) {
+    if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
+    if (typeof applyNanPatch !== 'function') return { ok: false, reason: 'invalid' };
+    batchEnsureFloatPixels(ds);
+    const k = typeof normalizeNanPatchKernelSize === 'function'
+        ? normalizeNanPatchKernelSize(kernelSize)
+        : (kernelSize | 0) || 3;
+    ds.data = applyNanPatch(ds.data, ds.width, ds.height, k, null, roi || null);
+    batchRefreshRange(ds);
+    return { ok: true };
+}
+
 function batchApplyCalc(ds, op, operand) {
     if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
     if (!Number.isFinite(operand)) return { ok: false, reason: 'invalid' };
@@ -377,6 +401,8 @@ function batchApplyStep(ds, step) {
         case 'segmentLevel': return batchApplySegmentLevel(ds);
         case 'segmentSkew': return batchApplySegmentSkew(ds, step);
         case 'denoise': return batchApplyDenoiseFromStep(ds, step);
+        case 'medianFilter': return batchApplyMedianFilter(ds, step.kernelSize);
+        case 'nanPatch': return batchApplyNanPatch(ds, step.kernelSize, step.roi || null);
         case 'calc': return batchApplyCalc(ds, step.op, step.operand);
         case 'cropRect':
         case 'cropCircle': return batchApplyCrop(ds, step);
@@ -405,6 +431,11 @@ function describeBatchStep(step) {
         case 'denoise':
             if (step.auto) return t('bfmStepDenoiseAuto');
             return t('bfmStepDenoise', (step.lo * 100).toFixed(0) + '%', (step.hi * 100).toFixed(0) + '%');
+        case 'medianFilter':
+            return t('bfmStepMedianFilter', step.kernelSize);
+        case 'nanPatch':
+            if (step.roi) return t('bfmStepNanPatchRoi', step.kernelSize);
+            return t('bfmStepNanPatch', step.kernelSize);
         case 'calc': return t('bfmStepCalc', step.op, step.operand);
         case 'cropRect': return t('bfmStepCropRect');
         case 'cropCircle': return t('bfmStepCropCircle');

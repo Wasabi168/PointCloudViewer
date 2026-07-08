@@ -332,6 +332,8 @@
                 <div class="ed-toolbar-block" id="edProcessBlock">
                     <span class="ed-toolbar-label" data-i18n="toolGroupProcess">處理</span>
                     <button type="button" id="edDenoise" data-i18n="denoise" data-i18n-title="denoiseTitle">刪除雜點</button>
+                    <button type="button" id="edMedianFilter" data-i18n="medianFilter" data-i18n-title="medianFilterTitle">中值濾波</button>
+                    <button type="button" id="edNanPatch" data-i18n="nanPatch" data-i18n-title="nanPatchTitle">NaN 修補</button>
                 </div>
             </div>
             <span class="ctrl-sep ctrl-sep--inline" id="edSepProcessCalib" aria-hidden="true"></span>
@@ -565,6 +567,137 @@
                         <div class="seg-level-busy-card">
                             <div class="seg-level-spinner" aria-hidden="true"></div>
                             <span class="seg-level-busy-text" id="edSegSkewBusyText" data-i18n="segSkewProcessing">正在分析分區並計算錯位校正…</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="seg-level-panel" id="edMedianFilterPanel" aria-hidden="true">
+                <div class="seg-level-head">
+                    <span class="seg-level-mode-badge" data-i18n="medianFilterModeName">中值濾波模式</span>
+                    <div class="seg-level-config" id="edMedianFilterConfig" aria-hidden="true">
+                        <label class="seg-level-config-item" for="edMedianFilterKernel">
+                            <span data-i18n="medianFilterKernelLabel">核心大小</span>
+                            <select id="edMedianFilterKernel">
+                                <option value="3">3×3</option>
+                                <option value="5">5×5</option>
+                                <option value="7">7×7</option>
+                                <option value="9">9×9</option>
+                                <option value="11">11×11</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="seg-level-actions">
+                        <button type="button" id="edMedianFilterApply" data-i18n="medianFilterApply" data-i18n-title="medianFilterApplyTitle">套用</button>
+                        <button type="button" id="edMedianFilterCancel" class="btn-secondary" data-i18n="medianFilterCancel" data-i18n-title="medianFilterCancelTitle">取消</button>
+                    </div>
+                </div>
+                <div class="seg-level-compare seg-skew-compare" id="edMedianFilterCompare">
+                    <div class="seg-level-pane">
+                        <span class="seg-level-pane-label" data-i18n="medianFilterBefore">濾波前</span>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap">
+                                <canvas id="edMedianFilterBefore"></canvas>
+                            </div>
+                            <div class="seg-level-cbar" aria-hidden="false">
+                                <span class="seg-level-cbar-val" id="edMedianFilterBeforeCbHi"></span>
+                                <canvas id="edMedianFilterBeforeCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                <span class="seg-level-cbar-val" id="edMedianFilterBeforeCbLo"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="seg-level-pane seg-level-pane-after">
+                        <span class="seg-level-pane-label" data-i18n="medianFilterAfter">濾波後</span>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap">
+                                <canvas id="edMedianFilterAfter"></canvas>
+                            </div>
+                            <div class="seg-level-cbar" aria-hidden="false">
+                                <span class="seg-level-cbar-val" id="edMedianFilterAfterCbHi"></span>
+                                <canvas id="edMedianFilterAfterCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                <span class="seg-level-cbar-val" id="edMedianFilterAfterCbLo"></span>
+                            </div>
+                        </div>
+                        <div class="seg-level-tune-busy" id="edMedianFilterBusy" aria-hidden="true">
+                            <div class="seg-level-tune-busy-card">
+                                <div class="seg-level-spinner" aria-hidden="true"></div>
+                                <span class="seg-level-tune-busy-text" id="edMedianFilterBusyText" data-i18n="medianFilterUpdating">正在更新預覽…</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="seg-level-panel" id="edNanPatchPanel" aria-hidden="true">
+                <div class="seg-level-head">
+                    <span class="seg-level-mode-badge" data-i18n="nanPatchModeName">NaN 修補模式</span>
+                    <div class="seg-level-config" id="edNanPatchConfig" aria-hidden="true">
+                        <label class="seg-level-config-item" for="edNanPatchKernel">
+                            <span data-i18n="nanPatchKernelLabel">核心大小</span>
+                            <select id="edNanPatchKernel">
+                                <option value="3">3×3</option>
+                                <option value="5">5×5</option>
+                                <option value="7">7×7</option>
+                                <option value="9">9×9</option>
+                                <option value="11">11×11</option>
+                            </select>
+                        </label>
+                        <div class="seg-level-config-item nan-patch-roi-tools">
+                            <span data-i18n="nanPatchRoiLabel">修補範圍</span>
+                            <div class="cursor-toggle ed-crop-toggle" id="edNanPatchRoiToggle">
+                                <button type="button" id="edNanPatchRoiRect" data-i18n="cropRectShort" data-i18n-title="nanPatchRoiRectTitle">方形</button>
+                                <button type="button" id="edNanPatchRoiCircle" data-i18n="cropCircleShort" data-i18n-title="nanPatchRoiCircleTitle">圓形</button>
+                                <button type="button" id="edNanPatchRoiClear" class="btn-secondary" data-i18n="nanPatchRoiClear" data-i18n-title="nanPatchRoiClearTitle">清除</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="seg-level-actions">
+                        <button type="button" id="edNanPatchApply" data-i18n="nanPatchApply" data-i18n-title="nanPatchApplyTitle">套用</button>
+                        <button type="button" id="edNanPatchCancel" class="btn-secondary" data-i18n="nanPatchCancel" data-i18n-title="nanPatchCancelTitle">取消</button>
+                    </div>
+                </div>
+                <div class="seg-level-compare seg-skew-compare" id="edNanPatchCompare">
+                    <div class="seg-level-pane">
+                        <span class="seg-level-pane-label" data-i18n="nanPatchBefore">修補前</span>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap" id="edNanPatchBeforeWrap">
+                                <canvas id="edNanPatchBefore"></canvas>
+                                <div class="crop-overlay" id="edNanPatchCropOverlay" aria-hidden="true">
+                                    <div class="crop-shape" id="edNanPatchCropShape" style="display:none;">
+                                        <span class="crop-handle" data-h="nw"></span>
+                                        <span class="crop-handle" data-h="n"></span>
+                                        <span class="crop-handle" data-h="ne"></span>
+                                        <span class="crop-handle" data-h="e"></span>
+                                        <span class="crop-handle" data-h="se"></span>
+                                        <span class="crop-handle" data-h="s"></span>
+                                        <span class="crop-handle" data-h="sw"></span>
+                                        <span class="crop-handle" data-h="w"></span>
+                                    </div>
+                                    <div class="crop-hint" id="edNanPatchCropHint" data-i18n="nanPatchRoiHint">在左側圖上拖曳以框選修補範圍（可選）</div>
+                                </div>
+                            </div>
+                            <div class="seg-level-cbar" aria-hidden="false">
+                                <span class="seg-level-cbar-val" id="edNanPatchBeforeCbHi"></span>
+                                <canvas id="edNanPatchBeforeCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                <span class="seg-level-cbar-val" id="edNanPatchBeforeCbLo"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="seg-level-pane seg-level-pane-after">
+                        <span class="seg-level-pane-label" data-i18n="nanPatchAfter">修補後</span>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap">
+                                <canvas id="edNanPatchAfter"></canvas>
+                            </div>
+                            <div class="seg-level-cbar" aria-hidden="false">
+                                <span class="seg-level-cbar-val" id="edNanPatchAfterCbHi"></span>
+                                <canvas id="edNanPatchAfterCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                <span class="seg-level-cbar-val" id="edNanPatchAfterCbLo"></span>
+                            </div>
+                        </div>
+                        <div class="seg-level-tune-busy" id="edNanPatchBusy" aria-hidden="true">
+                            <div class="seg-level-tune-busy-card">
+                                <div class="seg-level-spinner" aria-hidden="true"></div>
+                                <span class="seg-level-tune-busy-text" id="edNanPatchBusyText" data-i18n="nanPatchUpdating">正在更新預覽…</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -813,6 +946,8 @@
 <script src="js/file-export.js"></script>
 <script src="js/segment-level.js"></script>
 <script src="js/segment-skew.js"></script>
+<script src="js/median-filter.js"></script>
+<script src="js/nan-patch.js"></script>
 <script src="js/batch-pipeline.js"></script>
 <script src="js/colormap.js"></script>
 <script src="js/render.js"></script>

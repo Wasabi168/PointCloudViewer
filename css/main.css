@@ -1509,11 +1509,23 @@
     #edViewer.seg-skew-active #edZoomHint,
     #edViewer.seg-skew-active #edZoomIndicator,
     #edViewer.seg-skew-active #edCropOverlay,
-    #edViewer.seg-skew-active #edDropHint {
+    #edViewer.seg-skew-active #edDropHint,
+    #edViewer.median-filter-active #edCanvas,
+    #edViewer.median-filter-active #edZoomHint,
+    #edViewer.median-filter-active #edZoomIndicator,
+    #edViewer.median-filter-active #edCropOverlay,
+    #edViewer.median-filter-active #edDropHint,
+    #edViewer.nan-patch-active #edCanvas,
+    #edViewer.nan-patch-active #edZoomHint,
+    #edViewer.nan-patch-active #edZoomIndicator,
+    #edViewer.nan-patch-active #edCropOverlay,
+    #edViewer.nan-patch-active #edDropHint {
         display: none !important;
     }
     #edViewer.seg-level-active .seg-level-panel#edSegLevelPanel,
-    #edViewer.seg-skew-active .seg-level-panel#edSegSkewPanel {
+    #edViewer.seg-skew-active .seg-level-panel#edSegSkewPanel,
+    #edViewer.median-filter-active .seg-level-panel#edMedianFilterPanel,
+    #edViewer.nan-patch-active .seg-level-panel#edNanPatchPanel {
         display: flex;
     }
     .seg-level-panel {
@@ -1895,6 +1907,22 @@
         max-width: none;
         max-height: none;
     }
+    .seg-level-canvas-wrap.nan-patch-roi-show .crop-overlay,
+    .seg-level-canvas-wrap.crop-active .crop-overlay {
+        display: block;
+    }
+    .seg-level-canvas-wrap.crop-active .crop-overlay {
+        cursor: crosshair;
+    }
+    .seg-level-canvas-wrap.crop-active canvas {
+        pointer-events: none;
+    }
+    #edNanPatchRoiRect.active,
+    #edNanPatchRoiCircle.active {
+        background: rgba(79, 140, 255, 0.2);
+        border-color: var(--accent);
+        color: var(--accent-hover);
+    }
     .seg-level-profile-wrap {
         flex-shrink: 0;
         height: 118px;
@@ -1938,7 +1966,9 @@
         opacity: 1;
     }
     #edSegLevel.tool-active,
-    #edSegSkew.tool-active {
+    #edSegSkew.tool-active,
+    #edMedianFilter.tool-active,
+    #edNanPatch.tool-active {
         background: rgba(79, 140, 255, 0.2);
         border-color: var(--accent);
         color: var(--accent-hover);
