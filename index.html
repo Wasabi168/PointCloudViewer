@@ -34,12 +34,29 @@
     <div class="controls controls--overflow" id="viewerControls">
         <!-- 群組：檔案（永不收納） -->
         <div class="ctrl-group" id="viewerFileGroup" data-toolbar-priority="0">
-            <label class="file-btn">
-                <span data-i18n="btnOpen">讀取檔案</span>
+            <label class="file-btn toolbar-icon-btn" data-i18n-title="btnOpen" data-i18n-aria="btnOpen" title="讀取檔案" aria-label="讀取檔案">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
+                    <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
+                </svg>
                 <input type="file" id="fileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
             </label>
-            <button id="btnSave" data-i18n="btnSave">儲存</button>
-            <button type="button" id="btnClear" class="btn-secondary" data-i18n="btnClear" data-i18n-title="btnClearTitle" disabled>清除</button>
+            <button type="button" id="btnSave" class="toolbar-icon-btn" data-i18n-title="btnSave" data-i18n-aria="btnSave" title="儲存" aria-label="儲存">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                    <polyline points="17 21 17 13 7 13 7 21"/>
+                    <polyline points="7 3 7 8 15 8"/>
+                </svg>
+            </button>
+            <button type="button" id="btnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="btnClearTitle" data-i18n-aria="btnClearTitle" title="清除目前載入的資料" aria-label="清除目前載入的資料" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M4 7h16"/>
+                    <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                    <path d="M6 7l1 13a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/>
+                    <path d="M10 11v5"/>
+                    <path d="M14 11v5"/>
+                </svg>
+            </button>
         </div>
 
         <span class="ctrl-sep" id="viewerSepDisplay" aria-hidden="true"></span>
@@ -275,12 +292,29 @@
         <div class="controls controls--overflow" id="edControls">
             <!-- 群組：檔案（永不收納） -->
             <div class="ctrl-group" id="edFileGroup" data-toolbar-priority="0">
-                <label class="file-btn">
-                    <span data-i18n="btnOpen">讀取檔案</span>
+                <label class="file-btn toolbar-icon-btn" data-i18n-title="btnOpen" data-i18n-aria="btnOpen" title="讀取檔案" aria-label="讀取檔案">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
+                        <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
+                    </svg>
                     <input type="file" id="edFileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
                 </label>
-                <button id="edBtnSave" data-i18n="btnSave">儲存</button>
-                <button type="button" id="edBtnClear" class="btn-secondary" data-i18n="btnClear" data-i18n-title="btnClearTitle" disabled>清除</button>
+                <button type="button" id="edBtnSave" class="toolbar-icon-btn" data-i18n-title="btnSave" data-i18n-aria="btnSave" title="儲存" aria-label="儲存">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                </button>
+                <button type="button" id="edBtnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="btnClearTitle" data-i18n-aria="btnClearTitle" title="清除目前載入的資料" aria-label="清除目前載入的資料" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 7h16"/>
+                        <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        <path d="M6 7l1 13a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/>
+                        <path d="M10 11v5"/>
+                        <path d="M14 11v5"/>
+                    </svg>
+                </button>
             </div>
 
             <span class="ctrl-sep" id="edSepDisplay" aria-hidden="true"></span>
@@ -771,11 +805,24 @@
         </h1>
         <div class="controls">
             <div class="ctrl-group">
-                <label class="file-btn">
-                    <span data-i18n="batchBtnAdd">加入檔案</span>
+                <label class="file-btn toolbar-icon-btn" data-i18n-title="batchBtnAdd" data-i18n-aria="batchBtnAdd" title="加入檔案" aria-label="加入檔案">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
+                        <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
+                        <path d="M12 11v6"/>
+                        <path d="M9 14h6"/>
+                    </svg>
                     <input type="file" id="batchFileInput" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
                 </label>
-                <button type="button" id="batchBtnClear" class="btn-secondary" data-i18n="batchBtnClear" disabled>清除清單</button>
+                <button type="button" id="batchBtnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="batchBtnClear" data-i18n-aria="batchBtnClear" title="清除清單" aria-label="清除清單" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 7h16"/>
+                        <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        <path d="M6 7l1 13a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/>
+                        <path d="M10 11v5"/>
+                        <path d="M14 11v5"/>
+                    </svg>
+                </button>
             </div>
             <span class="ctrl-sep" aria-hidden="true"></span>
             <div class="ctrl-group">
@@ -791,7 +838,11 @@
                     </select>
                 </label>
                 <button type="button" id="batchPreviewEnable" data-i18n="batchPreviewFiles" data-i18n-title="batchPreviewTitle" aria-pressed="false">預覽圖片</button>
-                <button type="button" id="batchBtnConvert" data-i18n="batchBtnConvert" disabled>開始轉換</button>
+                <button type="button" id="batchBtnConvert" class="toolbar-icon-btn" data-i18n-title="batchBtnConvert" data-i18n-aria="batchBtnConvert" title="開始轉換" aria-label="開始轉換" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/>
+                    </svg>
+                </button>
             </div>
         </div>
     </header>
@@ -828,11 +879,24 @@
         </h1>
         <div class="controls">
             <div class="ctrl-group">
-                <label class="file-btn">
-                    <span data-i18n="batchEditBtnAdd">加入檔案</span>
+                <label class="file-btn toolbar-icon-btn" data-i18n-title="batchEditBtnAdd" data-i18n-aria="batchEditBtnAdd" title="加入檔案" aria-label="加入檔案">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
+                        <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
+                        <path d="M12 11v6"/>
+                        <path d="M9 14h6"/>
+                    </svg>
                     <input type="file" id="batchEditFileInput" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
                 </label>
-                <button type="button" id="batchEditBtnClear" class="btn-secondary" data-i18n="batchEditBtnClear" disabled>清除清單</button>
+                <button type="button" id="batchEditBtnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="batchEditBtnClear" data-i18n-aria="batchEditBtnClear" title="清除清單" aria-label="清除清單" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 7h16"/>
+                        <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        <path d="M6 7l1 13a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/>
+                        <path d="M10 11v5"/>
+                        <path d="M14 11v5"/>
+                    </svg>
+                </button>
             </div>
             <span class="ctrl-sep" aria-hidden="true"></span>
             <div class="ctrl-group">
@@ -851,7 +915,11 @@
                         <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
                     </select>
                 </label>
-                <button type="button" id="batchEditBtnRun" data-i18n="batchEditBtnRun" disabled>執行批次編輯</button>
+                <button type="button" id="batchEditBtnRun" class="toolbar-icon-btn" data-i18n-title="batchEditBtnRun" data-i18n-aria="batchEditBtnRun" title="執行批次編輯" aria-label="執行批次編輯" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/>
+                    </svg>
+                </button>
             </div>
         </div>
     </header>
@@ -892,10 +960,38 @@
         <button type="button" class="bfm-close" id="bfmCloseBtn" aria-label="Close">&times;</button>
     </div>
     <div class="bfm-toolbar">
-        <button type="button" id="bfmBtnNew" data-i18n="bfmBtnNew">新建</button>
-        <button type="button" id="bfmBtnOpen" class="btn-secondary" data-i18n="bfmBtnOpen">開啟</button>
-        <button type="button" id="bfmBtnSave" class="btn-secondary" data-i18n="bfmBtnSave" disabled>儲存</button>
-        <button type="button" id="bfmBtnClear" class="btn-secondary" data-i18n="bfmBtnClear" disabled>清除</button>
+        <div class="bfm-icon-group">
+            <button type="button" id="bfmBtnNew" class="toolbar-icon-btn" data-i18n-title="bfmBtnNew" data-i18n-aria="bfmBtnNew" title="新建" aria-label="新建">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10"/>
+                    <path d="M13 3v5h5"/>
+                    <path d="M9 13h6"/>
+                    <path d="M12 10v6"/>
+                </svg>
+            </button>
+            <button type="button" id="bfmBtnOpen" class="toolbar-icon-btn btn-secondary" data-i18n-title="bfmBtnOpen" data-i18n-aria="bfmBtnOpen" title="開啟" aria-label="開啟">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
+                    <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
+                </svg>
+            </button>
+            <button type="button" id="bfmBtnSave" class="toolbar-icon-btn btn-secondary" data-i18n-title="bfmBtnSave" data-i18n-aria="bfmBtnSave" title="儲存" aria-label="儲存" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                    <polyline points="17 21 17 13 7 13 7 21"/>
+                    <polyline points="7 3 7 8 15 8"/>
+                </svg>
+            </button>
+            <button type="button" id="bfmBtnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="bfmBtnClear" data-i18n-aria="bfmBtnClear" title="清除" aria-label="清除" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M4 7h16"/>
+                    <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                    <path d="M6 7l1 13a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/>
+                    <path d="M10 11v5"/>
+                    <path d="M14 11v5"/>
+                </svg>
+            </button>
+        </div>
         <div class="bfm-add-step-wrap">
             <button type="button" id="bfmBtnAddStep" data-i18n="bfmBtnAddStep" disabled>加入剛才的編輯</button>
             <span class="bfm-last-edit-hint" id="bfmLastEditHint">（尚無可加入的編輯）</span>
@@ -905,7 +1001,11 @@
     <div class="bfm-steps" id="bfmSteps" data-empty="流程中尚無步驟"></div>
     <div class="bfm-footer">
         <input type="text" id="bfmNameInput" class="bfm-name-input" data-i18n-placeholder="bfmNamePlaceholder" placeholder="批次檔名稱" />
-        <button type="button" id="bfmBtnDone" class="btn-secondary" data-i18n="bfmBtnDone">關閉</button>
+        <button type="button" id="bfmBtnDone" class="toolbar-icon-btn btn-secondary" data-i18n-title="bfmBtnDone" data-i18n-aria="bfmBtnDone" title="關閉" aria-label="關閉">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18"/>
+            </svg>
+        </button>
     </div>
     <input type="file" id="bfmFileInput" accept=".wbatch,.json" hidden />
 </div>

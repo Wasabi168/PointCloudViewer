@@ -159,13 +159,14 @@ function applyLanguage(lang) {
             statusEl.textContent = t('statusIdle');
         }
     }
-    // 儲存按鈕若非儲存中，更新文字
-    if (typeof btnSave !== 'undefined' && btnSave && !btnSave.disabled) {
-        btnSave.textContent = t('btnSave');
+    // 儲存按鈕若非儲存中，更新 tooltip
+    if (typeof btnSave !== 'undefined' && btnSave && !btnSave.disabled && !btnSave.classList.contains('is-busy')) {
+        btnSave.title = t('btnSave');
+        btnSave.setAttribute('aria-label', t('btnSave'));
     }
     if (typeof btnClear !== 'undefined' && btnClear) {
-        btnClear.textContent = t('btnClear');
         btnClear.title = t('btnClearTitle');
+        btnClear.setAttribute('aria-label', t('btnClearTitle'));
     }
     // 更新拖放提示 (依目前是否為 drag-reject 狀態)
     if (typeof dropText !== 'undefined' && dropText && typeof viewerEl !== 'undefined' && viewerEl) {

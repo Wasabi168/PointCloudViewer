@@ -467,7 +467,9 @@ function createImageView(ids, options) {
 
     async function runSaveJob(format, writeFn, fullName) {
         el.btnSave.disabled = true;
-        el.btnSave.textContent = t('btnSaving');
+        setBusy(el.btnSave, true);
+        el.btnSave.title = t('btnSaving');
+        el.btnSave.setAttribute('aria-label', t('btnSaving'));
         setProgress(0);
         el.status.textContent = t('statusSaving', fullName);
         try {
@@ -481,7 +483,9 @@ function createImageView(ids, options) {
         } finally {
             hideProgress();
             el.btnSave.disabled = false;
-            el.btnSave.textContent = t('btnSave');
+            setBusy(el.btnSave, false);
+            el.btnSave.title = t('btnSave');
+            el.btnSave.setAttribute('aria-label', t('btnSave'));
         }
     }
     function fallbackSave(format, base) {
@@ -4405,10 +4409,13 @@ function createImageView(ids, options) {
             if (!ds) el.status.textContent = t('statusIdle');
             else if (ds.type === 'pcd-scatter') el.status.textContent = t('statusLoadedPcd', ds.filename, ds.pointCount);
             else el.status.textContent = t('statusLoaded', ds.filename, ds.width, ds.height);
-            if (!el.btnSave.disabled) el.btnSave.textContent = t('btnSave');
+            if (!el.btnSave.disabled && !el.btnSave.classList.contains('is-busy')) {
+                el.btnSave.title = t('btnSave');
+                el.btnSave.setAttribute('aria-label', t('btnSave'));
+            }
             if (el.btnClear) {
-                el.btnClear.textContent = t('btnClear');
                 el.btnClear.title = t('btnClearTitle');
+                el.btnClear.setAttribute('aria-label', t('btnClearTitle'));
             }
         },
         clearData,

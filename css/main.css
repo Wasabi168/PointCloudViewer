@@ -282,6 +282,23 @@
 
     input[type="file"] { display: none; }
 
+    /* 工具列檔案操作：圖示按鈕（讀取 / 儲存 / 清除） */
+    .toolbar-icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        flex-shrink: 0;
+    }
+    .toolbar-icon-btn svg {
+        width: 18px;
+        height: 18px;
+        display: block;
+        flex-shrink: 0;
+    }
+
     /* 按鈕「處理中」狀態：顯示轉圈並暫時停用，避免重複點擊 */
     @keyframes ui-spin { to { transform: rotate(360deg); } }
     .is-busy {
@@ -2345,7 +2362,21 @@
         border-bottom: 1px solid var(--border);
         flex-shrink: 0;
     }
-    .bfm-toolbar button {
+    .bfm-icon-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+    }
+    .bfm-toolbar .toolbar-icon-btn {
+        width: 32px;
+        height: 32px;
+    }
+    .bfm-toolbar .toolbar-icon-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+    .bfm-toolbar button:not(.toolbar-icon-btn) {
         font-size: 12px;
         padding: 6px 10px;
     }
@@ -2476,6 +2507,15 @@
         justify-content: flex-end;
         gap: 8px;
         flex-shrink: 0;
+    }
+    .bfm-footer .toolbar-icon-btn {
+        width: 32px;
+        height: 32px;
+        flex-shrink: 0;
+    }
+    .bfm-footer .toolbar-icon-btn svg {
+        width: 16px;
+        height: 16px;
     }
     .bfm-name-input {
         flex: 1;

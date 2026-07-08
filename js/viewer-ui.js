@@ -564,7 +564,9 @@ if (supportsSavePicker) {
 /** 實際產生檔案並更新 UI（picker 與 fallback 兩條路徑共用） */
 async function runSaveJob(format, writeFn, fullName) {
     btnSave.disabled = true;
-    btnSave.textContent = t('btnSaving');
+    setBusy(btnSave, true);
+    btnSave.title = t('btnSaving');
+    btnSave.setAttribute('aria-label', t('btnSaving'));
     setProgress(0);
     statusEl.textContent = t('statusSaving', fullName);
     try {
@@ -578,7 +580,9 @@ async function runSaveJob(format, writeFn, fullName) {
     } finally {
         hideProgress();
         btnSave.disabled = false;
-        btnSave.textContent = t('btnSave');
+        setBusy(btnSave, false);
+        btnSave.title = t('btnSave');
+        btnSave.setAttribute('aria-label', t('btnSave'));
     }
 }
 
