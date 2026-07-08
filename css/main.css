@@ -6,9 +6,40 @@
         --accent: #4f8cff;
         --accent-hover: #6aa1ff;
         --muted: #9a9ab0;
+        --scrollbar-track: var(--panel);
+        --scrollbar-thumb: #4a4a5c;
+        --scrollbar-thumb-hover: #5c5c70;
     }
 
-    * { box-sizing: border-box; }
+    * {
+        box-sizing: border-box;
+        scrollbar-width: thin;
+        scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    *::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    *::-webkit-scrollbar-track {
+        background: var(--scrollbar-track);
+        border-radius: 5px;
+    }
+
+    *::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb);
+        border: 2px solid var(--scrollbar-track);
+        border-radius: 5px;
+    }
+
+    *::-webkit-scrollbar-thumb:hover {
+        background: var(--scrollbar-thumb-hover);
+    }
+
+    *::-webkit-scrollbar-corner {
+        background: var(--scrollbar-track);
+    }
 
     body {
         margin: 0;
