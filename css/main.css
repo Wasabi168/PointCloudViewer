@@ -2105,43 +2105,39 @@
     .batch-edit-side .batch-file-badge.ok { color: #6ec27a; }
     .batch-edit-side .batch-file-badge.warn { color: #ffaa44; }
 
-    /* ===== 批次檔管理器（編輯器 / 批次編輯共用浮動視窗） ===== */
-    .bfm-float {
-        position: fixed;
-        right: 20px;
-        bottom: 20px;
-        left: auto;
-        top: auto;
-        z-index: 10050;
-        width: min(380px, calc(100vw - 40px));
-        max-height: min(72vh, 560px);
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 10px;
+    /* ===== 批次檔管理器（編輯器 / 批次編輯共用，嵌入右側邊欄） ===== */
+    .bfm-mount {
+        margin-top: 20px;
+    }
+    .bfm-mount[hidden] {
+        display: none !important;
+    }
+    .bfm-panel {
         display: none;
         flex-direction: column;
+        width: 100%;
+        max-height: min(420px, 42vh);
+        background: #2a2a36;
+        border: 1px solid var(--border);
+        border-radius: 8px;
         overflow: hidden;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04);
         user-select: none;
         -webkit-user-select: none;
     }
-    .bfm-float .bfm-name-input {
+    .bfm-panel .bfm-name-input {
         user-select: text;
         -webkit-user-select: text;
     }
-    @media (max-height: 640px) {
-        .bfm-float { max-height: calc(100vh - 56px); }
-    }
-    .bfm-float.show {
+    .bfm-panel.show {
         display: flex;
     }
-    .bfm-float.bfm-drag-over {
+    .bfm-panel.bfm-drag-over {
         border-color: var(--accent);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(79, 140, 255, 0.45);
+        box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.35);
     }
-    .bfm-float.bfm-drag-reject {
+    .bfm-panel.bfm-drag-reject {
         border-color: #ff5c5c;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(255, 92, 92, 0.45);
+        box-shadow: 0 0 0 2px rgba(255, 92, 92, 0.35);
     }
     .bfm-header {
         display: flex;
@@ -2149,12 +2145,12 @@
         justify-content: space-between;
         padding: 10px 14px;
         border-bottom: 1px solid var(--border);
-        cursor: grab;
-        user-select: none;
         flex-shrink: 0;
     }
-    .bfm-header:active { cursor: grabbing; }
     .bfm-header h3 { margin: 0; font-size: 14px; font-weight: 600; }
+    .bfm-panel--pinned .bfm-header {
+        padding-top: 8px;
+    }
     .bfm-close {
         background: transparent;
         border: none;
@@ -2166,6 +2162,10 @@
         flex-shrink: 0;
     }
     .bfm-close:hover { color: var(--text); }
+    .bfm-close[hidden],
+    .bfm-footer .btn-secondary[hidden] {
+        display: none;
+    }
     .bfm-toolbar {
         display: flex;
         flex-wrap: wrap;
@@ -2316,8 +2316,7 @@
         border-radius: 4px;
         font-size: 12px;
     }
-    #edBtnBatchFile.active,
-    #batchEditBtnManage.active {
+    #edBtnBatchFile.active {
         background: var(--accent-hover, #3d7ae8);
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
     }

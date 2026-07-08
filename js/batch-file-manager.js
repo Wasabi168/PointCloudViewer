@@ -9,11 +9,14 @@
 const BatchFileManager = (() => {
     let currentFile = null;
     let onChangeCallback = null;
-    let isOpen = false;
+    let editorPanelOpen = false;
+    let pinnedMode = false;
+    let pageContext = null;
     let signatureProvider = null;
 
     const panel = document.getElementById('batchFileManagerPanel');
-    const dragHandle = document.getElementById('bfmDragHandle');
+    const edMount = document.getElementById('edBfmMount');
+    const batchEditMount = document.getElementById('batchEditBfmMount');
     const stepsEl = document.getElementById('bfmSteps');
     const metaEl = document.getElementById('bfmMeta');
     const nameInput = document.getElementById('bfmNameInput');
@@ -26,13 +29,38 @@ const BatchFileManager = (() => {
     const btnDone = document.getElementById('bfmBtnDone');
     const btnClose = document.getElementById('bfmCloseBtn');
     const fileInput = document.getElementById('bfmFileInput');
-    const toggleBtns = [
-        document.getElementById('edBtnBatchFile'),
-        document.getElementById('batchEditBtnManage'),
-    ].filter(Boolean);
+    const toggleBtn = document.getElementById('edBtnBatchFile');
 
-    function syncToggleButtons() {
-        toggleBtns.forEach(btn => btn.classList.toggle('active', isOpen));
+    function syncToggleButton() {
+        if (!toggleBtn) return;
+        toggleBtn.classList.toggle('active', pageContext === 'editor' && editorPanelOpen);
+    }
+
+    function syncPanelChrome() {
+        panel.classList.toggle('bfm-panel--pinned', pinnedMode);
+        if (btnClose) btnClose.hidden = pinnedMode;
+        if (btnDone) btnDone.hidden = pinnedMode;
+    }
+
+    function mountTo(targetMount) {
+        if (!targetMount || panel.parentElement === targetMount) return;
+        targetMount.appendChild(panel);
+    }
+
+    function syncEditorVisibility() {
+        if (!edMount) return;
+        const visible = editorPanelOpen;
+        edMount.hidden = !visible;
+        panel.classList.toggle('show', visible);
+        panel.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        syncToggleButton();
+    }
+
+    function syncPinnedVisibility() {
+        if (!batchEditMount) return;
+        batchEditMount.hidden = false;
+        panel.classList.add('show');
+        panel.setAttribute('aria-hidden', 'false');
     }
 
     function notifyChange() {
@@ -239,56 +267,6 @@ const BatchFileManager = (() => {
         notifyChange();
     }
 
-    const BFM_MARGIN = 8;
-    const BFM_TOP_MIN = 48;
-    const BFM_MIN_VISIBLE = 56;
-
-    function panelHasLayout() {
-        return panel.classList.contains('show') && panel.getBoundingClientRect().width > 0;
-    }
-
-    function isPanelInViewport() {
-        if (!panelHasLayout()) return false;
-        const rect = panel.getBoundingClientRect();
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        return rect.top < vh - BFM_MIN_VISIBLE
-            && rect.bottom > BFM_TOP_MIN
-            && rect.left < vw - BFM_MIN_VISIBLE
-            && rect.right > BFM_MIN_VISIBLE;
-    }
-
-    function resetPanelPosition() {
-        panel.style.left = 'auto';
-        panel.style.top = 'auto';
-        panel.style.right = BFM_MARGIN + 'px';
-        panel.style.bottom = BFM_MARGIN + 'px';
-    }
-
-    function clampPanelToViewport() {
-        if (!panel.classList.contains('show')) return;
-        const rect = panel.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) return;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        let left = rect.left;
-        let top = rect.top;
-        const w = rect.width;
-        const h = rect.height;
-        left = Math.max(BFM_MARGIN, Math.min(left, vw - w - BFM_MARGIN));
-        top = Math.max(BFM_TOP_MIN, Math.min(top, vh - h - BFM_MARGIN));
-        panel.style.right = 'auto';
-        panel.style.bottom = 'auto';
-        panel.style.left = left + 'px';
-        panel.style.top = top + 'px';
-    }
-
-    function ensurePanelVisible() {
-        if (!isOpen) return;
-        if (!isPanelInViewport()) resetPanelPosition();
-        clampPanelToViewport();
-    }
-
     function newFromEditor() {
         const sig = editorView.getDatasetSignature();
         if (!sig) { showToast(t('bfmNewNeedData'), 'info'); return; }
@@ -305,40 +283,27 @@ const BatchFileManager = (() => {
     }
 
     function open() {
+        if (pinnedMode) return;
         if (!currentFile) tryAutoCreateBatchFile();
-        isOpen = true;
-        panel.classList.add('show');
-        panel.setAttribute('aria-hidden', 'false');
-        syncToggleButtons();
+        editorPanelOpen = true;
+        syncEditorVisibility();
         render();
-        requestAnimationFrame(() => {
-            ensurePanelVisible();
-            requestAnimationFrame(ensurePanelVisible);
-        });
     }
 
     function close() {
-        isOpen = false;
-        panel.classList.remove('show');
-        panel.setAttribute('aria-hidden', 'true');
-        syncToggleButtons();
+        if (pinnedMode) return;
+        editorPanelOpen = false;
+        syncEditorVisibility();
     }
 
     function toggle() {
-        if (isOpen) {
-            if (!isPanelInViewport()) {
-                resetPanelPosition();
-                requestAnimationFrame(ensurePanelVisible);
-                return;
-            }
-            close();
-        } else {
-            open();
-        }
+        if (pinnedMode || pageContext !== 'editor') return;
+        if (editorPanelOpen) close();
+        else open();
     }
 
     function isVisible() {
-        return isOpen;
+        return pinnedMode || editorPanelOpen;
     }
 
     function getCurrent() {
@@ -425,6 +390,24 @@ const BatchFileManager = (() => {
         showToast(t('bfmCleared'), 'info');
     }
 
+    function setPageContext(page) {
+        pageContext = page;
+        if (page === 'batchEdit') {
+            pinnedMode = true;
+            mountTo(batchEditMount);
+            syncPanelChrome();
+            if (!currentFile) tryAutoCreateBatchFile();
+            syncPinnedVisibility();
+            render();
+        } else {
+            pinnedMode = false;
+            mountTo(edMount);
+            syncPanelChrome();
+            syncEditorVisibility();
+        }
+        syncToggleButton();
+    }
+
     btnNew.addEventListener('click', newFromEditor);
     btnOpen.addEventListener('click', () => fileInput.click());
     btnSave.addEventListener('click', saveFile);
@@ -496,62 +479,15 @@ const BatchFileManager = (() => {
         await loadFromFile(file);
     });
 
-    /* 拖曳浮動視窗 */
-    let dragState = null;
-    dragHandle.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0 || e.target.closest('.bfm-close')) return;
-        const rect = panel.getBoundingClientRect();
-        dragState = {
-            pointerId: e.pointerId,
-            startX: e.clientX,
-            startY: e.clientY,
-            origLeft: rect.left,
-            origTop: rect.top,
-        };
-        panel.style.right = 'auto';
-        panel.style.bottom = 'auto';
-        panel.style.left = rect.left + 'px';
-        panel.style.top = rect.top + 'px';
-        dragHandle.setPointerCapture(e.pointerId);
-        e.preventDefault();
-    });
-    dragHandle.addEventListener('pointermove', (e) => {
-        if (!dragState || dragState.pointerId !== e.pointerId) return;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        const rect = panel.getBoundingClientRect();
-        let left = dragState.origLeft + (e.clientX - dragState.startX);
-        let top = dragState.origTop + (e.clientY - dragState.startY);
-        left = Math.max(BFM_MARGIN, Math.min(left, vw - rect.width - BFM_MARGIN));
-        top = Math.max(BFM_TOP_MIN, Math.min(top, vh - rect.height - BFM_MARGIN));
-        panel.style.left = left + 'px';
-        panel.style.top = top + 'px';
-    });
-    const endDrag = (e) => {
-        if (!dragState || dragState.pointerId !== e.pointerId) return;
-        dragState = null;
-        try { dragHandle.releasePointerCapture(e.pointerId); } catch (_) {}
-        clampPanelToViewport();
-    };
-    dragHandle.addEventListener('pointerup', endDrag);
-    dragHandle.addEventListener('pointercancel', endDrag);
-
-    let resizeRaf = 0;
-    window.addEventListener('resize', () => {
-        if (!isOpen) return;
-        if (resizeRaf) cancelAnimationFrame(resizeRaf);
-        resizeRaf = requestAnimationFrame(() => {
-            resizeRaf = 0;
-            ensurePanelVisible();
-        });
-    });
-
-    document.body.appendChild(panel);
+    mountTo(edMount);
+    syncPanelChrome();
+    syncEditorVisibility();
 
     return {
         open, close, toggle, isVisible, getCurrent, setCurrent,
         onChange: (fn) => { onChangeCallback = fn; },
         setSignatureProvider: (fn) => { signatureProvider = fn; },
+        setPageContext,
         refreshLastEditHint: updateLastEditHint,
         loadFromJson,
         loadFromFile,
@@ -559,4 +495,3 @@ const BatchFileManager = (() => {
 })();
 
 document.getElementById('edBtnBatchFile').addEventListener('click', () => BatchFileManager.toggle());
-

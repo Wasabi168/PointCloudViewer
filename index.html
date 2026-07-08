@@ -517,6 +517,7 @@
             <h2 data-i18n="sideProgress">進度</h2>
             <div class="progress" id="edProgress"><div class="progress-bar" id="edProgressBar"></div></div>
             <div class="status" id="edStatus">尚未載入檔案</div>
+            <div class="bfm-mount" id="edBfmMount" hidden></div>
 
             <h2 style="margin-top:20px;" data-i18n="sideColorbar">色階 (Z 值)</h2>
             <div class="colorbar-adjust">
@@ -623,7 +624,6 @@
             <span class="ctrl-sep" aria-hidden="true"></span>
             <div class="ctrl-group">
                 <button type="button" id="batchEditBtnOpenBatch" class="btn-secondary" data-i18n="batchEditBtnOpenBatch">開啟批次檔</button>
-                <button type="button" id="batchEditBtnManage" data-i18n="batchEditBtnManage">批次檔管理</button>
             </div>
             <span class="ctrl-sep" aria-hidden="true"></span>
             <div class="ctrl-group">
@@ -667,13 +667,14 @@
             <h2 style="margin-top:20px;" data-i18n="sideProgress">進度</h2>
             <div class="progress" id="batchEditProgress"><div class="progress-bar" id="batchEditProgressBar"></div></div>
             <div class="status" id="batchEditStatus" data-i18n="batchEditStatusIdle">尚未加入檔案</div>
+            <div class="bfm-mount bfm-mount--pinned" id="batchEditBfmMount"></div>
         </aside>
     </main>
 </div><!-- /#pageBatchEdit -->
 
-<!-- 批次檔管理器浮動視窗（編輯器 / 批次編輯共用） -->
-<div class="bfm-float" id="batchFileManagerPanel" role="dialog" aria-labelledby="bfmTitle" aria-hidden="true">
-    <div class="bfm-header" id="bfmDragHandle">
+<!-- 批次檔管理器（編輯器 / 批次編輯共用，由 JS 掛載至右側邊欄） -->
+<div class="bfm-panel" id="batchFileManagerPanel" aria-labelledby="bfmTitle" aria-hidden="true">
+    <div class="bfm-header" id="bfmHeader">
         <h3 id="bfmTitle" data-i18n="bfmTitle">批次檔管理</h3>
         <button type="button" class="bfm-close" id="bfmCloseBtn" aria-label="Close">&times;</button>
     </div>

@@ -10,7 +10,6 @@
     const fileInput = document.getElementById('batchEditFileInput');
     const btnClear = document.getElementById('batchEditBtnClear');
     const btnOpenBatch = document.getElementById('batchEditBtnOpenBatch');
-    const btnManage = document.getElementById('batchEditBtnManage');
     const btnRun = document.getElementById('batchEditBtnRun');
     const saveFormat = document.getElementById('batchEditSaveFormat');
     const workspace = document.getElementById('batchEditWorkspace');
@@ -374,7 +373,6 @@
     }
 
     btnOpenBatch.addEventListener('click', () => document.getElementById('bfmFileInput').click());
-    btnManage.addEventListener('click', () => BatchFileManager.toggle());
     btnClear.addEventListener('click', () => {
         if (running) return;
         entries = [];

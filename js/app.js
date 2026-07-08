@@ -21,6 +21,9 @@ function switchPage(page) {
         btn.classList.toggle('active', active);
         btn.setAttribute('aria-selected', active ? 'true' : 'false');
     });
+    if (typeof BatchFileManager !== 'undefined' && BatchFileManager.setPageContext) {
+        BatchFileManager.setPageContext(page);
+    }
     requestAnimationFrame(() => {
         if (page === 'editor') {
             // 切換到編輯器時重新調整影像（隱藏狀態下尺寸為 0，需重新 fit）
@@ -64,6 +67,9 @@ if (btnMinMax) {
 // 還原上次使用的頁面
 const savedPage = getUserPref('page');
 if (savedPage === 'editor' || savedPage === 'batch' || savedPage === 'batchEdit') switchPage(savedPage);
+else if (typeof BatchFileManager !== 'undefined' && BatchFileManager.setPageContext) {
+    BatchFileManager.setPageContext(currentPage);
+}
 
 // 套用初始語言
 applyLanguage(currentLang);
