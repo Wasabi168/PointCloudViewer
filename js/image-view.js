@@ -1052,11 +1052,29 @@ function createImageView(ids, options) {
         };
     }
 
+    /** colorbar / 剖面圖軸標籤：依數值大小選小數位，僅極端值才用科學記號 */
     function segLevelFmt(v) {
         if (!Number.isFinite(v)) return '-';
         const a = Math.abs(v);
-        if (a >= 1000 || (a > 0 && a < 0.001)) return v.toExponential(2);
-        return v.toFixed(2);
+        if (a === 0) return '0';
+        if (a >= 1e7 || (a > 0 && a < 1e-6)) return v.toExponential(2);
+
+        let decimals;
+        if (a >= 10000) decimals = 0;
+        else if (a >= 1000) decimals = 1;
+        else if (a >= 100) decimals = 1;
+        else if (a >= 1) decimals = 2;
+        else if (a >= 0.01) decimals = 3;
+        else decimals = 4;
+
+        const rounded = Number(v.toFixed(decimals));
+        if (a >= 1000) {
+            return rounded.toLocaleString(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: decimals,
+            });
+        }
+        return String(rounded);
     }
 
     /** 水平分割 → 中央垂直剖線；垂直分割 → 中央水平剖線 */

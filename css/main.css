@@ -1874,7 +1874,7 @@
     }
     .seg-level-cbar {
         flex-shrink: 0;
-        width: 42px;
+        width: 52px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -1884,12 +1884,13 @@
     }
     .seg-level-cbar-val {
         font-size: 10px;
-        line-height: 1.2;
-        font-family: Consolas, monospace;
+        line-height: 1.25;
+        font-variant-numeric: tabular-nums;
         color: var(--muted);
         text-align: center;
         max-width: 100%;
-        word-break: break-all;
+        word-break: break-word;
+        hyphens: none;
     }
     .seg-level-cbar-canvas {
         display: block;
