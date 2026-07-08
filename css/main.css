@@ -382,6 +382,7 @@
     .viewer.mode-3d .zoom-hint,
     .viewer.mode-3d .value-indicator,
     .viewer.mode-3d .mode-indicator,
+    .viewer.mode-3d .viewer-cursor-toolbar,
     .viewer.mode-3d .profile-panel,
     .viewer.mode-3d .measure-panel { display: none !important; }
     .viewer.mode-3d .canvas3d { display: block; }
@@ -469,6 +470,55 @@
         box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.25);
     }
     .mode-indicator .mi-label { font-weight: 600; }
+
+    /* 圖像區右側浮空：滑鼠模式工具列（僅圖示） */
+    .viewer-cursor-toolbar {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 10;
+        display: none;
+        flex-direction: column;
+        gap: 4px;
+        padding: 6px;
+        background: rgba(20, 20, 28, 0.84);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.38);
+        backdrop-filter: blur(8px);
+        pointer-events: auto;
+    }
+    .viewer-cursor-toolbar.show { display: flex; }
+    .viewer-cursor-toolbar button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        color: #a8a8bc;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .viewer-cursor-toolbar button:hover {
+        background: rgba(255, 255, 255, 0.09);
+        color: #ececf4;
+    }
+    .viewer-cursor-toolbar button.active {
+        background: var(--accent);
+        color: #fff;
+        box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.32);
+    }
+    .viewer-cursor-toolbar button svg {
+        width: 20px;
+        height: 20px;
+        display: block;
+        flex-shrink: 0;
+    }
 
     .zoom-hint {
         position: absolute;

@@ -129,6 +129,43 @@
             <span class="mi-label" id="modeIndicatorLabel"></span>
         </div>
 
+        <div class="viewer-cursor-toolbar" id="viewerCursorToolbar" role="toolbar" aria-label="檢視工具">
+            <button type="button" data-cursor="pan" class="active" data-i18n-title="cursorPanTitle" title="拖曳模式">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M7 11V7.5a2 2 0 1 1 4 0V11"/>
+                    <path d="M11 11V6.5a2 2 0 1 1 4 0V11"/>
+                    <path d="M15 11V8a2 2 0 1 1 4 0v5a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-2"/>
+                </svg>
+            </button>
+            <button type="button" data-cursor="inspect" data-i18n-title="cursorInspectTitle" title="數值顯示模式">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="2.5"/>
+                    <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
+                </svg>
+            </button>
+            <button type="button" data-cursor="profile" data-i18n-title="cursorProfileTitle" title="剖面模式">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 18h18"/>
+                    <path d="M4 16 8 11 12 14 16 7 20 10"/>
+                    <path d="M12 4v14" stroke-dasharray="2.5 2.5"/>
+                </svg>
+            </button>
+            <button type="button" data-cursor="measure" data-i18n-title="cursorMeasureTitle" title="兩點距離測量">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="6" cy="18" r="2" fill="currentColor" stroke="none"/>
+                    <circle cx="18" cy="6" r="2" fill="currentColor" stroke="none"/>
+                    <path d="M8 16 16 8"/>
+                    <path d="M10 14l2-2M13 11l2-2"/>
+                </svg>
+            </button>
+            <button type="button" data-cursor="area" data-i18n-title="cursorAreaTitle" title="區域統計">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                    <rect x="5" y="6" width="14" height="13" rx="1" stroke-dasharray="4 3"/>
+                    <path d="M5 6h14M5 19h14M5 6v13M19 6v13" opacity="0.45"/>
+                </svg>
+            </button>
+        </div>
+
         <div class="profile-panel" id="profilePanel">
             <div class="profile-head">
                 <span class="profile-title" id="profileTitle" data-i18n="profileTitle">剖面</span>

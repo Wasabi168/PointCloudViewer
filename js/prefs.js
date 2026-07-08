@@ -80,6 +80,13 @@ function applyLanguage(lang) {
         const key = el.getAttribute('data-i18n-title');
         if (key) el.title = t(key);
     });
+    document.querySelectorAll('#viewerCursorToolbar button[data-i18n-title]').forEach(el => {
+        el.setAttribute('aria-label', el.title);
+    });
+    const viewerCursorToolbar = document.getElementById('viewerCursorToolbar');
+    if (viewerCursorToolbar) {
+        viewerCursorToolbar.setAttribute('aria-label', t('cursorToolbarLabel'));
+    }
 
     // 語言切換按鈕的 active 狀態
     document.querySelectorAll('#langToggle button').forEach(b => {

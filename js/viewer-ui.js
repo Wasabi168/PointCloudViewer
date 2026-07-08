@@ -2103,18 +2103,33 @@ window.addEventListener('mouseup', () => {
 
 const modeIndicator = document.getElementById('modeIndicator');
 const modeIndicatorLabel = document.getElementById('modeIndicatorLabel');
+const viewerCursorToolbar = document.getElementById('viewerCursorToolbar');
+const CURSOR_MODE_BTNS = '#cursorToggle button, #viewerCursorToolbar button';
 
-/** 更新左上角「目前滑鼠模式」標章（僅在 2D 且已載入資料時顯示） */
+/** 同步頂部與浮空工具列的滑鼠模式按鈕 active 狀態 */
+function syncCursorModeButtons(mode) {
+    document.querySelectorAll(CURSOR_MODE_BTNS).forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-cursor') === mode);
+    });
+}
+
+/** 更新左上角「目前滑鼠模式」標章與右側浮空工具列（僅在 2D 且已載入資料時顯示） */
 function updateModeIndicator() {
-    if (!modeIndicator) return;
-    const key = cursorMode === 'inspect' ? 'modeBadgeInspect'
-              : cursorMode === 'profile' ? 'modeBadgeProfile'
-              : cursorMode === 'measure' ? 'modeBadgeMeasure'
-              : cursorMode === 'area' ? 'modeBadgeArea'
-              : 'modeBadgePan';
-    modeIndicatorLabel.textContent = t(key);
     const in3d = (typeof view3dActive !== 'undefined') && view3dActive;
-    modeIndicator.classList.toggle('show', !!currentDataset && !in3d);
+    const showTools = !!currentDataset && !in3d;
+
+    if (modeIndicator && modeIndicatorLabel) {
+        const key = cursorMode === 'inspect' ? 'modeBadgeInspect'
+                  : cursorMode === 'profile' ? 'modeBadgeProfile'
+                  : cursorMode === 'measure' ? 'modeBadgeMeasure'
+                  : cursorMode === 'area' ? 'modeBadgeArea'
+                  : 'modeBadgePan';
+        modeIndicatorLabel.textContent = t(key);
+        modeIndicator.classList.toggle('show', showTools);
+    }
+    if (viewerCursorToolbar) {
+        viewerCursorToolbar.classList.toggle('show', showTools);
+    }
 }
 
 /** 切換鼠標模式 */
@@ -2126,10 +2141,7 @@ function applyCursorMode(mode, opts) {
     cursorMode = mode;
     setUserPref('cursorMode', mode);
 
-    // 更新按鈕 active 狀態
-    document.querySelectorAll('#cursorToggle button').forEach(b => {
-        b.classList.toggle('active', b.getAttribute('data-cursor') === mode);
-    });
+    syncCursorModeButtons(mode);
 
     // Canvas 鼠標樣式
     canvasEl.classList.toggle('inspect-mode', mode === 'inspect');
@@ -2186,8 +2198,8 @@ function applyCursorMode(mode, opts) {
     updateModeIndicator();
 }
 
-// 鼠標模式切換按鈕事件
-document.querySelectorAll('#cursorToggle button').forEach(btn => {
+// 鼠標模式切換按鈕事件（頂部工具列 + 圖像區浮空工具列）
+document.querySelectorAll(CURSOR_MODE_BTNS).forEach(btn => {
     btn.addEventListener('click', () => {
         applyCursorMode(btn.getAttribute('data-cursor'));
     });
