@@ -174,7 +174,31 @@
                     <span data-i18n="profileBand">帶寬</span>
                     <input type="number" id="profileBand" step="any" min="0" />
                 </label>
-                <button type="button" class="profile-clear" id="profileClear" data-i18n="profileClear">清除</button>
+                <div class="profile-chart-style" id="profileChartStyleWrap" style="display:none;" role="group" data-i18n-aria="profileChartStyleTitle">
+                    <div class="profile-icon-group profile-chart-toggle">
+                        <button type="button" data-profile-chart="line" data-i18n-title="profileChartLineTitle" title="折線圖">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M4 19h16"/>
+                                <path d="M5 15l4-5 4 3 5-8 4 4"/>
+                            </svg>
+                        </button>
+                        <button type="button" data-profile-chart="dots" data-i18n-title="profileChartDotsTitle" title="散點圖">
+                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <circle cx="6" cy="16" r="1.8"/>
+                                <circle cx="10" cy="10" r="1.8"/>
+                                <circle cx="14" cy="14" r="1.8"/>
+                                <circle cx="18" cy="7" r="1.8"/>
+                                <circle cx="8" cy="6" r="1.8"/>
+                                <circle cx="16" cy="18" r="1.8"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <button type="button" class="profile-clear profile-icon-btn" id="profileClear" data-i18n-title="profileClearTitle" title="清除剖面">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6L6 18"/>
+                    </svg>
+                </button>
             </div>
             <div class="profile-plot">
                 <canvas id="profileCanvas"></canvas>
@@ -185,7 +209,11 @@
             <div class="profile-head">
                 <span class="profile-title" id="measureTitle" data-i18n="measureTitle">測量</span>
                 <span class="profile-meta" id="measureMeta"></span>
-                <button type="button" class="profile-clear" id="measureClear" data-i18n="measureClear">清除</button>
+                <button type="button" class="profile-clear profile-icon-btn" id="measureClear" data-i18n-title="measureClearTitle" title="清除測量">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6L6 18"/>
+                    </svg>
+                </button>
             </div>
         </div>
         <div class="drop-hint" id="dropHint">

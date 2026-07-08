@@ -839,6 +839,31 @@ const profileMeta   = document.getElementById('profileMeta');
 const profileClearBtn = document.getElementById('profileClear');
 const profileBandWrap = document.getElementById('profileBandWrap');
 const profileBandInput = document.getElementById('profileBand');
+const profileChartStyleWrap = document.getElementById('profileChartStyleWrap');
+
+let profileChartStyle = getUserPref('profileChartStyle');
+if (profileChartStyle !== 'line' && profileChartStyle !== 'dots') profileChartStyle = 'line';
+
+function syncProfileChartStyleUI() {
+    if (!profileChartStyleWrap) return;
+    profileChartStyleWrap.querySelectorAll('button[data-profile-chart]').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-profile-chart') === profileChartStyle);
+    });
+}
+syncProfileChartStyleUI();
+
+if (profileChartStyleWrap) {
+    profileChartStyleWrap.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-profile-chart]');
+        if (!btn) return;
+        const style = btn.getAttribute('data-profile-chart');
+        if (style !== 'line' && style !== 'dots' || style === profileChartStyle) return;
+        profileChartStyle = style;
+        setUserPref('profileChartStyle', style);
+        syncProfileChartStyleUI();
+        renderProfileChart();
+    });
+}
 
 /** 剖面狀態
  *  space : 'image' → line 以影像像素座標記錄；'world' → 以點雲世界座標記錄
@@ -1221,8 +1246,10 @@ function renderProfileChart() {
     if (!d) { profilePanel.classList.remove('show'); return; }
     profilePanel.classList.add('show');
 
-    // 點雲模式顯示帶寬輸入框
+    // 點雲模式顯示帶寬輸入框；圖表樣式切換一律顯示
     profileBandWrap.style.display = d.scatter ? 'inline-flex' : 'none';
+    if (profileChartStyleWrap) profileChartStyleWrap.style.display = 'inline-flex';
+    syncProfileChartStyleUI();
 
     if (d.scatter) {
         profileMeta.textContent =
@@ -1290,18 +1317,19 @@ function renderProfileChart() {
 
     const range = (d.vmax - d.vmin) || 1;
 
-    if (d.scatter) {
-        // 散點：每個帶內點畫一個小圓點（X 用沿線距離，故間距不均）
+    if (profileChartStyle === 'dots') {
+        // 散點：各取樣點畫小圓點
         ctx.fillStyle = '#4f8cff';
+        const dotR = d.scatter ? 1.8 : 2.2;
         for (let i = 0; i < d.N; i++) {
             const v = d.vals[i];
             if (!Number.isFinite(v)) continue;
             const px = x0 + (d.dist[i] / distPx) * plotW;
             const py = y0 + (1 - (v - d.vmin) / range) * plotH;
-            ctx.beginPath(); ctx.arc(px, py, 1.8, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI * 2); ctx.fill();
         }
     } else {
-        // 折線（遇 NaN 斷開）
+        // 折線（遇 NaN 斷開；點雲依沿線距離排序後連線）
         ctx.strokeStyle = '#4f8cff'; ctx.lineWidth = 1.6;
         ctx.beginPath();
         let started = false;
@@ -1352,6 +1380,7 @@ function clearProfile() {
     profileTip.classList.remove('show');
     profilePanel.classList.remove('show');
     if (profileBandWrap) profileBandWrap.style.display = 'none';
+    if (profileChartStyleWrap) profileChartStyleWrap.style.display = 'none';
     drawProfileOverlay();
 }
 
@@ -1542,6 +1571,7 @@ window.addEventListener('mouseup', () => {
         profileState.line = null;
         profilePanel.classList.remove('show');
         if (profileBandWrap) profileBandWrap.style.display = 'none';
+        if (profileChartStyleWrap) profileChartStyleWrap.style.display = 'none';
         drawProfileOverlay();
         return;
     }

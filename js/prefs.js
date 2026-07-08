@@ -16,6 +16,7 @@ const PREFS_DEFAULTS = {
     cursorMode: 'pan',
     viewMode: '2d',
     showMinMax: false,
+    profileChartStyle: 'line',
 };
 
 let userPrefs = (() => {
@@ -80,7 +81,14 @@ function applyLanguage(lang) {
         const key = el.getAttribute('data-i18n-title');
         if (key) el.title = t(key);
     });
+    document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+        const key = el.getAttribute('data-i18n-aria');
+        if (key) el.setAttribute('aria-label', t(key));
+    });
     document.querySelectorAll('#viewerCursorToolbar button[data-i18n-title]').forEach(el => {
+        el.setAttribute('aria-label', el.title);
+    });
+    document.querySelectorAll('#profilePanel button[data-i18n-title], #measurePanel button[data-i18n-title]').forEach(el => {
         el.setAttribute('aria-label', el.title);
     });
     const viewerCursorToolbar = document.getElementById('viewerCursorToolbar');

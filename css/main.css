@@ -832,17 +832,20 @@
         align-items: center;
         gap: 10px;
         margin-bottom: 6px;
+        flex-wrap: wrap;
     }
     .profile-title {
         font-size: 13px;
         font-weight: 600;
         color: var(--text);
+        flex-shrink: 0;
     }
     .profile-meta {
         font-size: 12px;
         color: var(--muted);
         font-family: Consolas, monospace;
-        flex: 1;
+        flex: 1 1 140px;
+        min-width: 0;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -854,6 +857,7 @@
         font-size: 12px;
         color: var(--muted);
         white-space: nowrap;
+        flex-shrink: 0;
     }
     .profile-band input {
         width: 84px;
@@ -866,15 +870,62 @@
         font-family: Consolas, monospace;
     }
 
-    .profile-clear {
-        background: #3a3a4a;
-        color: var(--text);
-        border: 1px solid var(--border);
-        padding: 4px 12px;
-        font-size: 12px;
-        border-radius: 5px;
+    .profile-chart-style {
+        display: inline-flex;
+        flex-shrink: 0;
     }
-    .profile-clear:hover { background: #4a4a5c; }
+
+    .profile-icon-group {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+        background: #3a3a4a;
+    }
+    .profile-icon-group button,
+    .profile-icon-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+    .profile-icon-group button:not(:last-child) {
+        border-right: 1px solid var(--border);
+    }
+    .profile-icon-group button:hover,
+    .profile-icon-btn:hover {
+        color: var(--text);
+        background: #4a4a5c;
+    }
+    .profile-icon-group button.active {
+        background: var(--accent);
+        color: #fff;
+    }
+    .profile-icon-group button svg,
+    .profile-icon-btn svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+        flex-shrink: 0;
+    }
+
+    .profile-icon-btn {
+        background: #3a3a4a;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        flex-shrink: 0;
+    }
+
+    .profile-clear {
+        flex-shrink: 0;
+    }
 
     .profile-plot {
         position: relative;
