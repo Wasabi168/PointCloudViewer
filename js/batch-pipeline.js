@@ -354,11 +354,28 @@ function batchApplySegmentLevel(ds) {
     return { ok: true };
 }
 
+function batchApplySegmentSkew(ds, step) {
+    if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
+    if (typeof analyzeSegmentSkewWithParams !== 'function') return { ok: false, reason: 'invalid' };
+    const direction = step.direction === 'vertical' ? 'vertical' : 'horizontal';
+    const segmentCount = Math.round(step.segmentCount);
+    const shiftPx = Number(step.shiftPx);
+    if (!Number.isFinite(segmentCount) || segmentCount < 2) return { ok: false, reason: 'invalid' };
+    if (!Number.isFinite(shiftPx)) return { ok: false, reason: 'invalid' };
+    const analysis = analyzeSegmentSkewWithParams(ds, direction, segmentCount, shiftPx);
+    if (!analysis.ok) return { ok: false, reason: analysis.reason || 'insufficient' };
+    batchEnsureFloatPixels(ds);
+    ds.data = analysis.correctedData.slice();
+    batchRefreshRange(ds);
+    return { ok: true };
+}
+
 function batchApplyStep(ds, step) {
     if (!step || !step.type) return { ok: false, reason: 'invalid' };
     switch (step.type) {
         case 'globalLevel': return batchApplyGlobalLevel(ds);
         case 'segmentLevel': return batchApplySegmentLevel(ds);
+        case 'segmentSkew': return batchApplySegmentSkew(ds, step);
         case 'denoise': return batchApplyDenoiseFromStep(ds, step);
         case 'calc': return batchApplyCalc(ds, step.op, step.operand);
         case 'cropRect':
@@ -381,6 +398,10 @@ function describeBatchStep(step) {
     switch (step.type) {
         case 'globalLevel': return t('bfmStepGlobalLevel');
         case 'segmentLevel': return t('bfmStepSegmentLevel');
+        case 'segmentSkew': {
+            const dir = step.direction === 'vertical' ? t('segSkewDirVertical') : t('segSkewDirHorizontal');
+            return t('bfmStepSegmentSkew', dir, step.segmentCount, step.shiftPx);
+        }
         case 'denoise':
             if (step.auto) return t('bfmStepDenoiseAuto');
             return t('bfmStepDenoise', (step.lo * 100).toFixed(0) + '%', (step.hi * 100).toFixed(0) + '%');

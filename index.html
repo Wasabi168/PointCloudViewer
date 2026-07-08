@@ -258,7 +258,8 @@
                 <div class="ed-toolbar-block" id="edProcessBlock">
                     <span class="ed-toolbar-label" data-i18n="toolGroupProcess">處理</span>
                     <button type="button" id="edDenoise" data-i18n="denoise" data-i18n-title="denoiseTitle">刪除雜點</button>
-                    <button type="button" id="edSegLevel" data-i18n="segLevel" data-i18n-title="segLevelTitle">自動分區校正</button>
+                    <button type="button" id="edSegLevel" data-i18n="segLevel" data-i18n-title="segLevelTitle">分區水平校正</button>
+                    <button type="button" id="edSegSkew" data-i18n="segSkew" data-i18n-title="segSkewTitle">分區錯位校正</button>
                 </div>
             </div>
 
@@ -330,7 +331,7 @@
             </div>
             <div class="seg-level-panel" id="edSegLevelPanel" aria-hidden="true">
                 <div class="seg-level-head">
-                    <span class="seg-level-mode-badge" data-i18n="segLevelModeName">分區校正模式</span>
+                    <span class="seg-level-mode-badge" data-i18n="segLevelModeName">分區水平校正模式</span>
                     <div class="seg-level-config" id="edSegLevelConfig" aria-hidden="true">
                         <label class="seg-level-config-item" for="edSegLevelDir">
                             <span data-i18n="segLevelDirLabel">分割方向</span>
@@ -407,6 +408,83 @@
                         <div class="seg-level-busy-card">
                             <div class="seg-level-spinner" aria-hidden="true"></div>
                             <span class="seg-level-busy-text" id="edSegLevelBusyText" data-i18n="segLevelProcessing">正在分析分區並計算校正…</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="seg-level-panel" id="edSegSkewPanel" aria-hidden="true">
+                <div class="seg-level-head">
+                    <span class="seg-level-mode-badge" data-i18n="segSkewModeName">分區錯位校正模式</span>
+                    <div class="seg-level-config" id="edSegSkewConfig" aria-hidden="true">
+                        <label class="seg-level-config-item" for="edSegSkewDir">
+                            <span data-i18n="segSkewDirLabel">分割方向</span>
+                            <select id="edSegSkewDir">
+                                <option value="horizontal" data-i18n="segSkewDirHorizontal">水平分割</option>
+                                <option value="vertical" data-i18n="segSkewDirVertical">垂直分割</option>
+                            </select>
+                        </label>
+                        <label class="seg-level-config-item" for="edSegSkewCount">
+                            <span data-i18n="segSkewCountLabel">等份數</span>
+                            <input type="number" id="edSegSkewCount" min="2" step="1" />
+                        </label>
+                    </div>
+                    <label class="seg-level-bounds-toggle" id="edSegSkewBoundsWrap">
+                        <input type="checkbox" id="edSegSkewShowBounds" checked />
+                        <span data-i18n="segSkewShowBounds">顯示分割線</span>
+                    </label>
+                    <div class="seg-level-actions">
+                        <button type="button" id="edSegSkewApply" data-i18n="segSkewApply" data-i18n-title="segSkewApplyTitle">套用</button>
+                        <button type="button" id="edSegSkewCancel" class="btn-secondary" data-i18n="segSkewCancel" data-i18n-title="segSkewCancelTitle">取消</button>
+                    </div>
+                </div>
+                <div class="seg-level-tune" id="edSegSkewTune" aria-hidden="true">
+                    <div class="seg-level-tune-head">
+                        <span class="seg-level-tune-title" data-i18n="segSkewTuneTitle">位移微調</span>
+                        <span class="seg-level-tune-hint" id="edSegSkewTuneHint" data-i18n="segSkewTuneHint">全圖各帶共用同一 shift（像素），按 Enter 更新右側結果圖</span>
+                        <button type="button" id="edSegSkewTuneReset" class="btn-secondary btn-small" data-i18n="segSkewTuneReset" data-i18n-title="segSkewTuneResetTitle">重設 shift</button>
+                    </div>
+                    <div class="seg-level-tune-control">
+                        <label class="seg-level-tune-slope" for="edSegSkewTuneShift" data-i18n="segSkewTuneShift">共用 shift（pixel）</label>
+                        <input type="number" id="edSegSkewTuneShift" step="1" />
+                    </div>
+                </div>
+                <div class="seg-level-compare seg-skew-compare" id="edSegSkewCompare">
+                    <div class="seg-level-pane">
+                        <span class="seg-level-pane-label" data-i18n="segSkewBefore">校正前</span>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap">
+                                <canvas id="edSegSkewBefore"></canvas>
+                            </div>
+                            <div class="seg-level-cbar" aria-hidden="false">
+                                <span class="seg-level-cbar-val" id="edSegSkewBeforeCbHi"></span>
+                                <canvas id="edSegSkewBeforeCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                <span class="seg-level-cbar-val" id="edSegSkewBeforeCbLo"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="seg-level-pane seg-level-pane-after">
+                        <span class="seg-level-pane-label" data-i18n="segSkewAfter">校正後</span>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap">
+                                <canvas id="edSegSkewAfter"></canvas>
+                            </div>
+                            <div class="seg-level-cbar" aria-hidden="false">
+                                <span class="seg-level-cbar-val" id="edSegSkewAfterCbHi"></span>
+                                <canvas id="edSegSkewAfterCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                <span class="seg-level-cbar-val" id="edSegSkewAfterCbLo"></span>
+                            </div>
+                        </div>
+                        <div class="seg-level-tune-busy" id="edSegSkewTuneBusy" aria-hidden="true">
+                            <div class="seg-level-tune-busy-card">
+                                <div class="seg-level-spinner" aria-hidden="true"></div>
+                                <span class="seg-level-tune-busy-text" id="edSegSkewTuneBusyText" data-i18n="segSkewTuneUpdating">正在更新預覽…</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="seg-level-busy" id="edSegSkewBusy" aria-hidden="true">
+                        <div class="seg-level-busy-card">
+                            <div class="seg-level-spinner" aria-hidden="true"></div>
+                            <span class="seg-level-busy-text" id="edSegSkewBusyText" data-i18n="segSkewProcessing">正在分析分區並計算錯位校正…</span>
                         </div>
                     </div>
                 </div>
@@ -653,6 +731,7 @@
 <script src="js/file-parse.js"></script>
 <script src="js/file-export.js"></script>
 <script src="js/segment-level.js"></script>
+<script src="js/segment-skew.js"></script>
 <script src="js/batch-pipeline.js"></script>
 <script src="js/colormap.js"></script>
 <script src="js/render.js"></script>

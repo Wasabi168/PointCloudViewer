@@ -38,6 +38,16 @@ function createImageView(ids, options) {
             segLevelViews: null,
             segLevelPan: null,
             segLevelShowBounds: true,
+            segSkew: false,
+            segSkewBusy: false,
+            segSkewTuneBusy: false,
+            segSkewRunId: 0,
+            segSkewTuneRunId: 0,
+            segSkewBase: null,
+            segSkewResult: null,
+            segSkewViews: null,
+            segSkewPan: null,
+            segSkewShowBounds: true,
             histLo: 0, histHi: 1,
             histAuto: false,   // 刪除雜點是否以自動（IQR）方式套用
             history: [],         // 編輯歷史（資料集快照）
@@ -537,6 +547,7 @@ function createImageView(ids, options) {
         renderColorbar(el.colormap.value);
         if (st.dataset) {
             if (st.edit.segLevel) renderSegLevelCompare();
+            if (st.edit.segSkew) renderSegSkewCompare();
             else render(st.dataset, el.colormap.value, false);
         }
     });
@@ -655,7 +666,7 @@ function createImageView(ids, options) {
     function updateEditButtons() {
         if (!editing) return;
         const has = !!st.dataset;
-        [el.cropRect, el.cropCircle, el.denoise, el.segLevel, el.globalLevel, el.btnCalc, el.sendToViewer].forEach(b => { if (b) b.disabled = !has; });
+        [el.cropRect, el.cropCircle, el.denoise, el.segLevel, el.segSkew, el.globalLevel, el.btnCalc, el.sendToViewer].forEach(b => { if (b) b.disabled = !has; });
         if (el.btnClear) el.btnClear.disabled = !has;
         if (el.cropApply) el.cropApply.disabled = !(has && st.edit.cropMode && st.edit.cropSel);
         if (el.cropCancel) el.cropCancel.disabled = !(has && st.edit.cropMode);
@@ -667,6 +678,14 @@ function createImageView(ids, options) {
         const segConfigLocked = !(has && st.edit.segLevel && !st.edit.segLevelBusy && !st.edit.segLevelTuneBusy && st.edit.segLevelResult);
         if (el.segLevelDir) el.segLevelDir.disabled = segConfigLocked;
         if (el.segLevelCount) el.segLevelCount.disabled = segConfigLocked;
+        if (el.segSkewApply) el.segSkewApply.disabled = !(has && st.edit.segSkew && !st.edit.segSkewBusy && !st.edit.segSkewTuneBusy && st.edit.segSkewResult);
+        if (el.segSkewCancel) el.segSkewCancel.disabled = !(has && st.edit.segSkew);
+        if (el.segSkewShowBounds) {
+            el.segSkewShowBounds.disabled = !(has && st.edit.segSkew && !st.edit.segSkewBusy);
+        }
+        const segSkewConfigLocked = !(has && st.edit.segSkew && !st.edit.segSkewBusy && !st.edit.segSkewTuneBusy && st.edit.segSkewResult);
+        if (el.segSkewDir) el.segSkewDir.disabled = segSkewConfigLocked;
+        if (el.segSkewCount) el.segSkewCount.disabled = segSkewConfigLocked;
         updateHistoryButtons();
     }
 
@@ -765,6 +784,7 @@ function createImageView(ids, options) {
         if (st.edit.cropMode) exitCrop();
         if (st.edit.denoise) cancelDenoise();
         if (st.edit.segLevel) cancelSegLevel();
+        if (st.edit.segSkew) cancelSegSkew();
     }
     function doUndo() {
         if (!editing || !st.dataset || st.edit.histIndex <= 0) return;
@@ -2066,11 +2086,633 @@ function createImageView(ids, options) {
         showToast(msg, 'info');
     }
 
+    /* ---------- 分區錯位校正模式（自動分割 + 各帶 skew） ---------- */
+
+    function segSkewDirLabel(direction) {
+        return direction === 'vertical' ? t('segSkewDirVertical') : t('segSkewDirHorizontal');
+    }
+
+    function segSkewConfigLimits(direction) {
+        if (!st.dataset || typeof segSkewBoundaryOptionsForDirection !== 'function') return null;
+        const { width, height } = st.dataset;
+        const dir = direction === 'vertical' ? 'vertical' : 'horizontal';
+        const opts = segSkewBoundaryOptionsForDirection(width, height, dir);
+        const maxBands = typeof segLevelMaxValidBandCount === 'function'
+            ? segLevelMaxValidBandCount(opts.axisLen, opts.minDist, opts.edgeMargin)
+            : 8;
+        return { ...opts, maxBands: Math.max(2, maxBands) };
+    }
+
+    function setSegSkewConfigUI(visible) {
+        if (el.segSkewConfig) el.segSkewConfig.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+
+    function syncSegSkewConfigUI() {
+        const result = st.edit.segSkewResult;
+        if (!result) return;
+        const limits = segSkewConfigLimits(result.direction);
+        if (el.segSkewDir) el.segSkewDir.value = result.direction;
+        if (el.segSkewCount && limits) {
+            el.segSkewCount.min = '2';
+            el.segSkewCount.max = String(limits.maxBands);
+            el.segSkewCount.value = String(result.segmentCount);
+        }
+    }
+
+    function readSegSkewConfigFromUI() {
+        const direction = el.segSkewDir?.value === 'vertical' ? 'vertical' : 'horizontal';
+        let segmentCount = parseInt(el.segSkewCount?.value, 10);
+        const limits = segSkewConfigLimits(direction);
+        const maxBands = limits ? limits.maxBands : 8;
+        if (!Number.isFinite(segmentCount)) segmentCount = 2;
+        if (segmentCount < 2) segmentCount = 2;
+        if (segmentCount > maxBands) segmentCount = maxBands;
+        if (el.segSkewCount) {
+            el.segSkewCount.min = '2';
+            el.segSkewCount.max = String(maxBands);
+            el.segSkewCount.value = String(segmentCount);
+        }
+        return { direction, segmentCount, maxBands };
+    }
+
+    function segSkewStatusText(result) {
+        if (!result) return '';
+        return t('segSkewMeta', segSkewDirLabel(result.direction), result.segmentCount, result.shiftPx);
+    }
+
+    function snapshotSegSkewBase() {
+        const ds = st.dataset;
+        const src = ds.data;
+        st.edit.segSkewBase = {
+            data: src instanceof Float32Array ? src.slice() : Float32Array.from(src),
+            vmin: ds.vmin,
+            vmax: ds.vmax,
+        };
+    }
+
+    function segSkewEnsureViews() {
+        if (!st.edit.segSkewViews) {
+            st.edit.segSkewViews = {
+                beforeImg: segLevelDefaultView(),
+                afterImg: segLevelDefaultView(),
+            };
+        }
+        return st.edit.segSkewViews;
+    }
+
+    function segSkewResetViews() {
+        st.edit.segSkewViews = null;
+        st.edit.segSkewPan = null;
+    }
+
+    function segSkewSyncViewTransform(zoomKey, canvas, resetView) {
+        if (!zoomKey || !canvas) return;
+        const wrap = canvas.parentElement;
+        if (!wrap) return;
+        const views = segSkewEnsureViews();
+        const view = views[zoomKey];
+        const { cw, ch } = segLevelContentSize(canvas);
+        const sizeChanged = view.contentW !== cw || view.contentH !== ch;
+        if (resetView || sizeChanged) segLevelFitView(view, wrap, cw, ch);
+        segLevelApplyViewTransform(canvas, view, wrap);
+    }
+
+    function segSkewZoomAt(zoomKey, wrap, canvas, screenX, screenY, zoomFactor) {
+        const views = segSkewEnsureViews();
+        const view = views[zoomKey];
+        let newScale = view.scale * zoomFactor;
+        if (newScale < view.minScale) newScale = view.minScale;
+        if (newScale > view.maxScale) newScale = view.maxScale;
+        const k = newScale / view.scale;
+        view.tx = screenX - (screenX - view.tx) * k;
+        view.ty = screenY - (screenY - view.ty) * k;
+        view.scale = newScale;
+        segLevelApplyViewTransform(canvas, view, wrap);
+    }
+
+    function setupSegSkewZoom() {
+        const targets = [
+            { wrap: el.segSkewBefore?.parentElement, canvas: el.segSkewBefore, key: 'beforeImg' },
+            { wrap: el.segSkewAfter?.parentElement, canvas: el.segSkewAfter, key: 'afterImg' },
+        ];
+        for (const tgt of targets) {
+            if (!tgt.wrap || !tgt.canvas || tgt.wrap.dataset.segSkewZoomBound) continue;
+            tgt.wrap.dataset.segSkewZoomBound = '1';
+            tgt.wrap.classList.add('seg-level-zoomable');
+            if (!tgt.wrap.querySelector('.seg-level-zoom-ind')) {
+                const ind = document.createElement('div');
+                ind.className = 'seg-level-zoom-ind';
+                ind.setAttribute('aria-hidden', 'true');
+                tgt.wrap.appendChild(ind);
+            }
+            tgt.wrap.addEventListener('wheel', (e) => {
+                if (!st.edit.segSkew || st.edit.segSkewBusy) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const rect = tgt.wrap.getBoundingClientRect();
+                segSkewZoomAt(tgt.key, tgt.wrap, tgt.canvas, e.clientX - rect.left, e.clientY - rect.top,
+                    Math.pow(1.0015, -(e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * tgt.wrap.clientHeight : e.deltaY)));
+            }, { passive: false });
+            tgt.wrap.addEventListener('mousedown', (e) => {
+                if (!st.edit.segSkew || st.edit.segSkewBusy || e.button !== 0) return;
+                const views = segSkewEnsureViews();
+                const view = views[tgt.key];
+                st.edit.segSkewPan = {
+                    key: tgt.key,
+                    wrap: tgt.wrap,
+                    canvas: tgt.canvas,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    tx: view.tx,
+                    ty: view.ty,
+                };
+                tgt.wrap.classList.add('grabbing');
+                e.preventDefault();
+            });
+            tgt.wrap.addEventListener('dblclick', (e) => {
+                if (!st.edit.segSkew || st.edit.segSkewBusy) return;
+                e.preventDefault();
+                const views = segSkewEnsureViews();
+                const view = views[tgt.key];
+                segLevelFitView(view, tgt.wrap, view.contentW, view.contentH);
+                segLevelApplyViewTransform(tgt.canvas, view, tgt.wrap);
+            });
+        }
+        if (!st.edit.segSkewPanBound) {
+            st.edit.segSkewPanBound = true;
+            window.addEventListener('mousemove', (e) => {
+                const pan = st.edit.segSkewPan;
+                if (!pan) return;
+                const views = segSkewEnsureViews();
+                const view = views[pan.key];
+                view.tx = pan.tx + (e.clientX - pan.startX);
+                view.ty = pan.ty + (e.clientY - pan.startY);
+                segLevelApplyViewTransform(pan.canvas, view, pan.wrap);
+            });
+            window.addEventListener('mouseup', () => {
+                const pan = st.edit.segSkewPan;
+                if (!pan) return;
+                pan.wrap.classList.remove('grabbing');
+                st.edit.segSkewPan = null;
+            });
+        }
+    }
+
+    function segSkewShowBoundsEnabled() {
+        return !!st.edit.segSkewShowBounds;
+    }
+
+    function syncSegSkewBoundsToggle() {
+        if (!el.segSkewShowBounds) return;
+        el.segSkewShowBounds.checked = segSkewShowBoundsEnabled();
+    }
+
+    function onSegSkewBoundsToggle() {
+        if (!st.edit.segSkew || st.edit.segSkewBusy) return;
+        st.edit.segSkewShowBounds = !!el.segSkewShowBounds?.checked;
+        renderSegSkewCompare();
+    }
+
+    function renderSegSkewCanvas(canvas, data, width, height, cmin, crange, cmap, direction, boundaries, zoomKey, resetView) {
+        if (!canvas) return;
+        const cw = Math.max(1, width);
+        const ch = Math.max(1, height);
+        canvas.width = cw;
+        canvas.height = ch;
+        canvas.style.width = cw + 'px';
+        canvas.style.height = ch + 'px';
+        const ctx = canvas.getContext('2d');
+        const img = ctx.createImageData(cw, ch);
+        const px = img.data;
+        const lut = buildColormapLut(cmap);
+        for (let y = 0; y < ch; y++) {
+            const rowBase = y * width;
+            for (let x = 0; x < cw; x++) {
+                const v = data[rowBase + x];
+                const po = (y * cw + x) * 4;
+                if (!Number.isFinite(v)) {
+                    px[po] = px[po + 1] = px[po + 2] = 0;
+                    px[po + 3] = 255;
+                    continue;
+                }
+                let t = (v - cmin) / crange;
+                if (t < 0) t = 0; else if (t > 1) t = 1;
+                const lo = ((t * 255) | 0) * 3;
+                px[po] = lut[lo]; px[po + 1] = lut[lo + 1]; px[po + 2] = lut[lo + 2]; px[po + 3] = 255;
+            }
+        }
+        ctx.putImageData(img, 0, 0);
+        if (segSkewShowBoundsEnabled() && boundaries && boundaries.length) {
+            segLevelDrawImageSplitLines(ctx, direction, boundaries, cw, ch, canvas);
+        }
+        segSkewSyncViewTransform(zoomKey, canvas, resetView);
+    }
+
+    function renderSegSkewCompare(opts) {
+        const resetView = !!(opts && opts.resetView);
+        const base = st.edit.segSkewBase;
+        const result = st.edit.segSkewResult;
+        if (!base || !result || !st.dataset) return;
+        const ds = st.dataset;
+        const cmap = el.colormap.value;
+        const { width, height } = ds;
+        const afterData = result.correctedData;
+        const afterStats = computeRange(afterData);
+        const beforeDr = segLevelDisplayRange(base.vmin, base.vmax, st.colorClip);
+        const afterDr = segLevelDisplayRange(afterStats.vmin, afterStats.vmax, st.colorClip);
+        renderSegSkewCanvas(
+            el.segSkewBefore, base.data, width, height,
+            beforeDr.cmin, beforeDr.crange, cmap, result.direction, result.boundaries, 'beforeImg', resetView,
+        );
+        renderSegSkewCanvas(
+            el.segSkewAfter, afterData, width, height,
+            afterDr.cmin, afterDr.crange, cmap, result.direction, result.boundaries, 'afterImg', resetView,
+        );
+        renderSegLevelPaneColorbar(
+            el.segSkewBeforeCb, el.segSkewBeforeCbLo, el.segSkewBeforeCbHi,
+            base.vmin, base.vmax, cmap, st.colorClip,
+        );
+        renderSegLevelPaneColorbar(
+            el.segSkewAfterCb, el.segSkewAfterCbLo, el.segSkewAfterCbHi,
+            afterStats.vmin, afterStats.vmax, cmap, st.colorClip,
+        );
+        syncSegSkewConfigUI();
+    }
+
+    function renderSegSkewAfterOnly() {
+        const base = st.edit.segSkewBase;
+        const result = st.edit.segSkewResult;
+        if (!base || !result || !st.dataset) return;
+        const ds = st.dataset;
+        const cmap = el.colormap.value;
+        const { width, height } = ds;
+        const afterData = result.correctedData;
+        const afterStats = computeRange(afterData);
+        const afterDr = segLevelDisplayRange(afterStats.vmin, afterStats.vmax, st.colorClip);
+        renderSegSkewCanvas(
+            el.segSkewAfter, afterData, width, height,
+            afterDr.cmin, afterDr.crange, cmap, result.direction, result.boundaries, 'afterImg', false,
+        );
+        renderSegLevelPaneColorbar(
+            el.segSkewAfterCb, el.segSkewAfterCbLo, el.segSkewAfterCbHi,
+            afterStats.vmin, afterStats.vmax, cmap, st.colorClip,
+        );
+    }
+
+    function setSegSkewTuneUI(visible) {
+        if (el.segSkewTune) el.segSkewTune.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+
+    function readSegSkewShiftFromUI() {
+        const result = st.edit.segSkewResult;
+        if (!result || !el.segSkewTuneShift) return;
+        const v = parseFloat(el.segSkewTuneShift.value);
+        result.shiftPx = Number.isFinite(v) ? Math.round(v) : result.autoShiftPx;
+    }
+
+    function syncSegSkewShiftInput() {
+        const result = st.edit.segSkewResult;
+        if (!result || !el.segSkewTuneShift) return;
+        el.segSkewTuneShift.value = String(result.shiftPx);
+    }
+
+    function setSegSkewTuneBusyUI(busy) {
+        st.edit.segSkewTuneBusy = !!busy;
+        if (el.segSkewCompare) el.segSkewCompare.classList.toggle('is-tune-busy', !!busy);
+        if (el.segSkewTune) el.segSkewTune.classList.toggle('is-busy', !!busy);
+        if (el.segSkewTuneBusy) {
+            el.segSkewTuneBusy.classList.toggle('show', !!busy);
+            el.segSkewTuneBusy.setAttribute('aria-hidden', busy ? 'false' : 'true');
+        }
+        if (el.segSkewTuneShift) el.segSkewTuneShift.disabled = !!busy;
+        if (el.segSkewTuneReset) el.segSkewTuneReset.disabled = !!busy;
+        updateEditButtons();
+    }
+
+    function setSegSkewBusyUI(busy, progress) {
+        if (el.segSkewCompare) el.segSkewCompare.classList.toggle('is-busy', !!busy);
+        if (el.segSkewBusy) {
+            el.segSkewBusy.classList.toggle('show', !!busy);
+            el.segSkewBusy.setAttribute('aria-hidden', busy ? 'false' : 'true');
+        }
+        if (el.segSkewBusyText && busy) {
+            const pct = Math.round((progress || 0) * 100);
+            el.segSkewBusyText.textContent = pct > 0 && pct < 100
+                ? t('segSkewProgress', pct)
+                : t('segSkewProcessing');
+        }
+        updateEditButtons();
+    }
+
+    async function recomputeSegSkewPreview() {
+        const base = st.edit.segSkewBase;
+        const result = st.edit.segSkewResult;
+        if (!base || !result || !st.dataset) return;
+        const { width, height } = st.dataset;
+        const tuneRunId = ++st.edit.segSkewTuneRunId;
+        const outBuf = result.correctedData instanceof Float32Array ? result.correctedData : null;
+
+        setSegSkewTuneBusyUI(true);
+        await segLevelYield();
+        if (tuneRunId !== st.edit.segSkewTuneRunId) {
+            setSegSkewTuneBusyUI(false);
+            return;
+        }
+
+        try {
+            if (typeof applySegmentSkewAsync === 'function') {
+                const out = await applySegmentSkewAsync(
+                    base.data, width, height, result.direction, result.boundaries, result.shiftPx,
+                    outBuf, 64, () => tuneRunId !== st.edit.segSkewTuneRunId,
+                );
+                if (!out || tuneRunId !== st.edit.segSkewTuneRunId) return;
+                result.correctedData = out;
+            } else {
+                result.correctedData = applySegmentSkew(
+                    base.data, width, height, result.direction, result.boundaries, result.shiftPx, outBuf,
+                );
+            }
+            renderSegSkewAfterOnly();
+            el.status.textContent = segSkewStatusText(result);
+        } finally {
+            if (tuneRunId === st.edit.segSkewTuneRunId) setSegSkewTuneBusyUI(false);
+        }
+    }
+
+    function commitSegSkewTune() {
+        if (!st.edit.segSkew || st.edit.segSkewBusy || st.edit.segSkewTuneBusy) return;
+        readSegSkewShiftFromUI();
+        recomputeSegSkewPreview();
+    }
+
+    function onSegSkewTuneKeydown(e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        if (e.target && typeof e.target.blur === 'function') e.target.blur();
+        commitSegSkewTune();
+    }
+
+    function buildSegSkewTuneUI(result) {
+        if (!result) return;
+        setSegSkewTuneUI(true);
+        syncSegSkewShiftInput();
+    }
+
+    function resetSegSkewShift() {
+        const result = st.edit.segSkewResult;
+        if (!result || !Number.isFinite(result.autoShiftPx) || st.edit.segSkewTuneBusy) return;
+        result.shiftPx = result.autoShiftPx;
+        syncSegSkewShiftInput();
+        recomputeSegSkewPreview();
+    }
+
+    async function recomputeSegSkewWithConfig(options) {
+        options = options || {};
+        if (!st.edit.segSkew || st.edit.segSkewBusy || st.edit.segSkewTuneBusy || !st.dataset) return;
+        if (typeof analyzeSegmentSkewWithParamsAsync !== 'function') return;
+
+        const prev = st.edit.segSkewResult;
+        const { direction, segmentCount, maxBands } = readSegSkewConfigFromUI();
+        if (prev && prev.direction === direction && prev.segmentCount === segmentCount && !options.force) {
+            syncSegSkewConfigUI();
+            return;
+        }
+
+        const rawCount = parseInt(el.segSkewCount?.value, 10);
+        if (Number.isFinite(rawCount) && rawCount > maxBands) {
+            showToast(t('segSkewInvalidCount', maxBands), 'info');
+        }
+
+        st.edit.segSkewBusy = true;
+        st.edit.segSkewTuneRunId++;
+        const runId = ++st.edit.segSkewRunId;
+        setSegSkewBusyUI(true, 0);
+        el.status.textContent = t('segSkewProcessing');
+
+        await segLevelYield();
+
+        try {
+            const analysis = await analyzeSegmentSkewWithParamsAsync(
+                st.dataset,
+                direction,
+                segmentCount,
+                undefined,
+                (p) => {
+                    if (runId !== st.edit.segSkewRunId) return;
+                    setSegSkewBusyUI(true, p);
+                },
+                () => runId !== st.edit.segSkewRunId,
+            );
+
+            if (runId !== st.edit.segSkewRunId) return;
+
+            if (!analysis.ok) {
+                if (analysis.reason !== 'cancelled') {
+                    if (analysis.reason === 'invalidParams') showToast(t('segSkewInvalidCount', maxBands), 'info');
+                    else if (analysis.reason === 'scatter') showToast(t('segSkewScatter'), 'info');
+                    else if (analysis.reason === 'tooSmall') showToast(t('segSkewTooSmall'), 'error');
+                    else showToast(t('segSkewInsufficient'), 'error');
+                }
+                syncSegSkewConfigUI();
+                return;
+            }
+
+            st.edit.segSkewResult = analysis;
+            st.edit.segSkewBusy = false;
+            setSegSkewBusyUI(false);
+            buildSegSkewTuneUI(analysis);
+            if (options.resetView) segSkewResetViews();
+            renderSegSkewCompare({ resetView: !!options.resetView });
+            updateEditButtons();
+            el.status.textContent = segSkewStatusText(analysis);
+        } catch (err) {
+            console.error(err);
+            if (runId === st.edit.segSkewRunId) {
+                showToast(String(err.message || err), 'error');
+                syncSegSkewConfigUI();
+            }
+        } finally {
+            if (runId === st.edit.segSkewRunId && st.edit.segSkewBusy) {
+                st.edit.segSkewBusy = false;
+                setSegSkewBusyUI(false);
+                updateEditButtons();
+            }
+        }
+    }
+
+    function onSegSkewConfigChange() {
+        if (!st.edit.segSkew || st.edit.segSkewBusy || st.edit.segSkewTuneBusy || !st.edit.segSkewResult) return;
+        recomputeSegSkewWithConfig({ resetView: true });
+    }
+
+    function onSegSkewCountKeydown(e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        if (e.target && typeof e.target.blur === 'function') e.target.blur();
+        onSegSkewConfigChange();
+    }
+
+    function enterSegSkewUI(active) {
+        if (el.viewer) el.viewer.classList.toggle('seg-skew-active', active);
+        if (el.segSkewPanel) el.segSkewPanel.setAttribute('aria-hidden', active ? 'false' : 'true');
+        if (el.segSkew) el.segSkew.classList.toggle('tool-active', active);
+        if (active && !st.edit.segSkewBusy && st.edit.segSkewResult) {
+            requestAnimationFrame(() => renderSegSkewCompare({ resetView: true }));
+        }
+    }
+
+    function exitSegSkewMode() {
+        st.edit.segSkew = false;
+        st.edit.segSkewBusy = false;
+        st.edit.segSkewTuneBusy = false;
+        st.edit.segSkewRunId++;
+        st.edit.segSkewBase = null;
+        st.edit.segSkewResult = null;
+        st.edit.segSkewTuneRunId++;
+        st.edit.segSkewShowBounds = true;
+        segSkewResetViews();
+        setSegSkewTuneBusyUI(false);
+        setSegSkewTuneUI(false);
+        setSegSkewConfigUI(false);
+        setSegSkewBusyUI(false);
+        enterSegSkewUI(false);
+        updateEditButtons();
+    }
+
+    function cancelSegSkew() {
+        if (!st.edit.segSkew) return;
+        st.edit.segSkewRunId++;
+        const base = st.edit.segSkewBase;
+        if (base && st.dataset && !st.edit.segSkewBusy) {
+            st.dataset.data = base.data.slice();
+            st.dataset.vmin = base.vmin;
+            st.dataset.vmax = base.vmax;
+            resetColorClip(false);
+            render(st.dataset, el.colormap.value, false);
+        }
+        exitSegSkewMode();
+    }
+
+    async function startSegSkewMode() {
+        if (!editing || !st.dataset) { showToast(t('editNoData'), 'info'); return; }
+        if (isScatter(st.dataset)) { showToast(t('segSkewScatter'), 'info'); return; }
+        if (st.edit.segSkew) {
+            if (st.edit.segSkewBusy) {
+                st.edit.segSkewRunId++;
+                exitSegSkewMode();
+            } else {
+                cancelSegSkew();
+            }
+            return;
+        }
+
+        endTransientModes();
+
+        snapshotSegSkewBase();
+        segSkewResetViews();
+        st.edit.segSkew = true;
+        st.edit.segSkewShowBounds = true;
+        st.edit.segSkewBusy = true;
+        st.edit.segSkewResult = null;
+        const runId = ++st.edit.segSkewRunId;
+
+        enterSegSkewUI(true);
+        syncSegSkewBoundsToggle();
+        setSegSkewBusyUI(true, 0);
+        setSegSkewTuneUI(false);
+        setSegSkewConfigUI(false);
+        if (st.edit.segSkewBase && st.dataset) {
+            const { data, vmin, vmax } = st.edit.segSkewBase;
+            const dr = segLevelDisplayRange(vmin, vmax, st.colorClip);
+            renderSegSkewCanvas(
+                el.segSkewBefore, data, st.dataset.width, st.dataset.height,
+                dr.cmin, dr.crange, el.colormap.value, 'horizontal', [], 'beforeImg', true,
+            );
+            renderSegLevelPaneColorbar(
+                el.segSkewBeforeCb, el.segSkewBeforeCbLo, el.segSkewBeforeCbHi,
+                vmin, vmax, el.colormap.value, st.colorClip,
+            );
+            if (el.segSkewAfter) {
+                const c = el.segSkewAfter;
+                const ctx = c.getContext('2d');
+                if (ctx) ctx.clearRect(0, 0, c.width, c.height);
+            }
+        }
+        updateEditButtons();
+        el.status.textContent = t('segSkewAnalyzing');
+
+        await segLevelYield();
+
+        try {
+            const analysis = await analyzeSegmentSkewAsync(
+                st.dataset,
+                (p) => {
+                    if (runId !== st.edit.segSkewRunId) return;
+                    setSegSkewBusyUI(true, p);
+                },
+                () => runId !== st.edit.segSkewRunId,
+            );
+
+            if (runId !== st.edit.segSkewRunId) return;
+
+            if (!analysis.ok) {
+                const reason = analysis.reason;
+                if (reason !== 'cancelled') {
+                    if (reason === 'scatter') showToast(t('segSkewScatter'), 'info');
+                    else if (reason === 'tooSmall') showToast(t('segSkewTooSmall'), 'error');
+                    else showToast(t('segSkewInsufficient'), 'error');
+                }
+                st.edit.segSkewBase = null;
+                exitSegSkewMode();
+                if (st.dataset) {
+                    el.status.textContent = t('statusLoaded', st.dataset.filename, st.dataset.width, st.dataset.height);
+                }
+                return;
+            }
+
+            st.edit.segSkewResult = analysis;
+            st.edit.segSkewBusy = false;
+            setSegSkewBusyUI(false);
+            setSegSkewConfigUI(true);
+            buildSegSkewTuneUI(analysis);
+            renderSegSkewCompare({ resetView: true });
+            updateEditButtons();
+            el.status.textContent = segSkewStatusText(analysis);
+        } catch (err) {
+            console.error(err);
+            if (runId === st.edit.segSkewRunId) {
+                showToast(String(err.message || err), 'error');
+                exitSegSkewMode();
+            }
+        }
+    }
+
+    function applySegSkew() {
+        if (!st.edit.segSkew || st.edit.segSkewBusy || !st.edit.segSkewResult || !st.dataset) return;
+        const result = st.edit.segSkewResult;
+        ensureFloatPixels(st.dataset);
+        st.dataset.data = result.correctedData.slice();
+        exitSegSkewMode();
+        refreshAfterEdit(false);
+        pushHistory();
+        setLastEditStep({
+            type: 'segmentSkew',
+            direction: result.direction,
+            boundaries: result.boundaries.slice(),
+            shiftPx: result.shiftPx,
+            segmentCount: result.segmentCount,
+        });
+        const msg = t('segSkewDone', result.segmentCount, segSkewDirLabel(result.direction), result.shiftPx);
+        el.status.textContent = msg;
+        showToast(msg, 'info');
+    }
+
     /* 複製目前資料集（深拷貝陣列、移除畫布參照）以便安全傳送到檢視器 */
     function sendToViewer() {
         if (!st.dataset) { showToast(t('sendNoData'), 'info'); return; }
         if (st.edit.denoise) toggleDenoise(false); // 先套用雜點篩除結果
         if (st.edit.segLevel) cancelSegLevel();
+        if (st.edit.segSkew) cancelSegSkew();
         const clone = cloneDatasetForTransfer(st.dataset);
         // 先切到檢視器頁面，讓畫布有正確尺寸後再載入，避免 fit 計算到 0
         if (typeof switchPage === 'function') switchPage('viewer');
@@ -2154,6 +2796,7 @@ function createImageView(ids, options) {
         if (!editing || !st.dataset) return;
         if (st.edit.denoise) toggleDenoise(false);
         if (st.edit.segLevel) cancelSegLevel();
+        if (st.edit.segSkew) cancelSegSkew();
         // 點擊已啟用的模式 → 關閉
         if (st.edit.cropMode === mode) { exitCrop(); return; }
         st.edit.cropMode = mode;
@@ -2630,6 +3273,7 @@ function createImageView(ids, options) {
             st.edit.denoiseBase = null; histData = null;
         }
         if (st.edit.segLevel) exitSegLevelMode();
+        if (st.edit.segSkew) exitSegSkewMode();
         resetHistory();          // 以新載入的資料作為歷史起點
         updateEditButtons();
     }
@@ -2656,6 +3300,18 @@ function createImageView(ids, options) {
             el.segLevelCount.addEventListener('keydown', onSegLevelCountKeydown);
         }
         setupSegLevelZoom();
+        if (el.segSkew) el.segSkew.addEventListener('click', startSegSkewMode);
+        if (el.segSkewApply) el.segSkewApply.addEventListener('click', applySegSkew);
+        if (el.segSkewCancel) el.segSkewCancel.addEventListener('click', cancelSegSkew);
+        if (el.segSkewTuneShift) el.segSkewTuneShift.addEventListener('keydown', onSegSkewTuneKeydown);
+        if (el.segSkewTuneReset) el.segSkewTuneReset.addEventListener('click', resetSegSkewShift);
+        if (el.segSkewShowBounds) el.segSkewShowBounds.addEventListener('change', onSegSkewBoundsToggle);
+        if (el.segSkewDir) el.segSkewDir.addEventListener('change', onSegSkewConfigChange);
+        if (el.segSkewCount) {
+            el.segSkewCount.addEventListener('change', onSegSkewConfigChange);
+            el.segSkewCount.addEventListener('keydown', onSegSkewCountKeydown);
+        }
+        setupSegSkewZoom();
         if (el.globalLevel) el.globalLevel.addEventListener('click', applyGlobalLeveling);
         if (el.histAuto) el.histAuto.addEventListener('click', () => autoDenoiseBounds());
         if (el.histApply) el.histApply.addEventListener('click', () => toggleDenoise(false));
@@ -2677,6 +3333,7 @@ function createImageView(ids, options) {
         window.addEventListener('resize', () => {
             if (st.edit.denoise) renderHist();
             if (st.edit.segLevel) renderSegLevelCompare({ resetView: true });
+            if (st.edit.segSkew) renderSegSkewCompare({ resetView: true });
         });
         updateEditButtons();
     }
@@ -2701,6 +3358,7 @@ function createImageView(ids, options) {
                 fitImage();
                 if (st.edit.denoise) renderHist();
                 if (st.edit.segLevel) renderSegLevelCompare({ resetView: true });
+                if (st.edit.segSkew) renderSegSkewCompare({ resetView: true });
             }
         },
         syncLang: () => {
@@ -2751,6 +3409,22 @@ const editorView = createImageView({
     segLevelTuneBusy: 'edSegLevelTuneBusy', segLevelTuneBusyText: 'edSegLevelTuneBusyText',
     segLevelShowBounds: 'edSegLevelShowBounds', segLevelBoundsWrap: 'edSegLevelBoundsWrap',
     segLevelApply: 'edSegLevelApply', segLevelCancel: 'edSegLevelCancel',
+    segSkew: 'edSegSkew',
+    segSkewPanel: 'edSegSkewPanel', segSkewConfig: 'edSegSkewConfig',
+    segSkewDir: 'edSegSkewDir', segSkewCount: 'edSegSkewCount',
+    segSkewCompare: 'edSegSkewCompare', segSkewBusy: 'edSegSkewBusy',
+    segSkewBusyText: 'edSegSkewBusyText',
+    segSkewBefore: 'edSegSkewBefore', segSkewAfter: 'edSegSkewAfter',
+    segSkewBeforeCb: 'edSegSkewBeforeCb', segSkewBeforeCbLo: 'edSegSkewBeforeCbLo',
+    segSkewBeforeCbHi: 'edSegSkewBeforeCbHi',
+    segSkewAfterCb: 'edSegSkewAfterCb', segSkewAfterCbLo: 'edSegSkewAfterCbLo',
+    segSkewAfterCbHi: 'edSegSkewAfterCbHi',
+    segSkewTune: 'edSegSkewTune',
+    segSkewTuneShift: 'edSegSkewTuneShift',
+    segSkewTuneReset: 'edSegSkewTuneReset', segSkewTuneHint: 'edSegSkewTuneHint',
+    segSkewTuneBusy: 'edSegSkewTuneBusy', segSkewTuneBusyText: 'edSegSkewTuneBusyText',
+    segSkewShowBounds: 'edSegSkewShowBounds', segSkewBoundsWrap: 'edSegSkewBoundsWrap',
+    segSkewApply: 'edSegSkewApply', segSkewCancel: 'edSegSkewCancel',
     globalLevel: 'edGlobalLevel',
     histPanel: 'edHistPanel', histWrap: 'edHistWrap', histCanvas: 'edHistCanvas',
     histHandleLo: 'edHistHandleLo', histHandleHi: 'edHistHandleHi',

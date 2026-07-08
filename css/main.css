@@ -1363,10 +1363,16 @@
     #edViewer.seg-level-active #edZoomHint,
     #edViewer.seg-level-active #edZoomIndicator,
     #edViewer.seg-level-active #edCropOverlay,
-    #edViewer.seg-level-active #edDropHint {
+    #edViewer.seg-level-active #edDropHint,
+    #edViewer.seg-skew-active #edCanvas,
+    #edViewer.seg-skew-active #edZoomHint,
+    #edViewer.seg-skew-active #edZoomIndicator,
+    #edViewer.seg-skew-active #edCropOverlay,
+    #edViewer.seg-skew-active #edDropHint {
         display: none !important;
     }
-    #edViewer.seg-level-active .seg-level-panel {
+    #edViewer.seg-level-active .seg-level-panel#edSegLevelPanel,
+    #edViewer.seg-skew-active .seg-level-panel#edSegSkewPanel {
         display: flex;
     }
     .seg-level-panel {
@@ -1428,7 +1434,9 @@
         white-space: nowrap;
     }
     #edSegLevelDir,
-    #edSegLevelCount {
+    #edSegLevelCount,
+    #edSegSkewDir,
+    #edSegSkewCount {
         padding: 4px 6px;
         font-size: 12px;
         font-family: Consolas, monospace;
@@ -1440,16 +1448,24 @@
     #edSegLevelDir {
         min-width: 7.5em;
     }
-    #edSegLevelCount {
+    #edSegSkewDir {
+        min-width: 7.5em;
+    }
+    #edSegLevelCount,
+    #edSegSkewCount {
         width: 56px;
     }
     #edSegLevelDir:focus,
-    #edSegLevelCount:focus {
+    #edSegLevelCount:focus,
+    #edSegSkewDir:focus,
+    #edSegSkewCount:focus {
         border-color: var(--accent);
         outline: none;
     }
     #edSegLevelDir:disabled,
-    #edSegLevelCount:disabled {
+    #edSegLevelCount:disabled,
+    #edSegSkewDir:disabled,
+    #edSegSkewCount:disabled {
         opacity: 0.55;
         cursor: not-allowed;
     }
@@ -1542,7 +1558,8 @@
         white-space: nowrap;
         font-family: Consolas, monospace;
     }
-    #edSegLevelTuneK {
+    #edSegLevelTuneK,
+    #edSegSkewTuneShift {
         width: 96px;
         padding: 4px 6px;
         font-size: 12px;
@@ -1552,7 +1569,8 @@
         border-radius: 4px;
         color: var(--text);
     }
-    #edSegLevelTuneK:focus {
+    #edSegLevelTuneK:focus,
+    #edSegSkewTuneShift:focus {
         border-color: var(--accent);
         outline: none;
     }
@@ -1579,6 +1597,13 @@
     .seg-level-compare.is-tune-busy .seg-level-pane-after .seg-level-profile-wrap {
         opacity: 0.55;
         pointer-events: none;
+    }
+    .seg-skew-compare .seg-level-pane {
+        flex: 1;
+    }
+    .seg-skew-compare .seg-level-image-row {
+        flex: 1;
+        min-height: 120px;
     }
     .seg-level-pane-after {
         position: relative;
@@ -1771,7 +1796,8 @@
     .seg-level-zoomable.grabbing .seg-level-zoom-ind {
         opacity: 1;
     }
-    #edSegLevel.tool-active {
+    #edSegLevel.tool-active,
+    #edSegSkew.tool-active {
         background: rgba(79, 140, 255, 0.2);
         border-color: var(--accent);
         color: var(--accent-hover);
