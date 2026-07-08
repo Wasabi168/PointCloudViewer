@@ -152,10 +152,12 @@ const layoutEdToolbar = setupOverflowToolbar({
     overflowTargetId: 'edMoreOverflow',
     alwaysShowMore: true,
     groups: [
-        { id: 'edHistoryGroup', sepId: 'edSepHistory', priority: 25 },
-        { id: 'edDisplayGroup', sepId: 'edSepDisplay', priority: 35 },
-        { id: 'edEditGroup',    sepId: 'edSepEdit',    priority: 45 },
-        { id: 'edSendGroup',    sepId: 'edSepSend',    priority: 55 },
+        { id: 'edDisplayGroup',  sepId: 'edSepDisplay',      priority: 35 },
+        { id: 'edHistoryGroup',  sepId: 'edSepHistory',      priority: 25 },
+        { id: 'edCropGroup',     sepId: 'edSepEdit',         priority: 10 },
+        { id: 'edProcessGroup',  sepId: 'edSepCropProcess',  priority: 12 },
+        { id: 'edCalibGroup',    sepId: 'edSepProcessCalib', priority: 50 },
+        { id: 'edSendGroup',     sepId: 'edSepSend',         priority: 55 },
     ],
 });
 

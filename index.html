@@ -211,16 +211,6 @@
                 <button type="button" id="edBtnClear" class="btn-secondary" data-i18n="btnClear" data-i18n-title="btnClearTitle" disabled>清除</button>
             </div>
 
-            <span class="ctrl-sep" id="edSepHistory" aria-hidden="true"></span>
-
-            <!-- 群組：復原 / 重做 -->
-            <div class="ctrl-group" id="edHistoryGroup" data-toolbar-priority="25">
-                <div class="ed-icon-group" id="edHistoryTools">
-                    <button type="button" id="edUndo" data-i18n="undo" data-i18n-title="undoTitle" disabled>↶</button>
-                    <button type="button" id="edRedo" data-i18n="redo" data-i18n-title="redoTitle" disabled>↷</button>
-                </div>
-            </div>
-
             <span class="ctrl-sep" id="edSepDisplay" aria-hidden="true"></span>
 
             <!-- 群組：顯示 -->
@@ -237,10 +227,20 @@
                 </label>
             </div>
 
+            <span class="ctrl-sep" id="edSepHistory" aria-hidden="true"></span>
+
+            <!-- 群組：復原 / 重做 -->
+            <div class="ctrl-group" id="edHistoryGroup" data-toolbar-priority="25">
+                <div class="ed-icon-group" id="edHistoryTools">
+                    <button type="button" id="edUndo" data-i18n="undo" data-i18n-title="undoTitle" disabled>↶</button>
+                    <button type="button" id="edRedo" data-i18n="redo" data-i18n-title="redoTitle" disabled>↷</button>
+                </div>
+            </div>
+
             <span class="ctrl-sep" id="edSepEdit" aria-hidden="true"></span>
 
-            <!-- 群組：影像編輯（裁切 / 刪除雜點） -->
-            <div class="ctrl-group ed-edit-cluster" id="edEditGroup" data-toolbar-priority="45">
+            <!-- 群組：影像編輯（裁切 / 處理 / 校正；寬度不足時依優先順序收進「更多」） -->
+            <div class="ctrl-group ed-edit-cluster" id="edCropGroup" data-toolbar-priority="10">
                 <div class="ed-toolbar-block" id="edCropBlock">
                     <span class="ed-toolbar-label" data-i18n="toolGroupCrop">裁切</span>
                     <div class="ed-toolbar-block-row">
@@ -254,10 +254,19 @@
                         </div>
                     </div>
                 </div>
-                <span class="ctrl-sep ctrl-sep--inline" aria-hidden="true"></span>
+            </div>
+            <span class="ctrl-sep ctrl-sep--inline" id="edSepCropProcess" aria-hidden="true"></span>
+            <div class="ctrl-group ed-edit-cluster" id="edProcessGroup" data-toolbar-priority="12">
                 <div class="ed-toolbar-block" id="edProcessBlock">
                     <span class="ed-toolbar-label" data-i18n="toolGroupProcess">處理</span>
                     <button type="button" id="edDenoise" data-i18n="denoise" data-i18n-title="denoiseTitle">刪除雜點</button>
+                </div>
+            </div>
+            <span class="ctrl-sep ctrl-sep--inline" id="edSepProcessCalib" aria-hidden="true"></span>
+            <div class="ctrl-group ed-edit-cluster" id="edCalibGroup" data-toolbar-priority="50">
+                <div class="ed-toolbar-block" id="edCalibBlock">
+                    <span class="ed-toolbar-label" data-i18n="toolGroupCalib">校正</span>
+                    <button type="button" id="edGlobalLevel" data-i18n="globalLevel" data-i18n-title="globalLevelTitle">全域水平校正</button>
                     <button type="button" id="edSegLevel" data-i18n="segLevel" data-i18n-title="segLevelTitle">分區水平校正</button>
                     <button type="button" id="edSegSkew" data-i18n="segSkew" data-i18n-title="segSkewTitle">分區錯位校正</button>
                 </div>
@@ -272,7 +281,7 @@
 
             <span class="ctrl-sep ctrl-sep--more" id="edSepMore" aria-hidden="true"></span>
 
-            <!-- 群組：更多（儲存格式、水平校正、計算機、批次檔；視窗縮小時另收納次要工具） -->
+            <!-- 群組：更多（儲存格式、計算機、批次檔；視窗縮小時另收納次要工具） -->
             <div class="ctrl-group more-wrap" id="edMoreWrap">
                 <button type="button" id="edBtnMore" class="more-btn" aria-haspopup="true" aria-expanded="false" data-i18n-title="btnMoreTitleEditor" title="更多選項">
                     <span data-i18n="btnMore">更多</span>
@@ -293,7 +302,6 @@
                             </select>
                         </label>
                         <div class="more-menu-actions">
-                            <button type="button" id="edGlobalLevel" data-i18n="globalLevel" data-i18n-title="globalLevelTitle">全域水平校正</button>
                             <button type="button" id="edBtnCalc" data-i18n="btnCalc" data-i18n-title="calcTitle">計算機</button>
                             <button type="button" id="edBtnBatchFile" data-i18n="batchFileBtn" data-i18n-title="batchFileBtnTitle">批次檔</button>
                         </div>
