@@ -16,10 +16,9 @@
     <button type="button" class="app-tab" data-page="batch" aria-selected="false" data-i18n="tabBatch">批次轉檔</button>
     <span class="app-tabs-hint"><span data-i18n="tabHintPrefix">按</span> <kbd>Tab</kbd> <span data-i18n="tabHintSuffix">切換視窗</span></span>
     <button type="button" class="info-btn" id="btnInfo" data-i18n-title="infoBtnTitle" data-i18n-aria="infoBtnTitle" title="關於與說明" aria-label="關於與說明">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 16v-4"/>
-            <circle cx="12" cy="8" r="0.5" fill="currentColor" stroke="none"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="7" r="1.75" fill="currentColor" stroke="none"/>
+            <path d="M12 11v8"/>
         </svg>
     </button>
     <div class="lang-toggle" id="langToggle">
@@ -480,7 +479,15 @@
             </div>
             <div class="seg-level-panel" id="edSegLevelPanel" aria-hidden="true">
                 <div class="seg-level-head">
-                    <span class="seg-level-mode-badge" data-i18n="segLevelModeName">分區水平校正模式</span>
+                    <div class="seg-level-title-wrap">
+                        <span class="seg-level-mode-badge" data-i18n="segLevelModeName">分區水平校正模式</span>
+                        <button type="button" class="info-btn seg-level-info-btn" id="edSegLevelInfo" data-i18n-title="segLevelInfoBtnTitle" data-i18n-aria="segLevelInfoBtnTitle" title="分區水平校正說明" aria-label="分區水平校正說明">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true">
+                                <circle cx="12" cy="7" r="1.75" fill="currentColor" stroke="none"/>
+                                <path d="M12 11v8"/>
+                            </svg>
+                        </button>
+                    </div>
                     <div class="seg-level-config" id="edSegLevelConfig" aria-hidden="true">
                         <label class="seg-level-config-item" for="edSegLevelDir">
                             <span data-i18n="segLevelDirLabel">分割方向</span>
@@ -563,7 +570,15 @@
             </div>
             <div class="seg-level-panel" id="edSegSkewPanel" aria-hidden="true">
                 <div class="seg-level-head">
-                    <span class="seg-level-mode-badge" data-i18n="segSkewModeName">分區錯位校正模式</span>
+                    <div class="seg-level-title-wrap">
+                        <span class="seg-level-mode-badge" data-i18n="segSkewModeName">分區錯位校正模式</span>
+                        <button type="button" class="info-btn seg-level-info-btn" id="edSegSkewInfo" data-i18n-title="segSkewInfoBtnTitle" data-i18n-aria="segSkewInfoBtnTitle" title="分區錯位校正說明" aria-label="分區錯位校正說明">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true">
+                                <circle cx="12" cy="7" r="1.75" fill="currentColor" stroke="none"/>
+                                <path d="M12 11v8"/>
+                            </svg>
+                        </button>
+                    </div>
                     <div class="seg-level-config" id="edSegSkewConfig" aria-hidden="true">
                         <label class="seg-level-config-item" for="edSegSkewDir">
                             <span data-i18n="segSkewDirLabel">分割方向</span>
@@ -1065,6 +1080,89 @@
         </button>
     </div>
     <input type="file" id="bfmFileInput" accept=".wbatch,.json" hidden />
+</div>
+
+<!-- 分區水平校正說明 modal -->
+<div class="info-overlay" id="segLevelInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="segLevelInfoTitle">
+    <div class="info-panel info-panel--wide">
+        <div class="info-header">
+            <h3 id="segLevelInfoTitle" data-i18n="segLevelInfoTitle">分區水平校正說明</h3>
+            <button type="button" class="info-close" id="segLevelInfoCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body">
+            <section class="info-section">
+                <h4 data-i18n="segLevelInfoPurposeHeading">功能目的</h4>
+                <p data-i18n="segLevelInfoPurposeText">針對階梯狀或多平台高度圖，自動偵測分割方向與帶數，扣除各帶共用傾斜後將各平台墊高對齊，消除接縫處的高度落差。</p>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="segLevelInfoWorkflowHeading">操作流程</h4>
+                <ol class="info-steps">
+                    <li data-i18n="segLevelInfoStep1">載入高度圖後，點選工具列「分區水平校正」進入此模式。</li>
+                    <li data-i18n="segLevelInfoStep2">系統自動分析分割方向與等份數，並顯示校正前後對照與中央剖面折線圖。</li>
+                    <li data-i18n="segLevelInfoStep3">可調整「分割方向」「等份數」，或於「傾斜微調」修改共用斜率後按 Enter 更新預覽。</li>
+                    <li data-i18n="segLevelInfoStep4">勾選「顯示分割線」可疊加等分邊界；影像與剖面圖支援滾輪縮放、拖曳平移、雙擊還原。</li>
+                    <li data-i18n="segLevelInfoStep5">確認結果後按「套用」寫入資料並離開；按「取消」則放棄預覽、還原原始資料。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="segLevelInfoPrincipleHeading">演算法原理</h4>
+                <ol class="info-steps">
+                    <li data-i18n="segLevelInfoPrinciple1">方向偵測：分別建立水平與垂直方向的邊界能量剖面（相鄰像素高度差與平均高度階梯），比較結構強度後選定分割方向。</li>
+                    <li data-i18n="segLevelInfoPrinciple2">帶數決定：分析平均高度剖面的階梯跳變，在 2～N 等份候選中挑選「帶間變異大、帶內變異小」的最佳等份數。</li>
+                    <li data-i18n="segLevelInfoPrinciple3">邊界位置：採幾何等分（round(b × 軸長 / 帶數)），不做接縫微調，確保各帶寬度均勻且滿足最小間距約束。</li>
+                    <li data-i18n="segLevelInfoPrinciple4">斜率估計：各帶獨立做 1D 線性擬合（z = k·t + c，t 為物理距離 mm），取有效帶斜率的算術平均作為全圖共用 k（µm/mm）。</li>
+                    <li data-i18n="segLevelInfoPrinciple5">扣除傾斜：各帶以帶中心為基準，從每個像素扣除 k × 距離 的傾斜分量，保留各帶截距。</li>
+                    <li data-i18n="segLevelInfoPrinciple6">墊高對齊：計算各帶平均高度，將較低帶整帶加上高度差，對齊至最高帶，使各平台處於同一水平面。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="segLevelInfoNoteHeading">注意事項</h4>
+                <p data-i18n="segLevelInfoNoteText">僅適用於規則網格高度圖；散布點雲 (.pcd / .txt) 不支援。與「全域水平校正」不同，本功能保留各帶截距，專門處理階梯狀多平台資料。</p>
+            </section>
+        </div>
+    </div>
+</div>
+
+<!-- 分區錯位校正說明 modal -->
+<div class="info-overlay" id="segSkewInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="segSkewInfoTitle">
+    <div class="info-panel info-panel--wide">
+        <div class="info-header">
+            <h3 id="segSkewInfoTitle" data-i18n="segSkewInfoTitle">分區錯位校正說明</h3>
+            <button type="button" class="info-close" id="segSkewInfoCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body">
+            <section class="info-section">
+                <h4 data-i18n="segSkewInfoPurposeHeading">功能目的</h4>
+                <p data-i18n="segSkewInfoPurposeText">針對多帶拼接高度圖的平面錯位（skew／剪切），自動偵測接縫方向與帶數，對各帶套用共用的線性像素位移後拼回，消除掃描拼接造成的幾何錯位。</p>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="segSkewInfoWorkflowHeading">操作流程</h4>
+                <ol class="info-steps">
+                    <li data-i18n="segSkewInfoStep1">載入高度圖後，點選工具列「分區錯位校正」進入此模式。</li>
+                    <li data-i18n="segSkewInfoStep2">系統自動分析接縫方向、等份數與共用 shift，並顯示校正前後對照影像。</li>
+                    <li data-i18n="segSkewInfoStep3">可調整「分割方向」「等份數」，或於「位移微調」修改共用 shift（像素）後按 Enter 更新預覽。</li>
+                    <li data-i18n="segSkewInfoStep4">勾選「顯示分割線」可疊加等分邊界；影像支援滾輪縮放、拖曳平移、雙擊還原。</li>
+                    <li data-i18n="segSkewInfoStep5">確認結果後按「套用」寫入資料並離開；按「取消」則放棄預覽、還原原始資料。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="segSkewInfoPrincipleHeading">演算法原理</h4>
+                <ol class="info-steps">
+                    <li data-i18n="segSkewInfoPrinciple1">方向偵測：分別建立水平與垂直方向的接縫能量剖面（相鄰像素高度差），比較各方向等分邊界與接縫峰值的對齊分數後選定分割方向。</li>
+                    <li data-i18n="segSkewInfoPrinciple2">帶數決定：在 2～N 等份候選中，挑選等分邊界最對齊接縫能量峰值的帶數（弱接縫會拉低分數，避免過度分割）。</li>
+                    <li data-i18n="segSkewInfoPrinciple3">邊界位置：採幾何等分，與分區水平校正相同，確保各帶寬度均勻。</li>
+                    <li data-i18n="segSkewInfoPrinciple4">位移估計：各帶沿 skew 軸抽取平均剖面，與帶邊緣參考做互相關搜尋，線性擬合估算該帶總位移（pixel）；以首帶估算為主（較不受接縫干擾）。</li>
+                    <li data-i18n="segSkewInfoPrinciple5">共用 shift：彙整各帶估算值為全圖共用的像素位移，並在接縫殘餘錯位意義下做窄範圍微調。</li>
+                    <li data-i18n="segSkewInfoPrinciple6">Skew 變換：各帶內沿 skew 軸從起點 0 線性漸增至 totalShift（水平分割沿 X、垂直分割沿 Y），以雙線性插值重採樣像素後寫回。</li>
+                    <li data-i18n="segSkewInfoPrinciple7">拼回：將各帶校正結果寫回完整影像，空缺處以 NaN 填補。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="segSkewInfoNoteHeading">注意事項</h4>
+                <p data-i18n="segSkewInfoNoteText">僅適用於規則網格高度圖；散布點雲 (.pcd / .txt) 不支援。本功能校正平面像素錯位，不改變各帶高度值；與「分區水平校正」（處理高度落差）互補，可視需求分別或依序使用。</p>
+            </section>
+        </div>
+    </div>
 </div>
 
 <!-- 關於與說明 modal -->

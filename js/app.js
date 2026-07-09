@@ -50,6 +50,8 @@ document.addEventListener('keydown', (e) => {
     // 計算機或說明視窗開啟時，保留原本的鍵盤操作
     if (typeof calcOverlay !== 'undefined' && calcOverlay && calcOverlay.classList.contains('show')) return;
     if (typeof infoOverlay !== 'undefined' && infoOverlay && infoOverlay.classList.contains('show')) return;
+    if (typeof segLevelInfoOverlay !== 'undefined' && segLevelInfoOverlay && segLevelInfoOverlay.classList.contains('show')) return;
+    if (typeof segSkewInfoOverlay !== 'undefined' && segSkewInfoOverlay && segSkewInfoOverlay.classList.contains('show')) return;
     // 焦點在輸入欄位時不攔截，避免影響表單操作
     const ae = document.activeElement;
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' ||

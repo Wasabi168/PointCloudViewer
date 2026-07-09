@@ -1055,6 +1055,10 @@
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
         animation: calcPop 0.18s ease-out;
     }
+    .info-panel--wide {
+        width: min(600px, 92vw);
+        max-height: min(85vh, 720px);
+    }
 
     .info-header {
         display: flex;
@@ -1127,6 +1131,16 @@
     .info-email a {
         color: var(--accent);
         text-decoration: none;
+    }
+    .info-steps {
+        margin: 0;
+        padding-left: 1.25em;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+    }
+    .info-steps li + li {
+        margin-top: 6px;
     }
     .info-email a:hover {
         text-decoration: underline;
@@ -1331,8 +1345,8 @@
         transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
     }
     .info-btn svg {
-        width: 16px;
-        height: 16px;
+        width: 18px;
+        height: 18px;
     }
     .info-btn:hover {
         color: var(--text);
@@ -1731,6 +1745,21 @@
         gap: 12px;
         flex-wrap: wrap;
         flex-shrink: 0;
+    }
+    .seg-level-title-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .seg-level-info-btn {
+        width: 24px;
+        height: 24px;
+        margin: 0;
+        flex-shrink: 0;
+    }
+    .seg-level-info-btn svg {
+        width: 16px;
+        height: 16px;
     }
     .seg-level-mode-badge {
         display: inline-flex;
