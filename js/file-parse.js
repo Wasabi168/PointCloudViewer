@@ -710,6 +710,92 @@ async function readPcd(file, onProgress) {
 
 
 /* -------------------------------------------------------------------------
+ *  TXT 三欄位座標 (x y z) — 對應 MicroVuHandler.read_microvu_txt_xyz
+ * ------------------------------------------------------------------------- */
+
+const TXT_XYZ_LINE_RE = /^\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)/;
+
+/** 嘗試多種編碼讀取文字檔（對應 MicroVuHandler 的 encodings 列表） */
+async function decodeTextFileMultiEncoding(file) {
+    const buffer = await file.arrayBuffer();
+    const encodings = ['utf-8', 'utf-16le', 'utf-16be', 'gbk', 'big5', 'iso-8859-1'];
+    for (const enc of encodings) {
+        try {
+            const text = new TextDecoder(enc, { fatal: true }).decode(buffer);
+            if (text.includes('\uFFFD') && enc === 'utf-8') continue;
+            return text;
+        } catch (_) { /* try next */ }
+    }
+    return new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+}
+
+function txtMakePcdLikeHeader(pointCount) {
+    return {
+        fields: ['x', 'y', 'z'],
+        size: [4, 4, 4],
+        type: ['F', 'F', 'F'],
+        count: [1, 1, 1],
+        width: 1,
+        height: 1,
+        points: pointCount,
+        data: 'ascii',
+    };
+}
+
+/**
+ * 解析 MicroVu 風格三欄位 .txt（x y z），預設以 pcd-scatter 散布點雲載入。
+ */
+async function readTxt(file, onProgress) {
+    const text = await decodeTextFileMultiEncoding(file);
+    if (onProgress) onProgress(0.1);
+
+    const lines = text.split(/\r?\n/);
+    const total = lines.length;
+
+    let validCount = 0;
+    for (let i = 0; i < total; i++) {
+        const line = lines[i].trim();
+        if (!line || line.startsWith('#')) continue;
+        if (TXT_XYZ_LINE_RE.test(line)) validCount++;
+    }
+    if (validCount === 0) throw new Error(t('errTxtNoData'));
+
+    const x = new Float32Array(validCount);
+    const y = new Float32Array(validCount);
+    const z = new Float32Array(validCount);
+
+    let idx = 0;
+    const batchSize = 50000;
+    for (let i = 0; i < total; i++) {
+        const line = lines[i].trim();
+        if (!line || line.startsWith('#')) continue;
+        const m = TXT_XYZ_LINE_RE.exec(line);
+        if (!m) continue;
+        x[idx] = parseFloat(m[1]);
+        y[idx] = parseFloat(m[2]);
+        z[idx] = parseFloat(m[3]);
+        idx++;
+        if (onProgress && (idx % batchSize === 0 || idx === validCount)) {
+            onProgress(0.1 + 0.5 * (idx / validCount));
+        }
+    }
+
+    if (onProgress) onProgress(0.65);
+
+    const columns = { x, y, z };
+    const header = txtMakePcdLikeHeader(validCount);
+
+    if (onProgress) onProgress(0.85);
+
+    const result = pcdPrepareScatter(header, columns);
+    result.header.fileformat = 'txt';
+
+    if (onProgress) onProgress(1.0);
+    return result;
+}
+
+
+/* -------------------------------------------------------------------------
  *  PNG / JPG / BMP 解析：透過瀏覽器原生解碼，再轉為灰階 (對應 PIL .convert('L'))
  * ------------------------------------------------------------------------- */
 

@@ -29,8 +29,8 @@ applySelectPref(document.getElementById('saveFormat'), 'saveFormat');
 applySelectPref(document.getElementById('edColormap'), 'edColormap');
 applySelectPref(document.getElementById('edSaveFormat'), 'edSaveFormat');
 
-const SUPPORTED_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'pcd', 'bmp', 'png', 'jpg', 'jpeg'];
-const SUPPORTED_TEXT = '.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg';
+const SUPPORTED_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'pcd', 'txt', 'bmp', 'png', 'jpg', 'jpeg'];
+const SUPPORTED_TEXT = '.bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg';
 
 function setProgress(p) {
     progressEl.classList.add('show');
@@ -76,6 +76,7 @@ async function parseFileToDataset(file, onProgress) {
         case 'tif':
         case 'tiff':          result = await readTiff(file, onProgress); break;
         case 'pcd':           result = await readPcd(file, onProgress); break;
+        case 'txt':           result = await readTxt(file, onProgress); break;
         case 'bmp':           result = await readBmp(file, onProgress); break;
         case 'png':           result = await readPng(file, onProgress); break;
         case 'jpg':

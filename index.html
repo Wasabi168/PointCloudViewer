@@ -29,7 +29,7 @@
 <header id="viewerHeader">
     <h1>
         <span data-i18n="appTitle">點雲檢視</span>
-        <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg)</span>
+        <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg)</span>
     </h1>
     <div class="controls controls--overflow" id="viewerControls">
         <!-- 群組：檔案（永不收納） -->
@@ -39,7 +39,7 @@
                     <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
                     <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
                 </svg>
-                <input type="file" id="fileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
+                <input type="file" id="fileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.bmp,.png,.jpg,.jpeg" />
             </label>
             <button type="button" id="btnSave" class="toolbar-icon-btn" data-i18n-title="btnSave" data-i18n-aria="btnSave" title="儲存" aria-label="儲存">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -117,6 +117,7 @@
                         <select id="saveFormat">
                             <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
                             <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
+                            <option value="txt"  data-i18n="saveFormat.txt">TXT (x y z 座標)</option>
                             <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
                             <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
                             <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
@@ -132,7 +133,7 @@
 <main>
     <div class="viewer" id="viewer">
         <div class="placeholder" id="placeholder" data-i18n="placeholder">
-            點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg 檔案拖曳到此處
+            點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg 檔案拖曳到此處
         </div>
         <canvas id="canvas" style="display:none;"></canvas>
         <canvas id="canvas3d" class="canvas3d"></canvas>
@@ -287,7 +288,7 @@
     <header id="edHeader">
         <h1>
             <span data-i18n="editorTitle">點雲編輯</span>
-            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg)</span>
+            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg)</span>
         </h1>
         <div class="controls controls--overflow" id="edControls">
             <!-- 群組：檔案（永不收納） -->
@@ -297,7 +298,7 @@
                         <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
                         <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
                     </svg>
-                    <input type="file" id="edFileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
+                    <input type="file" id="edFileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.bmp,.png,.jpg,.jpeg" />
                 </label>
                 <button type="button" id="edBtnSave" class="toolbar-icon-btn" data-i18n-title="btnSave" data-i18n-aria="btnSave" title="儲存" aria-label="儲存">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -411,6 +412,7 @@
                             <select id="edSaveFormat">
                                 <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
                                 <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
+                                <option value="txt"  data-i18n="saveFormat.txt">TXT (x y z 座標)</option>
                                 <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
                                 <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
                                 <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
@@ -431,7 +433,7 @@
       <div class="ed-left">
         <div class="viewer" id="edViewer">
             <div class="placeholder" id="edPlaceholder" data-i18n="placeholder">
-                點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg 檔案拖曳到此處
+                點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg 檔案拖曳到此處
             </div>
             <canvas id="edCanvas" style="display:none;"></canvas>
             <div class="zoom-hint" id="edZoomHint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
@@ -821,7 +823,7 @@
     <header id="batchHeader">
         <h1>
             <span data-i18n="batchTitle">批次轉檔</span>
-            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg)</span>
+            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg)</span>
         </h1>
         <div class="controls">
             <div class="ctrl-group">
@@ -832,7 +834,7 @@
                         <path d="M12 11v6"/>
                         <path d="M9 14h6"/>
                     </svg>
-                    <input type="file" id="batchFileInput" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
+                    <input type="file" id="batchFileInput" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.bmp,.png,.jpg,.jpeg" />
                 </label>
                 <button type="button" id="batchBtnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="batchBtnClear" data-i18n-aria="batchBtnClear" title="清除清單" aria-label="清除清單" disabled>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -851,6 +853,7 @@
                     <select id="batchSaveFormat">
                         <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
                         <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
+                        <option value="txt"  data-i18n="saveFormat.txt">TXT (x y z 座標)</option>
                         <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
                         <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
                         <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
@@ -895,7 +898,7 @@
     <header id="batchEditHeader">
         <h1>
             <span data-i18n="batchEditTitle">批次編輯</span>
-            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .bmp / .png / .jpg)</span>
+            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg)</span>
         </h1>
         <div class="controls">
             <div class="ctrl-group">
@@ -906,7 +909,7 @@
                         <path d="M12 11v6"/>
                         <path d="M9 14h6"/>
                     </svg>
-                    <input type="file" id="batchEditFileInput" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.bmp,.png,.jpg,.jpeg" />
+                    <input type="file" id="batchEditFileInput" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.bmp,.png,.jpg,.jpeg" />
                 </label>
                 <button type="button" id="batchEditBtnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="batchEditBtnClear" data-i18n-aria="batchEditBtnClear" title="清除清單" aria-label="清除清單" disabled>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -929,6 +932,7 @@
                     <select id="batchEditSaveFormat">
                         <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
                         <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
+                        <option value="txt"  data-i18n="saveFormat.txt">TXT (x y z 座標)</option>
                         <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
                         <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
                         <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>

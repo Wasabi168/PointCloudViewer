@@ -433,6 +433,7 @@ function createImageView(ids, options) {
                 case 'tif':
                 case 'tiff': result = await readTiff(file, setProgress); break;
                 case 'pcd':  result = await readPcd(file, setProgress); break;
+                case 'txt':  result = await readTxt(file, setProgress); break;
                 case 'bmp':  result = await readBmp(file, setProgress); break;
                 case 'png':  result = await readPng(file, setProgress); break;
                 case 'jpg':

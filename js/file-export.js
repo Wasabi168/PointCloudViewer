@@ -165,6 +165,35 @@ function writeAsc(dataset, onProgress) {
 }
 
 
+/* ---------- TXT（三欄位 x y z，對應 MicroVu / readTxt） ---------- */
+function writeTxt(dataset, onProgress) {
+    if (!dataset || dataset.type !== 'pcd-scatter') {
+        throw new Error(t('errSaveFmt', 'txt'));
+    }
+    const { x, y, z } = dataset;
+    const n = dataset.pointCount || (z && z.length) || 0;
+    if (!x || !y || !z || n === 0) throw new Error(t('errTxtNoData'));
+
+    if (onProgress) onProgress(0.05);
+
+    const parts = [];
+    const batchSize = 50000;
+    let chunk = '';
+    for (let i = 0; i < n; i++) {
+        chunk += `${x[i]} ${y[i]} ${z[i]}\n`;
+        if ((i + 1) % batchSize === 0 || i === n - 1) {
+            parts.push(chunk);
+            chunk = '';
+            if (onProgress) onProgress(0.05 + 0.9 * ((i + 1) / n));
+        }
+    }
+
+    const blob = new Blob(parts, { type: 'text/plain;charset=utf-8' });
+    if (onProgress) onProgress(1.0);
+    return blob;
+}
+
+
 /* ---------- TIFF (float32，ImageDescription = JSON header) ---------- */
 function writeTiff(dataset, onProgress) {
     const { width, height, data } = dataset;
@@ -410,6 +439,7 @@ async function buildSaveBlob(dataset, format, onProgress) {
     switch (format) {
         case 'bcrf': return writeBcrf(dataset, onProgress);
         case 'asc':  return writeAsc(dataset, onProgress);
+        case 'txt':  return writeTxt(dataset, onProgress);
         case 'tiff': return writeTiff(dataset, onProgress);
         case 'bmp':  return writeBmp(dataset, onProgress);
         case 'png':  return await writePng(dataset, onProgress);
@@ -427,6 +457,7 @@ function formatToExt(format) {
 const SAVE_FORMAT_META = {
     bcrf: { mime: 'application/octet-stream', exts: ['.bcrf'], descKey: 'saveFormat.bcrf' },
     asc:  { mime: 'text/plain',               exts: ['.asc'],  descKey: 'saveFormat.asc'  },
+    txt:  { mime: 'text/plain',               exts: ['.txt'],  descKey: 'saveFormat.txt'  },
     tiff: { mime: 'image/tiff',               exts: ['.tif', '.tiff'], descKey: 'saveFormat.tiff' },
     bmp:  { mime: 'image/bmp',                exts: ['.bmp'],  descKey: 'saveFormat.bmp'  },
     png:  { mime: 'image/png',                exts: ['.png'],  descKey: 'saveFormat.png'  },
@@ -438,6 +469,7 @@ function extToFormat(ext) {
     switch ((ext || '').toLowerCase()) {
         case 'bcrf': return 'bcrf';
         case 'asc':  return 'asc';
+        case 'txt':  return 'txt';
         case 'tif':
         case 'tiff': return 'tiff';
         case 'bmp':  return 'bmp';
@@ -448,9 +480,9 @@ function extToFormat(ext) {
     }
 }
 
-/** 此資料集允許儲存的格式（散布點雲僅支援 png / jpg） */
+/** 此資料集允許儲存的格式（散布點雲支援 txt / png / jpg） */
 function getAllowedSaveFormats(dataset) {
-    if (dataset && dataset.type === 'pcd-scatter') return ['png', 'jpg'];
+    if (dataset && dataset.type === 'pcd-scatter') return ['txt', 'png', 'jpg'];
     return ['bcrf', 'asc', 'tiff', 'bmp', 'png', 'jpg'];
 }
 
