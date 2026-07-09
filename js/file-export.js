@@ -194,6 +194,118 @@ function writeTxt(dataset, onProgress) {
 }
 
 
+/* ---------- PCD（x y z，盡量沿用載入時的 DATA 編碼） ---------- */
+function resolvePcdDataMode(dataset) {
+    const d = String((dataset && dataset.header && dataset.header.DATA) || '').toLowerCase();
+    if (d === 'ascii') return 'ascii';
+    // binary_compressed 寫回改為 binary（仍為合法 PCD，無需 LZF）
+    return 'binary';
+}
+
+function buildPcdHeaderText(n, dataMode, width, height) {
+    const w = (width != null && width > 0) ? width : n;
+    const h = (height != null && height > 0) ? height : 1;
+    return [
+        '# .PCD v0.7 - Point Cloud Data file format',
+        'VERSION 0.7',
+        'FIELDS x y z',
+        'SIZE 4 4 4',
+        'TYPE F F F',
+        'COUNT 1 1 1',
+        `WIDTH ${w}`,
+        `HEIGHT ${h}`,
+        'VIEWPOINT 0 0 0 1 0 0 0',
+        `POINTS ${n}`,
+        `DATA ${dataMode}`,
+        ''
+    ].join('\n');
+}
+
+/** 從散布點雲取出 x/y/z 陣列 */
+function pcdScatterXYZ(dataset) {
+    const { x, y, z } = dataset;
+    const n = dataset.pointCount || (z && z.length) || 0;
+    if (!x || !y || !z || n === 0) throw new Error(t('errTxtNoData'));
+    return { x, y, z, n, width: n, height: 1 };
+}
+
+/**
+ * 從高度網格重建 x/y/z（有序 PCD：WIDTH×HEIGHT）。
+ * x/y 使用像素索引，與 organized 載入路徑相容。
+ */
+function pcdGridXYZ(dataset) {
+    const { width, height, data } = dataset;
+    if (!data || !width || !height) throw new Error(t('errSaveFmt', 'pcd'));
+    const n = width * height;
+    const x = new Float32Array(n);
+    const y = new Float32Array(n);
+    const z = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        x[i] = i % width;
+        y[i] = (i / width) | 0;
+        z[i] = data[i];
+    }
+    return { x, y, z, n, width, height };
+}
+
+function writePcdAscii(xyz, headerText, onProgress) {
+    const { x, y, z, n } = xyz;
+    const parts = [headerText];
+    const batchSize = 50000;
+    let chunk = '';
+    for (let i = 0; i < n; i++) {
+        const xi = x[i], yi = y[i], zi = z[i];
+        chunk += `${xi} ${yi} ${zi}\n`;
+        if ((i + 1) % batchSize === 0 || i === n - 1) {
+            parts.push(chunk);
+            chunk = '';
+            if (onProgress) onProgress(0.1 + 0.85 * ((i + 1) / n));
+        }
+    }
+    return new Blob(parts, { type: 'application/octet-stream' });
+}
+
+function writePcdBinary(xyz, headerText, onProgress) {
+    const { x, y, z, n } = xyz;
+    const headerBytes = new TextEncoder().encode(headerText);
+    const payload = new ArrayBuffer(n * 12);
+    const dv = new DataView(payload);
+    const batchSize = 50000;
+    for (let i = 0; i < n; i++) {
+        const o = i * 12;
+        dv.setFloat32(o, x[i], true);
+        dv.setFloat32(o + 4, y[i], true);
+        dv.setFloat32(o + 8, z[i], true);
+        if (onProgress && ((i + 1) % batchSize === 0 || i === n - 1)) {
+            onProgress(0.1 + 0.85 * ((i + 1) / n));
+        }
+    }
+    return new Blob([headerBytes, payload], { type: 'application/octet-stream' });
+}
+
+function writePcd(dataset, onProgress) {
+    if (!dataset) throw new Error(t('errSaveFmt', 'pcd'));
+
+    let xyz;
+    if (dataset.type === 'pcd-scatter') {
+        xyz = pcdScatterXYZ(dataset);
+    } else if (dataset.data && dataset.width && dataset.height) {
+        xyz = pcdGridXYZ(dataset);
+    } else {
+        throw new Error(t('errSaveFmt', 'pcd'));
+    }
+
+    if (onProgress) onProgress(0.05);
+    const dataMode = resolvePcdDataMode(dataset);
+    const headerText = buildPcdHeaderText(xyz.n, dataMode, xyz.width, xyz.height);
+    const blob = (dataMode === 'ascii')
+        ? writePcdAscii(xyz, headerText, onProgress)
+        : writePcdBinary(xyz, headerText, onProgress);
+    if (onProgress) onProgress(1.0);
+    return blob;
+}
+
+
 /* ---------- TIFF (float32，ImageDescription = JSON header) ---------- */
 function writeTiff(dataset, onProgress) {
     const { width, height, data } = dataset;
@@ -440,6 +552,7 @@ async function buildSaveBlob(dataset, format, onProgress) {
         case 'bcrf': return writeBcrf(dataset, onProgress);
         case 'asc':  return writeAsc(dataset, onProgress);
         case 'txt':  return writeTxt(dataset, onProgress);
+        case 'pcd':  return writePcd(dataset, onProgress);
         case 'tiff': return writeTiff(dataset, onProgress);
         case 'bmp':  return writeBmp(dataset, onProgress);
         case 'png':  return await writePng(dataset, onProgress);
@@ -458,6 +571,7 @@ const SAVE_FORMAT_META = {
     bcrf: { mime: 'application/octet-stream', exts: ['.bcrf'], descKey: 'saveFormat.bcrf' },
     asc:  { mime: 'text/plain',               exts: ['.asc'],  descKey: 'saveFormat.asc'  },
     txt:  { mime: 'text/plain',               exts: ['.txt'],  descKey: 'saveFormat.txt'  },
+    pcd:  { mime: 'application/octet-stream', exts: ['.pcd'],  descKey: 'saveFormat.pcd'  },
     tiff: { mime: 'image/tiff',               exts: ['.tif', '.tiff'], descKey: 'saveFormat.tiff' },
     bmp:  { mime: 'image/bmp',                exts: ['.bmp'],  descKey: 'saveFormat.bmp'  },
     png:  { mime: 'image/png',                exts: ['.png'],  descKey: 'saveFormat.png'  },
@@ -470,6 +584,7 @@ function extToFormat(ext) {
         case 'bcrf': return 'bcrf';
         case 'asc':  return 'asc';
         case 'txt':  return 'txt';
+        case 'pcd':  return 'pcd';
         case 'tif':
         case 'tiff': return 'tiff';
         case 'bmp':  return 'bmp';
@@ -480,10 +595,14 @@ function extToFormat(ext) {
     }
 }
 
-/** 此資料集允許儲存的格式（散布點雲支援 txt / png / jpg） */
+/** 此資料集允許儲存的格式（散布點雲支援 pcd / txt / png / jpg） */
 function getAllowedSaveFormats(dataset) {
-    if (dataset && dataset.type === 'pcd-scatter') return ['txt', 'png', 'jpg'];
-    return ['bcrf', 'asc', 'tiff', 'bmp', 'png', 'jpg'];
+    if (dataset && dataset.type === 'pcd-scatter') return ['pcd', 'txt', 'png', 'jpg'];
+    const formats = ['bcrf', 'asc', 'tiff', 'bmp', 'png', 'jpg'];
+    // 由 PCD 載入的有序高度圖也可存回 PCD
+    const ff = String((dataset && dataset.header && dataset.header.fileformat) || '').toLowerCase();
+    if (ff === 'pcd' || ff.startsWith('pcd')) formats.splice(2, 0, 'pcd');
+    return formats;
 }
 
 /** 建立 showSaveFilePicker 的 types 清單，preferred 格式排在最前面（成為視窗預設選項） */
