@@ -1275,7 +1275,7 @@
         .side { max-height: none; }
     }
 
-    /* ===== 多視窗頁籤（點雲檢視器 / 點雲編輯器，可按 Tab 切換） ===== */
+    /* ===== 多視窗頁籤（點雲檢視器 / 點雲編輯器） ===== */
     .app-tabs {
         display: flex;
         align-items: center;
@@ -1307,22 +1307,6 @@
         top: 1px;
     }
 
-    .app-tabs-hint {
-        margin-left: auto;
-        color: var(--muted);
-        font-size: 12px;
-        padding-bottom: 6px;
-    }
-    .app-tabs-hint kbd {
-        background: #3a3a4a;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        padding: 1px 6px;
-        font-size: 11px;
-        font-family: inherit;
-        color: var(--text);
-    }
-
     /* 語言切換移至頂部列，兩個頁面共用 */
     .app-tabs .lang-toggle { margin-left: 8px; margin-bottom: 6px; }
 
@@ -1333,7 +1317,7 @@
         justify-content: center;
         width: 30px;
         height: 30px;
-        margin-left: 12px;
+        margin-left: auto;
         margin-bottom: 6px;
         padding: 0;
         border: 1px solid var(--border);
