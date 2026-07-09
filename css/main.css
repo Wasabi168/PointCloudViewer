@@ -1030,6 +1030,108 @@
     .profile-tip.show { display: block; }
     .profile-tip .k { color: var(--muted); margin-right: 4px; }
 
+    /* 關於與說明 modal */
+    .info-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        backdrop-filter: blur(2px);
+    }
+    .info-overlay.show { display: flex; }
+
+    .info-panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        width: min(520px, 92vw);
+        max-width: 92vw;
+        max-height: min(80vh, 640px);
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        animation: calcPop 0.18s ease-out;
+    }
+
+    .info-header {
+        display: flex;
+        align-items: center;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+    .info-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
+    .info-header .info-close {
+        margin-left: auto;
+        background: transparent;
+        color: var(--muted);
+        font-size: 20px;
+        padding: 0 6px;
+        line-height: 1;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+    }
+    .info-header .info-close:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+
+    .info-body {
+        padding: 16px 18px 20px;
+        overflow-y: auto;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--text);
+    }
+    .info-section + .info-section {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid var(--border);
+    }
+    .info-section h4 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+    }
+    .info-section p {
+        margin: 0;
+        color: var(--muted);
+    }
+    .info-formats {
+        margin: 0;
+    }
+    .info-formats > div {
+        margin-top: 10px;
+    }
+    .info-formats > div:first-child {
+        margin-top: 0;
+    }
+    .info-formats dt {
+        font-weight: 600;
+        font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+        font-size: 12px;
+        color: var(--accent);
+        margin-bottom: 2px;
+    }
+    .info-formats dd {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
+    }
+    .info-email {
+        margin-top: 6px !important;
+    }
+    .info-email a {
+        color: var(--accent);
+        text-decoration: none;
+    }
+    .info-email a:hover {
+        text-decoration: underline;
+    }
+
     /* 計算機 modal */
     .calc-overlay {
         position: fixed;
@@ -1208,7 +1310,35 @@
     }
 
     /* 語言切換移至頂部列，兩個頁面共用 */
-    .app-tabs .lang-toggle { margin-left: 14px; margin-bottom: 6px; }
+    .app-tabs .lang-toggle { margin-left: 8px; margin-bottom: 6px; }
+
+    /* 頂部列：關於與說明按鈕 */
+    .info-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        margin-left: 12px;
+        margin-bottom: 6px;
+        padding: 0;
+        border: 1px solid var(--border);
+        border-radius: 50%;
+        background: #3a3a4a;
+        color: var(--muted);
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+    }
+    .info-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+    .info-btn:hover {
+        color: var(--text);
+        background: #454558;
+        border-color: #555568;
+    }
 
     /* 分頁容器：僅顯示啟用中的頁面 */
     .page {

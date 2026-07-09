@@ -47,8 +47,9 @@ document.querySelectorAll('.app-tab').forEach(btn => {
 // 按 Tab 在兩個視窗之間來回切換
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey) return;
-    // 計算機開啟時，保留原本的鍵盤操作
+    // 計算機或說明視窗開啟時，保留原本的鍵盤操作
     if (typeof calcOverlay !== 'undefined' && calcOverlay && calcOverlay.classList.contains('show')) return;
+    if (typeof infoOverlay !== 'undefined' && infoOverlay && infoOverlay.classList.contains('show')) return;
     // 焦點在輸入欄位時不攔截，避免影響表單操作
     const ae = document.activeElement;
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' ||
