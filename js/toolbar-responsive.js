@@ -16,7 +16,6 @@ function setupOverflowToolbar(cfg) {
     const overflowTarget = cfg.overflowTargetId
         ? document.getElementById(cfg.overflowTargetId)
         : moreMenu;
-    const alwaysShowMore = !!cfg.alwaysShowMore;
     if (!controls || !moreMenu || !moreWrap || !overflowTarget) return;
 
     const entries = cfg.groups.map(g => ({
@@ -26,6 +25,7 @@ function setupOverflowToolbar(cfg) {
     })).filter(e => e.group);
 
     const anchor = moreSep || moreWrap;
+    const staticEl = moreMenu.querySelector('.more-menu-static');
 
     function restoreAll() {
         entries.forEach(e => {
@@ -59,6 +59,32 @@ function setupOverflowToolbar(cfg) {
         return moreWrap.offsetWidth + (moreSep ? moreSep.offsetWidth + 10 : 10);
     }
 
+    /** 選單固定區是否有可見項目（略過 display:none） */
+    function hasVisibleStaticContent() {
+        if (!staticEl) return false;
+        for (const child of staticEl.children) {
+            if (getComputedStyle(child).display === 'none') continue;
+            if (child.classList.contains('more-menu-actions')) {
+                const hasBtn = [...child.children].some(
+                    c => getComputedStyle(c).display !== 'none'
+                );
+                if (hasBtn) return true;
+                continue;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    function setMoreVisible(show) {
+        moreWrap.style.display = show ? '' : 'none';
+        if (moreSep) moreSep.style.display = show ? '' : 'none';
+        if (!show) {
+            moreWrap.classList.remove('open');
+            if (btnMore) btnMore.setAttribute('aria-expanded', 'false');
+        }
+    }
+
     function layout() {
         if (cfg.pageId) {
             const page = document.getElementById(cfg.pageId);
@@ -71,10 +97,11 @@ function setupOverflowToolbar(cfg) {
         if (btnMore) btnMore.setAttribute('aria-expanded', 'false');
 
         const available = controls.clientWidth;
+        const hasStatic = hasVisibleStaticContent();
 
-        if (!alwaysShowMore) {
-            moreWrap.style.display = 'none';
-            if (moreSep) moreSep.style.display = 'none';
+        // 無固定項目時先隱藏「更多」，確認工具列是否已能全部放下
+        if (!hasStatic) {
+            setMoreVisible(false);
             if (toolbarContentWidth() <= available) return;
         }
 
@@ -91,11 +118,8 @@ function setupOverflowToolbar(cfg) {
             e.group.classList.add('toolbar-overflow-group');
         }
 
-        if (!alwaysShowMore) {
-            const hasOverflow = overflowTarget.children.length > 0;
-            moreWrap.style.display = hasOverflow ? '' : 'none';
-            if (moreSep) moreSep.style.display = hasOverflow ? '' : 'none';
-        }
+        const hasOverflow = overflowTarget.children.length > 0;
+        setMoreVisible(hasOverflow || hasStatic);
     }
 
     if (btnMore) {
@@ -133,7 +157,6 @@ const layoutViewerToolbar = setupOverflowToolbar({
     moreSepId: 'viewerSepMore',
     btnMoreId: 'btnMore',
     overflowTargetId: 'viewerMoreOverflow',
-    alwaysShowMore: true,
     groups: [
         { id: 'viewerDisplayGroup', sepId: 'viewerSepDisplay', priority: 35 },
         { id: 'viewerToolsGroup',   sepId: 'viewerSepTools',   priority: 45 },
@@ -150,7 +173,6 @@ const layoutEdToolbar = setupOverflowToolbar({
     moreSepId: 'edSepMore',
     btnMoreId: 'edBtnMore',
     overflowTargetId: 'edMoreOverflow',
-    alwaysShowMore: true,
     groups: [
         { id: 'edDisplayGroup',  sepId: 'edSepDisplay',      priority: 35 },
         { id: 'edHistoryGroup',  sepId: 'edSepHistory',      priority: 25 },
@@ -160,4 +182,3 @@ const layoutEdToolbar = setupOverflowToolbar({
         { id: 'edSendGroup',     sepId: 'edSepSend',         priority: 55 },
     ],
 });
-

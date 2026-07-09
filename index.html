@@ -105,9 +105,12 @@
 
         <!-- 群組：更多（儲存格式；視窗縮小時另收納顯示／工具） -->
         <div class="ctrl-group more-wrap" id="viewerMoreWrap">
-            <button type="button" id="btnMore" class="more-btn" aria-haspopup="true" aria-expanded="false" data-i18n-title="btnMoreTitle" title="更多選項">
-                <span data-i18n="btnMore">更多</span>
-                <span class="more-caret" aria-hidden="true">▾</span>
+            <button type="button" id="btnMore" class="more-btn toolbar-icon-btn" aria-haspopup="true" aria-expanded="false" data-i18n-title="btnMoreTitle" data-i18n-aria="btnMoreTitle" title="更多選項" aria-label="更多選項">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <circle cx="12" cy="5" r="1.75"/>
+                    <circle cx="12" cy="12" r="1.75"/>
+                    <circle cx="12" cy="19" r="1.75"/>
+                </svg>
             </button>
             <div class="more-menu" id="moreMenu" role="menu">
                 <div class="more-menu-overflow" id="viewerMoreOverflow"></div>
@@ -401,9 +404,12 @@
 
             <!-- 群組：更多（儲存格式、計算機、批次檔；視窗縮小時另收納次要工具） -->
             <div class="ctrl-group more-wrap" id="edMoreWrap">
-                <button type="button" id="edBtnMore" class="more-btn" aria-haspopup="true" aria-expanded="false" data-i18n-title="btnMoreTitleEditor" title="更多選項">
-                    <span data-i18n="btnMore">更多</span>
-                    <span class="more-caret" aria-hidden="true">▾</span>
+                <button type="button" id="edBtnMore" class="more-btn toolbar-icon-btn" aria-haspopup="true" aria-expanded="false" data-i18n-title="btnMoreTitleEditor" data-i18n-aria="btnMoreTitleEditor" title="更多選項" aria-label="更多選項">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <circle cx="12" cy="5" r="1.75"/>
+                        <circle cx="12" cy="12" r="1.75"/>
+                        <circle cx="12" cy="19" r="1.75"/>
+                    </svg>
                 </button>
                 <div class="more-menu" id="edMoreMenu" role="menu">
                     <div class="more-menu-overflow" id="edMoreOverflow"></div>

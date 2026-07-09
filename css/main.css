@@ -176,24 +176,16 @@
     /* 「更多」下拉 */
     .more-wrap { position: relative; }
     .more-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
         background: #3a3a4a;
         color: var(--text);
         border: 1px solid var(--border);
     }
     .more-btn:hover { background: #4a4a5c; }
-    .more-btn .more-caret {
-        font-size: 11px;
-        transition: transform 0.15s ease;
-    }
     .more-wrap.open .more-btn {
         background: var(--accent);
         color: #fff;
         border-color: var(--accent);
     }
-    .more-wrap.open .more-btn .more-caret { transform: rotate(180deg); }
 
     .more-menu {
         position: absolute;
