@@ -10,7 +10,10 @@
 const Viewer3D = (() => {
     const canvas = document.getElementById('canvas3d');
     const MAX_POINTS = 2_000_000;       // 超過則等距抽樣，維持互動順暢
-    const POINT_PX   = 2.2;             // 點的螢幕像素大小 (再乘 dpr)
+    const DEFAULT_POINT_PX = 2.2;       // 點的螢幕像素大小預設 (再乘 dpr)
+    const POINT_SIZE_MIN = 0.5;
+    const POINT_SIZE_MAX = 12;
+    let pointPx = DEFAULT_POINT_PX;
 
     let gl = null;
     let program = null;
@@ -286,7 +289,7 @@ const Viewer3D = (() => {
 
         gl.useProgram(program);
         gl.uniformMatrix4fv(uMVP, false, mvp);
-        gl.uniform1f(uPointSize, POINT_PX * (window.devicePixelRatio || 1));
+        gl.uniform1f(uPointSize, pointPx * (window.devicePixelRatio || 1));
 
         gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
         gl.enableVertexAttribArray(attribPos);
@@ -370,6 +373,12 @@ const Viewer3D = (() => {
     }, { passive: false });
     canvas.addEventListener('dblclick', (e) => { e.preventDefault(); resetCamera(); requestDraw(); });
 
+    function clampPointSize(v) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return DEFAULT_POINT_PX;
+        return Math.min(POINT_SIZE_MAX, Math.max(POINT_SIZE_MIN, n));
+    }
+
     return {
         isSupported() { return initGL(); },
         isActive() { return active; },
@@ -399,6 +408,19 @@ const Viewer3D = (() => {
             return true;
         },
         onResize() { if (active) requestDraw(); },
+        getPointSize() { return pointPx; },
+        getDefaultPointSize() { return DEFAULT_POINT_PX; },
+        getPointSizeLimits() { return { min: POINT_SIZE_MIN, max: POINT_SIZE_MAX }; },
+        setPointSize(v) {
+            pointPx = clampPointSize(v);
+            if (active) requestDraw();
+            return pointPx;
+        },
+        resetPointSize() {
+            pointPx = DEFAULT_POINT_PX;
+            if (active) requestDraw();
+            return pointPx;
+        },
     };
 })();
 
@@ -442,6 +464,7 @@ function setViewMode(mode) {
     }
     updateViewModeButtons();
     if (typeof updateModeIndicator === 'function') updateModeIndicator();
+    if (typeof syncPointSizeControls === 'function') syncPointSizeControls();
 }
 
 document.querySelectorAll('#viewModeToggle button').forEach(btn => {

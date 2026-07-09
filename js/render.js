@@ -73,8 +73,35 @@ const scatterView = {
     minWorldPerPx: 1e-6,
     maxWorldPerPx: 1e9,
 };
-const SCATTER_POINT_SCREEN_RADIUS = 1;
+/** 2D 散布點預設半徑（螢幕 CSS px）；會話內可調，不寫入偏好 */
+const DEFAULT_SCATTER_POINT_SCREEN_RADIUS = 1;
+const SCATTER_POINT_SIZE_MIN = 0.5;
+const SCATTER_POINT_SIZE_MAX = 12;
+let scatterPointScreenRadius = DEFAULT_SCATTER_POINT_SCREEN_RADIUS;
+const SCATTER_POINT_SCREEN_RADIUS = DEFAULT_SCATTER_POINT_SCREEN_RADIUS;
 let scatterRedrawQueued = false;
+
+function clampScatterPointSize(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return DEFAULT_SCATTER_POINT_SCREEN_RADIUS;
+    return Math.min(SCATTER_POINT_SIZE_MAX, Math.max(SCATTER_POINT_SIZE_MIN, n));
+}
+
+function getScatterPointSize() { return scatterPointScreenRadius; }
+
+function setScatterPointSize(v, opts) {
+    opts = opts || {};
+    scatterPointScreenRadius = clampScatterPointSize(v);
+    if (opts.redraw !== false && isPcdScatterDataset(currentDataset)
+        && !(typeof view3dActive !== 'undefined' && view3dActive)) {
+        requestScatterRedraw();
+    }
+    return scatterPointScreenRadius;
+}
+
+function resetScatterPointSize(opts) {
+    return setScatterPointSize(DEFAULT_SCATTER_POINT_SCREEN_RADIUS, opts);
+}
 
 function isPcdScatterDataset(ds) {
     return ds && ds.type === 'pcd-scatter';

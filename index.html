@@ -280,6 +280,14 @@
             <button type="button" class="cb-reset" id="cbReset" data-i18n="colorbarReset">重設色階範圍</button>
         </div>
 
+        <div class="point-size-adjust" id="pointSizeAdjust" hidden>
+            <h2 data-i18n="sidePointSize">點大小</h2>
+            <div class="point-size-row">
+                <input type="range" id="pointSizeSlider" min="0.5" max="12" step="0.1" value="1" />
+                <span class="point-size-val" id="pointSizeVal">1.0</span>
+            </div>
+        </div>
+
         <h2 style="margin-top:20px;" data-i18n="sideInfo">檔案資訊</h2>
         <div id="infoList"></div>
     </aside>
@@ -818,6 +826,14 @@
                     </span>
                 </div>
                 <button type="button" class="cb-reset" id="edCbReset" data-i18n="colorbarReset">重設色階範圍</button>
+            </div>
+
+            <div class="point-size-adjust" id="edPointSizeAdjust" hidden>
+                <h2 data-i18n="sidePointSize">點大小</h2>
+                <div class="point-size-row">
+                    <input type="range" id="edPointSizeSlider" min="0.5" max="12" step="0.1" value="1" />
+                    <span class="point-size-val" id="edPointSizeVal">1.0</span>
+                </div>
             </div>
 
             <h2 style="margin-top:20px;" data-i18n="sideInfo">檔案資訊</h2>

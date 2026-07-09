@@ -259,13 +259,15 @@ function stampDisk(px, width, height, cx, cy, radius, r, g, b) {
     }
 }
 
-/** 散布繪製：世界座標 → 螢幕座標，點大小固定為螢幕像素 */
+/** 散布繪製：世界座標 → 螢幕座標，點大小為可調螢幕像素 */
 function renderPcdScatter(dataset, cmap) {
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const { x, y, z, vmin, vmax } = dataset;
     const n = z.length;
-    const R = SCATTER_POINT_SCREEN_RADIUS;
+    const R = (typeof getScatterPointSize === 'function')
+        ? getScatterPointSize()
+        : DEFAULT_SCATTER_POINT_SCREEN_RADIUS;
 
     const { w: sw, h: sh } = getScatterViewerSize();
     scatterView.screenW = sw;

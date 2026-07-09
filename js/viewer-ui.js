@@ -17,6 +17,71 @@ const dropIcon = document.getElementById('dropIcon');
 const dropText = document.getElementById('dropText');
 const toastEl = document.getElementById('toast');
 const valueIndicator = document.getElementById('valueIndicator');
+const pointSizeAdjust = document.getElementById('pointSizeAdjust');
+const pointSizeSlider = document.getElementById('pointSizeSlider');
+const pointSizeVal = document.getElementById('pointSizeVal');
+
+/** 點大小控件：僅 Grid 3D / 散點 2D / 散點 3D；不寫入偏好，載入或清除時重設 */
+function isPointSizeControlApplicable() {
+    if (!currentDataset) return false;
+    if (typeof view3dActive !== 'undefined' && view3dActive) return true;
+    return isPcdScatterDataset(currentDataset);
+}
+
+function formatPointSizeLabel(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '-';
+    return (Math.round(n * 10) / 10).toFixed(1);
+}
+
+function syncPointSizeControls() {
+    if (!pointSizeAdjust || !pointSizeSlider || !pointSizeVal) return;
+    const show = isPointSizeControlApplicable();
+    pointSizeAdjust.hidden = !show;
+    if (!show) return;
+
+    let size;
+    if (typeof view3dActive !== 'undefined' && view3dActive && typeof Viewer3D !== 'undefined') {
+        size = Viewer3D.getPointSize();
+        const lim = Viewer3D.getPointSizeLimits();
+        pointSizeSlider.min = String(lim.min);
+        pointSizeSlider.max = String(lim.max);
+    } else {
+        size = getScatterPointSize();
+        pointSizeSlider.min = String(SCATTER_POINT_SIZE_MIN);
+        pointSizeSlider.max = String(SCATTER_POINT_SIZE_MAX);
+    }
+    pointSizeSlider.value = String(size);
+    pointSizeVal.textContent = formatPointSizeLabel(size);
+}
+
+function applyPointSizeFromSlider() {
+    if (!pointSizeSlider || !isPointSizeControlApplicable()) return;
+    const v = Number(pointSizeSlider.value);
+    let size;
+    if (typeof view3dActive !== 'undefined' && view3dActive && typeof Viewer3D !== 'undefined') {
+        size = Viewer3D.setPointSize(v);
+    } else {
+        size = setScatterPointSize(v);
+    }
+    if (pointSizeVal) pointSizeVal.textContent = formatPointSizeLabel(size);
+}
+
+function resetViewerPointSizeSession(opts) {
+    opts = opts || {};
+    if (typeof resetScatterPointSize === 'function') {
+        resetScatterPointSize({ redraw: false });
+    }
+    if (typeof Viewer3D !== 'undefined' && Viewer3D.resetPointSize) {
+        // 幾何尚未重建時只重設數值；active 時會 requestDraw，載入流程稍後會 rebuild
+        Viewer3D.resetPointSize();
+    }
+    if (opts.sync !== false) syncPointSizeControls();
+}
+
+if (pointSizeSlider) {
+    pointSizeSlider.addEventListener('input', applyPointSizeFromSlider);
+}
 
 /* 鼠標模式：'pan' = 拖曳平移；'inspect' = 顯示鼠標位置數值 */
 let cursorMode = getUserPref('cursorMode');
@@ -109,6 +174,7 @@ async function loadFile(file) {
         currentDataset = await parseFileToDataset(file, setProgress);
 
         if (typeof clearProfile === 'function') clearProfile();
+        resetViewerPointSizeSession({ sync: false });
         resetColorClip(false);
         render(currentDataset, cmapSelect.value, true);
         // 若目前正處於 3D 模式，載入新檔後重建立體點雲
@@ -129,6 +195,7 @@ async function loadFile(file) {
             statusEl.textContent = t('statusLoaded', file.name, currentDataset.width, currentDataset.height);
         }
         applyPreferredViewMode();
+        syncPointSizeControls();
     } catch (err) {
         console.error(err);
         statusEl.textContent = t('statusReadFailed', err.message);
@@ -188,6 +255,7 @@ function clearViewerData() {
     if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) btnSendToEditor.disabled = true;
     if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = true;
     if (typeof updateModeIndicator === 'function') updateModeIndicator();
+    resetViewerPointSizeSession();
     showToast(t('statusCleared'), 'info');
 }
 
@@ -212,6 +280,7 @@ function loadDatasetIntoViewer(ds) {
     const { vmin, vmax } = computeRange(rangeSrc);
     currentDataset = { ...ds, vmin, vmax };
     if (typeof clearProfile === 'function') clearProfile();
+    resetViewerPointSizeSession({ sync: false });
     resetColorClip(false);
     render(currentDataset, cmapSelect.value, true);
     if (typeof Viewer3D !== 'undefined' && Viewer3D.isActive()) {
@@ -226,6 +295,7 @@ function loadDatasetIntoViewer(ds) {
     if (ds.type === 'pcd-scatter') statusEl.textContent = t('statusLoadedPcd', ds.filename, ds.pointCount);
     else statusEl.textContent = t('statusLoaded', ds.filename, ds.width, ds.height);
     applyPreferredViewMode();
+    syncPointSizeControls();
     if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) btnSendToEditor.disabled = false;
     if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = false;
     return true;
@@ -260,6 +330,7 @@ async function loadDatasetIntoViewerAsync(ds, onProgress) {
         : computeRange(rangeSrc);
     currentDataset = { ...ds, vmin, vmax };
     if (typeof clearProfile === 'function') clearProfile();
+    resetViewerPointSizeSession({ sync: false });
     resetColorClip(false);
 
     const canvas = document.getElementById('canvas');
@@ -298,6 +369,7 @@ async function loadDatasetIntoViewerAsync(ds, onProgress) {
     if (ds.type === 'pcd-scatter') statusEl.textContent = t('statusLoadedPcd', ds.filename, ds.pointCount);
     else statusEl.textContent = t('statusLoaded', ds.filename, ds.width, ds.height);
     applyPreferredViewMode();
+    syncPointSizeControls();
     if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) btnSendToEditor.disabled = false;
     if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = false;
     return true;

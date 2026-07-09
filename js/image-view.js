@@ -12,11 +12,14 @@ function createImageView(ids, options) {
     const el = {};
     for (const k in ids) el[k] = document.getElementById(ids[k]);
 
-    const SCATTER_R = 1;
+    const SCATTER_R_DEFAULT = 1;
+    const SCATTER_R_MIN = 0.5;
+    const SCATTER_R_MAX = 12;
     const st = {
         dataset: null,
         view: { scale: 1, tx: 0, ty: 0, minScale: 0.02, maxScale: 100 },
         colorClip: { lo: 0, hi: 1 },
+        scatterPointRadius: SCATTER_R_DEFAULT,
         sc: {
             centerX: 0, centerY: 0, worldPerPx: 1, baseWorldPerPx: 1,
             screenW: 1, screenH: 1, minWorldPerPx: 1e-6, maxWorldPerPx: 1e9,
@@ -134,7 +137,7 @@ function createImageView(ids, options) {
         const ctx = canvas.getContext('2d');
         const { x, y, z } = ds;
         const n = z.length;
-        const R = SCATTER_R;
+        const R = st.scatterPointRadius;
         const { w: sw, h: sh } = viewerSize();
         st.sc.screenW = sw; st.sc.screenH = sh;
 
@@ -322,6 +325,50 @@ function createImageView(ids, options) {
         syncColorbarHandles();
     }
 
+    function formatPointSizeLabel(v) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return '-';
+        return (Math.round(n * 10) / 10).toFixed(1);
+    }
+
+    function clampEditorPointSize(v) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return SCATTER_R_DEFAULT;
+        return Math.min(SCATTER_R_MAX, Math.max(SCATTER_R_MIN, n));
+    }
+
+    function syncPointSizeControls() {
+        if (!el.pointSizeAdjust || !el.pointSizeSlider || !el.pointSizeVal) return;
+        const show = isScatter(st.dataset);
+        el.pointSizeAdjust.hidden = !show;
+        if (!show) return;
+        el.pointSizeSlider.min = String(SCATTER_R_MIN);
+        el.pointSizeSlider.max = String(SCATTER_R_MAX);
+        el.pointSizeSlider.step = '0.1';
+        el.pointSizeSlider.value = String(st.scatterPointRadius);
+        el.pointSizeVal.textContent = formatPointSizeLabel(st.scatterPointRadius);
+    }
+
+    function resetPointSizeSession(opts) {
+        opts = opts || {};
+        st.scatterPointRadius = SCATTER_R_DEFAULT;
+        if (opts.redraw && isScatter(st.dataset)) {
+            requestScatterRedraw();
+        }
+        if (opts.sync !== false) syncPointSizeControls();
+    }
+
+    function setupPointSizeControls() {
+        if (!el.pointSizeSlider) return;
+        el.pointSizeSlider.addEventListener('input', () => {
+            if (!isScatter(st.dataset)) return;
+            st.scatterPointRadius = clampEditorPointSize(el.pointSizeSlider.value);
+            if (el.pointSizeVal) el.pointSizeVal.textContent = formatPointSizeLabel(st.scatterPointRadius);
+            requestScatterRedraw();
+        });
+        syncPointSizeControls();
+    }
+
     const EDITABLE_UNIT_KEYS = new Set(['xunit', 'yunit', 'zunit', 'x-unit', 'y-unit', 'z-unit']);
     const ALLOWED_HEADER_UNITS = new Set(['nm', 'um', 'mm', 'cm']);
 
@@ -443,6 +490,7 @@ function createImageView(ids, options) {
             const rangeSrc = result.type === 'pcd-scatter' ? result.z : result.data;
             const { vmin, vmax } = computeRange(rangeSrc);
             st.dataset = { ...result, vmin, vmax, filename: file.name, canvasEl: el.canvas };
+            resetPointSizeSession({ sync: false });
             resetColorClip(false);
             render(st.dataset, el.colormap.value, true);
             const infoExtra = result.type === 'pcd-scatter' ? { pointCount: result.pointCount } : null;
@@ -451,6 +499,7 @@ function createImageView(ids, options) {
             else el.status.textContent = t('statusLoaded', file.name, result.width, result.height);
             if (typeof editAfterLoad === 'function') editAfterLoad();
             if (el.btnClear) el.btnClear.disabled = false;
+            syncPointSizeControls();
         } catch (err) {
             console.error(err);
             el.status.textContent = t('statusReadFailed', err.message);
@@ -728,6 +777,7 @@ function createImageView(ids, options) {
         st.dataset = null;
         st.colorClip.lo = 0;
         st.colorClip.hi = 1;
+        st.scatterPointRadius = SCATTER_R_DEFAULT;
         if (editing) {
             setLastEditStep(null);
             resetHistory();
@@ -751,6 +801,7 @@ function createImageView(ids, options) {
         if (el.fileInput) el.fileInput.value = '';
         if (el.btnClear) el.btnClear.disabled = true;
         if (editing) updateEditButtons();
+        syncPointSizeControls();
         showToast(t('statusCleared'), 'info');
     }
 
@@ -3844,6 +3895,7 @@ function createImageView(ids, options) {
         const rangeSrc = ds.type === 'pcd-scatter' ? ds.z : ds.data;
         const { vmin, vmax } = computeRange(rangeSrc);
         st.dataset = { ...ds, vmin, vmax, canvasEl: el.canvas };
+        resetPointSizeSession({ sync: false });
         resetColorClip(false);
         if (opts.colormap && el.colormap) {
             el.colormap.value = opts.colormap;
@@ -3857,6 +3909,7 @@ function createImageView(ids, options) {
         if (typeof editAfterLoad === 'function') editAfterLoad();
         if (el.btnSave) el.btnSave.disabled = false;
         if (el.btnClear) el.btnClear.disabled = false;
+        syncPointSizeControls();
         return true;
     }
 
@@ -3868,6 +3921,7 @@ function createImageView(ids, options) {
             ? await computeRangeAsync(rangeSrc)
             : computeRange(rangeSrc);
         st.dataset = { ...ds, vmin, vmax, canvasEl: el.canvas };
+        resetPointSizeSession({ sync: false });
         resetColorClip(false);
         if (opts.colormap && el.colormap) {
             el.colormap.value = opts.colormap;
@@ -3904,6 +3958,7 @@ function createImageView(ids, options) {
         else el.status.textContent = t('statusLoaded', ds.filename, ds.width, ds.height);
         if (typeof editAfterLoad === 'function') editAfterLoad();
         if (el.btnSave) el.btnSave.disabled = false;
+        syncPointSizeControls();
         if (el.btnClear) el.btnClear.disabled = false;
         return true;
     }
@@ -4401,6 +4456,7 @@ function createImageView(ids, options) {
     /* 初始繪製空色階列 */
     renderColorbar(el.colormap.value);
     setupColorbarHandles();
+    setupPointSizeControls();
 
     return {
         loadFile,
@@ -4454,6 +4510,7 @@ const editorView = createImageView({
     cbHandleLo: 'edCbHandleLo', cbHandleHi: 'edCbHandleHi',
     cbValLo: 'edCbValLo', cbValHi: 'edCbValHi', cbReset: 'edCbReset',
     zMin: 'edZMin', zMax: 'edZMax',
+    pointSizeAdjust: 'edPointSizeAdjust', pointSizeSlider: 'edPointSizeSlider', pointSizeVal: 'edPointSizeVal',
     cropRect: 'edCropRect', cropCircle: 'edCropCircle', cropApply: 'edCropApply',
     cropCancel: 'edCropCancel', cropOverlay: 'edCropOverlay', cropShape: 'edCropShape',
     cropHint: 'edCropHint', denoise: 'edDenoise', medianFilter: 'edMedianFilter', nanPatch: 'edNanPatch',

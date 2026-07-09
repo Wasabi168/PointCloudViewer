@@ -663,7 +663,9 @@ function renderScatterExportToCanvas(dataset, canvas, cmap, screenW, screenH) {
     const ctx = canvas.getContext('2d');
     const { x, y, z } = dataset;
     const n = z.length;
-    const R = SCATTER_POINT_SCREEN_RADIUS;
+    const R = (typeof DEFAULT_SCATTER_POINT_SCREEN_RADIUS === 'number')
+        ? DEFAULT_SCATTER_POINT_SCREEN_RADIUS
+        : 1;
     const b = dataset.bounds;
     const pad = 24;
     const spanX = (b.xmax - b.xmin) || 1;
