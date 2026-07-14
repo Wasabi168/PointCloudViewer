@@ -9,7 +9,7 @@
 
 const I18N = {
     'zh-Hant': {
-        appTitle: '點雲檢視',
+        appTitle: 'CloudMap',
         tabViewer: '點雲檢視',
         tabEditor: '點雲編輯',
         tabBatch: '批次轉檔',
@@ -18,7 +18,7 @@ const I18N = {
         infoTitle: '關於與說明',
         infoClose: '關閉',
         infoAboutHeading: '關於此軟體',
-        infoAboutText: 'WebViewer 是一套在瀏覽器中運行的點雲與高度圖檢視、編輯工具。可載入量測資料進行 2D／3D 檢視、剖面與量測，並提供裁切、校正、濾波等編輯功能，以及批次轉檔與批次編輯。',
+        infoAboutText: 'CloudMap 是一套在瀏覽器中運行的點雲與高度圖檢視、編輯工具。可載入量測資料進行 2D／3D 檢視、剖面與量測，並提供裁切、校正、濾波等編輯功能，以及批次轉檔與批次編輯。',
         infoFormatsHeading: '支援的點雲格式',
         infoFmtBcrf: 'Precitec 二進位格式：前 2048 bytes 為 key=value 標頭（含像素尺寸、單位等），其後為 float32 小端序高度資料。',
         infoFmtAsc: 'ASCII 文字格式：以 # 開頭的行為標頭，其餘為數值高度矩陣（空白或逗號分隔）。',
@@ -473,7 +473,7 @@ const I18N = {
         bfmStepAdded: '已加入編輯步驟'
     },
     'en': {
-        appTitle: 'Point Cloud Viewer',
+        appTitle: 'CloudMap',
         tabViewer: 'Point Cloud Viewer',
         tabEditor: 'Point Cloud Editor',
         tabBatch: 'Batch Convert',
@@ -482,7 +482,7 @@ const I18N = {
         infoTitle: 'About & Help',
         infoClose: 'Close',
         infoAboutHeading: 'About This App',
-        infoAboutText: 'WebViewer is a browser-based point cloud and height-map viewer and editor. Load measurement data for 2D/3D viewing, profiles, and measurements, with crop, leveling, filtering, batch conversion, and batch editing.',
+        infoAboutText: 'CloudMap is a browser-based point cloud and height-map viewer and editor. Load measurement data for 2D/3D viewing, profiles, and measurements, with crop, leveling, filtering, batch conversion, and batch editing.',
         infoFormatsHeading: 'Supported Point Cloud Formats',
         infoFmtBcrf: 'Precitec binary format: 2048-byte key=value header (pixel size, units, etc.) followed by float32 little-endian height data.',
         infoFmtAsc: 'ASCII text format: lines starting with # are headers; remaining lines are numeric height matrix (space- or comma-separated).',

@@ -340,7 +340,7 @@ const BatchFileManager = (() => {
             try {
                 const handle = await window.showSaveFilePicker({
                     suggestedName: base + '.wbatch',
-                    types: [{ description: 'WebViewer Batch', accept: { 'application/json': ['.wbatch', '.json'] } }],
+                    types: [{ description: 'CloudMap Batch', accept: { 'application/json': ['.wbatch', '.json'] } }],
                 });
                 const w = await handle.createWritable();
                 await w.write(blob);
