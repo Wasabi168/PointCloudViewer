@@ -40,7 +40,7 @@ function createImageView(ids, options) {
             segLevelResult: null,
             segLevelViews: null,
             segLevelPan: null,
-            segLevelShowBounds: true,
+            segLevelShowBounds: false,
             segSkew: false,
             segSkewBusy: false,
             segSkewTuneBusy: false,
@@ -50,7 +50,7 @@ function createImageView(ids, options) {
             segSkewResult: null,
             segSkewViews: null,
             segSkewPan: null,
-            segSkewShowBounds: true,
+            segSkewShowBounds: false,
             medianFilter: false,
             medianFilterBusy: false,
             medianFilterRunId: 0,
@@ -2050,7 +2050,7 @@ function createImageView(ids, options) {
         st.edit.segLevelBase = null;
         st.edit.segLevelResult = null;
         st.edit.segLevelTuneRunId++;
-        st.edit.segLevelShowBounds = true;
+        st.edit.segLevelShowBounds = false;
         segLevelResetViews();
         setSegLevelTuneBusyUI(false);
         setSegLevelTuneUI(false);
@@ -2092,7 +2092,7 @@ function createImageView(ids, options) {
         snapshotSegLevelBase();
         segLevelResetViews();
         st.edit.segLevel = true;
-        st.edit.segLevelShowBounds = true;
+        st.edit.segLevelShowBounds = false;
         st.edit.segLevelBusy = true;
         st.edit.segLevelResult = null;
         const runId = ++st.edit.segLevelRunId;
@@ -2673,7 +2673,7 @@ function createImageView(ids, options) {
         st.edit.segSkewBase = null;
         st.edit.segSkewResult = null;
         st.edit.segSkewTuneRunId++;
-        st.edit.segSkewShowBounds = true;
+        st.edit.segSkewShowBounds = false;
         segSkewResetViews();
         setSegSkewTuneBusyUI(false);
         setSegSkewTuneUI(false);
@@ -2715,7 +2715,7 @@ function createImageView(ids, options) {
         snapshotSegSkewBase();
         segSkewResetViews();
         st.edit.segSkew = true;
-        st.edit.segSkewShowBounds = true;
+        st.edit.segSkewShowBounds = false;
         st.edit.segSkewBusy = true;
         st.edit.segSkewResult = null;
         const runId = ++st.edit.segSkewRunId;
@@ -4442,6 +4442,7 @@ function createImageView(ids, options) {
         if (el.globalLevel) el.globalLevel.addEventListener('click', applyGlobalLeveling);
         if (el.histAuto) el.histAuto.addEventListener('click', () => autoDenoiseBounds());
         if (el.histApply) el.histApply.addEventListener('click', () => toggleDenoise(false));
+        if (el.histCancel) el.histCancel.addEventListener('click', () => cancelDenoise());
         if (el.sendToViewer) el.sendToViewer.addEventListener('click', sendToViewer);
         if (el.sendToAnalysis) el.sendToAnalysis.addEventListener('click', sendToAnalysis);
         if (el.undo) el.undo.addEventListener('click', doUndo);
@@ -4593,7 +4594,7 @@ const editorView = createImageView({
     histHandleLo: 'edHistHandleLo', histHandleHi: 'edHistHandleHi',
     histValLo: 'edHistValLo', histValHi: 'edHistValHi',
     histStats: 'edHistStats', histAxisMin: 'edHistAxisMin', histAxisMax: 'edHistAxisMax',
-    histAuto: 'edDenoiseAuto', histApply: 'edDenoiseApply',
+    histAuto: 'edDenoiseAuto', histApply: 'edDenoiseApply', histCancel: 'edDenoiseCancel',
     sendToViewer: 'edSendToViewer', sendToAnalysis: 'edSendToAnalysis',
     undo: 'edUndo', redo: 'edRedo',
     btnCalc: 'edBtnCalc',
