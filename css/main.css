@@ -75,7 +75,7 @@
         margin-left: auto;
     }
 
-    /* 工具列分群：群組內元件間距較小，群組之間以分隔線區隔 */
+    /* ?????????????????????????? */
     .ctrl-group {
         display: flex;
         align-items: center;
@@ -91,7 +91,7 @@
         margin: 0 2px;
     }
 
-    /* 帶標籤的下拉選單欄位（例如：色彩） */
+    /* ????????????????? */
     .ctrl-field {
         display: inline-flex;
         align-items: center;
@@ -101,7 +101,7 @@
     }
     .ctrl-field--colormap .colormap-picker-ui { min-width: 0; }
 
-    /* 色彩選單：自訂下拉，開啟時顯示目前選項色條，懸停其他選項時切換預覽 */
+    /* ????????????????????????????????? */
     .colormap-picker { position: relative; display: inline-block; }
     .colormap-picker-native {
         position: absolute;
@@ -129,7 +129,7 @@
     }
     .colormap-picker-trigger:hover { background: #4a4a5c; }
     .colormap-picker-trigger::after {
-        content: '▾';
+        content: '\25BE';
         position: absolute;
         right: 10px;
         top: 50%;
@@ -173,7 +173,7 @@
     .colormap-picker-option.focused { background: rgba(79, 140, 255, 0.15); }
     .colormap-picker-option.selected { color: var(--accent); font-weight: 600; }
 
-    /* 「更多」下拉 */
+    /* ?????? */
     .more-wrap { position: relative; }
     .more-btn {
         background: #3a3a4a;
@@ -214,7 +214,7 @@
     }
     .more-item select { flex: 1; min-width: 0; }
 
-    /* 「更多」選單內收納的工具列群組 */
+    /* ??????????????? */
     .more-menu .toolbar-overflow-group {
         display: flex;
         flex-wrap: wrap;
@@ -243,7 +243,7 @@
         border-top: 1px solid var(--border);
     }
 
-    /* 響應式工具列：不換行，空間不足時收進「更多」 */
+    /* ?????????????????????? */
     .controls--overflow {
         flex: 1;
         min-width: 0;
@@ -274,7 +274,7 @@
 
     input[type="file"] { display: none; }
 
-    /* 工具列檔案操作：圖示按鈕（讀取 / 儲存 / 清除） */
+    /* ??????????????? / ?? / ??? */
     .toolbar-icon-btn {
         display: inline-flex;
         align-items: center;
@@ -291,7 +291,7 @@
         flex-shrink: 0;
     }
 
-    /* 按鈕「處理中」狀態：顯示轉圈並暫時停用，避免重複點擊 */
+    /* ?????????????????????????? */
     @keyframes ui-spin { to { transform: rotate(360deg); } }
     .is-busy {
         position: relative;
@@ -388,7 +388,7 @@
     }
     .toast.info { background: #4f8cff; }
 
-    #canvas, #edCanvas {
+    #canvas, #edCanvas, #anCanvas {
         position: absolute;
         top: 0;
         left: 0;
@@ -399,9 +399,9 @@
         cursor: grab;
         will-change: transform;
     }
-    #canvas.grabbing, #edCanvas.grabbing { cursor: grabbing; }
+    #canvas.grabbing, #edCanvas.grabbing, #anCanvas.grabbing { cursor: grabbing; }
 
-    /* 3D 立體檢視畫布：填滿整個 viewer，預設隱藏，切到 3D 模式時顯示 */
+    /* 3D ??????????? viewer???????? 3D ????? */
     .canvas3d {
         position: absolute;
         inset: 0;
@@ -415,7 +415,7 @@
     }
     .canvas3d.grabbing { cursor: grabbing; }
 
-    /* 3D 模式：隱藏所有 2D 專用的元件，顯示 3D 畫布與提示 */
+    /* 3D ??????? 2D ???????? 3D ????? */
     .viewer.mode-3d #canvas,
     .viewer.mode-3d .overlay,
     .viewer.mode-3d .zoom-indicator,
@@ -428,7 +428,7 @@
     .viewer.mode-3d .canvas3d { display: block; }
     .viewer.mode-3d .hint3d { display: block; }
 
-    /* 3D 操作提示 */
+    /* 3D ???? */
     .hint3d {
         position: absolute;
         bottom: 10px;
@@ -484,7 +484,7 @@
     }
     .zoom-indicator.show { display: block; }
 
-    /* 目前滑鼠模式標章（左上角），讓使用者隨時知道現在是拖曳 / 數值 / 剖面 */
+    /* ??????????????????????????? / ?? / ?? */
     .mode-indicator {
         position: absolute;
         left: 12px;
@@ -511,7 +511,7 @@
     }
     .mode-indicator .mi-label { font-weight: 600; }
 
-    /* 圖像區右側浮空：滑鼠模式工具列（僅圖示） */
+    /* ???????????????????? */
     .viewer-cursor-toolbar {
         position: absolute;
         right: 12px;
@@ -678,7 +678,7 @@
         font-variant-numeric: tabular-nums;
     }
 
-    /* 可調整色階範圍 */
+    /* ??????? */
     .colorbar-adjust {
         margin-top: 12px;
     }
@@ -816,10 +816,10 @@
         color: #fff;
     }
 
-    /* 數值顯示模式的鼠標樣式 */
+    /* ??????????? */
     #canvas.inspect-mode { cursor: crosshair; }
 
-    /* 鼠標位置數值顯示 */
+    /* ???????? */
     .value-indicator {
         position: absolute;
         pointer-events: none;
@@ -838,7 +838,7 @@
     .value-indicator.show { display: block; }
     .value-indicator .k { color: var(--muted); margin-right: 4px; }
 
-    /* 剖面 (profile) 疊加層 */
+    /* ?? (profile) ??? */
     .overlay {
         position: absolute;
         inset: 0;
@@ -850,17 +850,17 @@
     }
     .overlay.show { display: block; }
 
-    /* 剖面模式的鼠標樣式 */
+    /* ????????? */
     #canvas.profile-mode { cursor: crosshair; }
     .viewer.profile-mode { cursor: crosshair; }
 
-    /* 測量模式的鼠標樣式 */
+    /* ????????? */
     #canvas.measure-mode,
     #canvas.area-mode { cursor: crosshair; }
     .viewer.measure-mode,
     .viewer.area-mode { cursor: crosshair; }
 
-    /* 測量結果面板 */
+    /* ?????? */
     .measure-panel {
         position: absolute;
         left: 12px;
@@ -878,7 +878,7 @@
     }
     .measure-panel.show { display: block; }
 
-    /* 剖面圖面板 */
+    /* ????? */
     .profile-panel {
         position: absolute;
         left: 12px;
@@ -1030,7 +1030,7 @@
     .profile-tip.show { display: block; }
     .profile-tip .k { color: var(--muted); margin-right: 4px; }
 
-    /* 關於與說明 modal */
+    /* ????? modal */
     .info-overlay {
         position: fixed;
         inset: 0;
@@ -1103,6 +1103,20 @@
         margin: 0;
         color: var(--muted);
     }
+    .info-section p + p {
+        margin-top: 8px;
+    }
+    .info-formula {
+        font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+        font-size: 12.5px;
+        color: var(--accent) !important;
+        background: rgba(79, 140, 255, 0.08);
+        border: 1px solid rgba(79, 140, 255, 0.22);
+        border-radius: 6px;
+        padding: 8px 10px;
+        line-height: 1.45;
+        word-break: break-word;
+    }
     .info-formats {
         margin: 0;
     }
@@ -1146,7 +1160,7 @@
         text-decoration: underline;
     }
 
-    /* 計算機 modal */
+    /* ??? modal */
     .calc-overlay {
         position: fixed;
         inset: 0;
@@ -1275,7 +1289,7 @@
         .side { max-height: none; }
     }
 
-    /* ===== 多視窗頁籤（點雲檢視器 / 點雲編輯器） ===== */
+    /* ===== ??????????? / ?????? ===== */
     .app-tabs {
         display: flex;
         align-items: center;
@@ -1307,10 +1321,10 @@
         top: 1px;
     }
 
-    /* 語言切換移至頂部列，兩個頁面共用 */
+    /* ???????????????? */
     .app-tabs .lang-toggle { margin-left: 8px; margin-bottom: 6px; }
 
-    /* 頂部列：關於與說明按鈕 */
+    /* ??????????? */
     .info-btn {
         display: inline-flex;
         align-items: center;
@@ -1338,7 +1352,7 @@
         border-color: #555568;
     }
 
-    /* 分頁容器：僅顯示啟用中的頁面 */
+    /* ?????????????? */
     .page {
         flex: 1;
         min-height: 0;
@@ -1347,8 +1361,8 @@
     }
     .page.active { display: flex; }
 
-    /* ===== 點雲編輯器：工具列與影像編輯 ===== */
-    /* 編輯器左欄：影像 + 直方圖面板（垂直排列） */
+    /* ===== ?????????????? ===== */
+    /* ???????? + ??????????? */
     .ed-left {
         display: flex;
         flex-direction: column;
@@ -1358,7 +1372,7 @@
     }
     .ed-left .viewer { flex: 1; min-height: 320px; }
 
-    /* 編輯器工具列：帶標籤的功能分群 */
+    /* ??????????????? */
     .ed-toolbar-block {
         display: inline-flex;
         align-items: center;
@@ -1385,7 +1399,7 @@
         margin: 0;
     }
 
-    /* 復原 / 重做：緊湊圖示按鈕組 */
+    /* ?? / ?????????? */
     .ed-icon-group {
         display: inline-flex;
         border: 1px solid var(--border);
@@ -1406,7 +1420,7 @@
     .ed-icon-group button:hover:not(:disabled) { background: #4a4a5c; }
     .ed-icon-group button:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    /* 裁切模式切換（方形 / 圓形） */
+    /* ????????? / ??? */
     .ed-crop-toggle button {
         display: inline-flex;
         align-items: center;
@@ -1428,7 +1442,7 @@
     .ed-crop-toggle button.btn-secondary:hover:not(:disabled) { background: transparent; color: var(--text); }
     .ed-crop-toggle button:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    /* 裁切動作按鈕 */
+    /* ?????? */
     .ed-crop-actions button {
         background: #3a3a4a;
         color: var(--text);
@@ -1446,7 +1460,7 @@
     }
     #edCropApply:not(:disabled):hover { background: var(--accent-hover); }
 
-    /* 切換型工具按鈕（左側指示燈）：刪除雜點、預覽檔案圖片、Max/Min 等 */
+    /* ???????????????????????????Max/Min ? */
     #edDenoise,
     #batchPreviewEnable,
     #btnMinMax {
@@ -1506,7 +1520,7 @@
 
     #edSendToViewer:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* 「更多」選單內的次要工具 */
+    /* ???????????? */
     .more-menu-actions {
         display: flex;
         flex-direction: column;
@@ -1524,7 +1538,7 @@
     .more-menu-actions button:hover:not(:disabled) { background: #4a4a5c; }
     .more-menu-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* 裁切選取覆蓋層：覆蓋在影像之上接收滑鼠繪製 */
+    /* ????????????????????? */
     .crop-overlay {
         position: absolute;
         inset: 0;
@@ -1539,12 +1553,12 @@
         border: 1.5px dashed var(--accent);
         background: rgba(79, 140, 255, 0.12);
         box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
-        pointer-events: auto;       /* 可拖曳框內以移動 */
+        pointer-events: auto;       /* ???????? */
         cursor: move;
     }
     .crop-overlay .crop-shape.circle { border-radius: 50%; }
 
-    /* 裁切框的 8 個調整控點 */
+    /* ???? 8 ????? */
     .crop-handle {
         position: absolute;
         width: 12px;
@@ -1579,7 +1593,7 @@
         white-space: nowrap;
     }
 
-    /* 互動式刪除雜點：直方圖統計面板 */
+    /* ??????????????? */
     .hist-panel {
         background: var(--panel);
         border: 1px solid var(--border);
@@ -1683,7 +1697,7 @@
         margin: 0 6px;
     }
 
-    /* 分區校正模式：校正前後並排預覽 */
+    /* ??????????????? */
     #edViewer.seg-level-active #edCanvas,
     #edViewer.seg-level-active #edZoomHint,
     #edViewer.seg-level-active #edZoomIndicator,
@@ -2174,7 +2188,7 @@
         color: var(--accent-hover);
     }
 
-    /* ===== 批次轉檔 ===== */
+    /* ===== ???? ===== */
     .batch-page main {
         grid-template-columns: 1fr 300px;
     }
@@ -2363,7 +2377,7 @@
     button.btn-secondary:hover { background: #4a4a5c; }
     button.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* ===== 批次編輯 ===== */
+    /* ===== ???? ===== */
     .batch-edit-page main {
         grid-template-columns: 1fr 340px;
     }
@@ -2476,7 +2490,7 @@
     .batch-edit-side .batch-file-badge.ok { color: #6ec27a; }
     .batch-edit-side .batch-file-badge.warn { color: #ffaa44; }
 
-    /* ===== 批次檔管理器（編輯器 / 批次編輯共用，嵌入右側邊欄） ===== */
+    /* ===== ?????????? / ?????????????? ===== */
     .bfm-mount {
         margin-top: 20px;
     }
@@ -2715,3 +2729,469 @@
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
     }
 
+
+    /* ===== Point Cloud Analysis page ===== */
+    main.an-main {
+        display: grid;
+        grid-template-columns: 168px 1fr 300px;
+        gap: 0;
+        padding: 0;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        transition: grid-template-columns 0.2s ease;
+    }
+    main.an-main.an-nav-collapsed {
+        grid-template-columns: 44px 1fr 300px;
+    }
+    .an-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 8px;
+        background: #22222e;
+        border-right: 1px solid var(--border);
+        overflow: hidden;
+        min-width: 0;
+    }
+    .an-nav-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px;
+        min-height: 32px;
+        flex-shrink: 0;
+    }
+    .an-nav-title {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
+        letter-spacing: 0.04em;
+        padding-left: 6px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .an-nav-toggle {
+        appearance: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        flex-shrink: 0;
+        margin-left: auto;
+        padding: 0;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #2a2a38;
+        color: var(--muted);
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .an-nav-toggle:hover {
+        color: var(--text);
+        background: #343446;
+        border-color: #555568;
+    }
+    .an-nav-toggle-icon {
+        width: 16px;
+        height: 16px;
+        transition: transform 0.2s ease;
+    }
+    main.an-main.an-nav-collapsed .an-nav {
+        padding: 10px 6px;
+        align-items: center;
+    }
+    main.an-main.an-nav-collapsed .an-nav-head {
+        justify-content: center;
+    }
+    main.an-main.an-nav-collapsed .an-nav-title,
+    main.an-main.an-nav-collapsed .an-nav-items {
+        display: none;
+    }
+    main.an-main.an-nav-collapsed .an-nav-toggle {
+        margin-left: 0;
+    }
+    main.an-main.an-nav-collapsed .an-nav-toggle-icon {
+        transform: rotate(180deg);
+    }
+    .an-nav-items {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-height: 0;
+        overflow-y: auto;
+    }
+    .an-nav-item {
+        appearance: none;
+        text-align: left;
+        background: transparent;
+        border: 1px solid transparent;
+        color: var(--muted);
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+    .an-nav-item:hover:not(:disabled) {
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .an-nav-item.active {
+        color: #fff;
+        background: rgba(79, 140, 255, 0.18);
+        border-color: rgba(79, 140, 255, 0.35);
+    }
+    .an-nav-item:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+    .an-workspace {
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 12px;
+    }
+    .an-workspace .viewer {
+        flex: 1;
+        min-height: 280px;
+    }
+    .an-side {
+        border-left: 1px solid var(--border);
+        overflow-y: auto;
+    }
+    .an-params {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .an-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--muted);
+    }
+    .an-field select {
+        background: #22222e;
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 6px;
+        padding: 6px 8px;
+        font-size: 13px;
+    }
+    .an-field-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted);
+    }
+    .an-lambda-info-btn {
+        width: 22px;
+        height: 22px;
+        margin: 0;
+        flex-shrink: 0;
+    }
+    .an-lambda-info-btn svg {
+        width: 14px;
+        height: 14px;
+    }
+    .an-lambda-row {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 4px;
+    }
+    .an-lambda-row select,
+    .an-lambda-row input[type="number"] {
+        background: #22222e;
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 6px;
+        padding: 6px 8px;
+        font-size: 13px;
+        width: 100%;
+    }
+    .an-lambda-row select:disabled,
+    .an-lambda-row input[type="number"]:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+    .an-lambda-hint {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.35;
+    }
+    .an-note {
+        margin: 0;
+        font-size: 11px;
+        line-height: 1.45;
+        color: var(--muted);
+    }
+    .an-btn-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .an-btn-row button {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    .an-result-panel {
+        margin-top: 16px;
+        opacity: 0.55;
+        transition: opacity 0.15s ease;
+    }
+    .an-result-panel.has-result { opacity: 1; }
+    .an-result-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0 0 8px;
+    }
+    .an-result-head h2 {
+        margin: 0;
+    }
+    .an-result-head .an-lambda-info-btn {
+        margin: 0;
+        flex-shrink: 0;
+    }
+    .an-result-meta {
+        margin: 0 0 10px;
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.4;
+        word-break: break-word;
+    }
+    .an-param-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    .an-param {
+        background: #22222e;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        cursor: help;
+    }
+    .an-param--primary {
+        grid-column: span 1;
+        border-color: rgba(79, 140, 255, 0.35);
+        background: rgba(79, 140, 255, 0.08);
+    }
+    .an-param-k {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
+        letter-spacing: 0.02em;
+    }
+    .an-param-v {
+        font-family: Consolas, "Cascadia Mono", monospace;
+        font-size: 14px;
+        color: var(--text);
+        word-break: break-all;
+    }
+    .an-param--primary .an-param-v { font-size: 16px; font-weight: 600; }
+    .an-subhead {
+        margin: 14px 0 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+    }
+    .an-subhead-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 14px 0 6px;
+    }
+    .an-subhead-row .an-subhead {
+        margin: 0;
+    }
+    .an-subhead-row .an-lambda-info-btn {
+        margin: 0;
+    }
+    .an-thumb-canvas,
+    .an-hist-canvas {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: #1a1a24;
+    }
+    .an-hist-canvas {
+        cursor: zoom-in;
+    }
+    .an-hist-large-canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        cursor: crosshair;
+        touch-action: none;
+    }
+    #anViewer.has-roi:not(.crop-active) .crop-overlay {
+        display: block;
+        pointer-events: none;
+        cursor: default;
+    }
+    #anViewer.has-roi:not(.crop-active) .crop-overlay .crop-shape {
+        pointer-events: none;
+        cursor: default;
+    }
+    #anBtnRoi.tool-active {
+        background: rgba(79, 140, 255, 0.22);
+        box-shadow: inset 0 0 0 1px rgba(79, 140, 255, 0.4);
+    }
+    .an-tool-panel[hidden] { display: none !important; }
+    .an-line-overlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        z-index: 6;
+        pointer-events: none;
+        cursor: crosshair;
+        touch-action: none;
+    }
+    #anViewer.line-active .an-line-overlay {
+        display: block;
+        pointer-events: auto;
+    }
+    #anViewer.has-line:not(.line-active) .an-line-overlay {
+        display: block;
+        pointer-events: none;
+        cursor: default;
+    }
+    .an-line-svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        pointer-events: none;
+    }
+    .an-line-seg {
+        stroke: #4f8cff;
+        stroke-width: 2;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    #anViewer.line-active .an-line-seg {
+        pointer-events: stroke;
+        cursor: crosshair;
+    }
+    .an-line-handle {
+        fill: #fff;
+        stroke: #4f8cff;
+        stroke-width: 2;
+        vector-effect: non-scaling-stroke;
+        pointer-events: all;
+        cursor: grab;
+    }
+    #anViewer.line-active .an-line-overlay .crop-hint {
+        display: block;
+    }
+    #anBtnLine.tool-active {
+        background: rgba(79, 140, 255, 0.22);
+        box-shadow: inset 0 0 0 1px rgba(79, 140, 255, 0.4);
+    }
+    .an-pf-plot-canvas {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: #1a1a24;
+        cursor: zoom-in;
+    }
+    .info-panel--plot {
+        width: min(860px, 94vw);
+        max-height: min(90vh, 820px);
+    }
+    .an-pf-plot-dialog-body {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 0;
+    }
+    .an-pf-plot-hint {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+    }
+    .an-pf-plot-large-wrap {
+        flex: 1;
+        min-height: 280px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: #14141c;
+        overflow: hidden;
+    }
+    .an-pf-plot-large-canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        cursor: crosshair;
+        touch-action: none;
+    }
+    .an-pf-plot-readout {
+        font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+        font-size: 13px;
+        color: var(--text);
+        background: #22222e;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        min-height: 1.4em;
+        word-break: break-word;
+    }
+    @media (max-width: 1100px) {
+        main.an-main,
+        main.an-main.an-nav-collapsed {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr auto;
+            overflow: auto;
+        }
+        .an-nav {
+            flex-direction: row;
+            flex-wrap: wrap;
+            align-items: center;
+            border-right: none;
+            border-bottom: 1px solid var(--border);
+            padding: 8px 10px;
+        }
+        .an-nav-head {
+            width: 100%;
+        }
+        .an-nav-items {
+            flex-direction: row;
+            flex-wrap: wrap;
+            width: 100%;
+        }
+        main.an-main.an-nav-collapsed .an-nav {
+            padding: 6px 10px;
+        }
+        main.an-main.an-nav-collapsed .an-nav-head {
+            width: auto;
+            margin-left: auto;
+        }
+        .an-workspace { min-height: 360px; }
+        .an-side {
+            border-left: none;
+            border-top: 1px solid var(--border);
+            max-height: none;
+        }
+    }

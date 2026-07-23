@@ -12,6 +12,7 @@
 <nav class="app-tabs" id="appTabs">
     <button type="button" class="app-tab active" data-page="viewer" aria-selected="true" data-i18n="tabViewer">點雲檢視</button>
     <button type="button" class="app-tab" data-page="editor" aria-selected="false" data-i18n="tabEditor">點雲編輯</button>
+    <button type="button" class="app-tab" data-page="analysis" aria-selected="false" data-i18n="tabAnalysis">點雲分析</button>
     <button type="button" class="app-tab" data-page="batchEdit" aria-selected="false" data-i18n="tabBatchEdit">批次編輯</button>
     <button type="button" class="app-tab" data-page="batch" aria-selected="false" data-i18n="tabBatch">批次轉檔</button>
     <button type="button" class="info-btn" id="btnInfo" data-i18n-title="infoBtnTitle" data-i18n-aria="infoBtnTitle" title="關於與說明" aria-label="關於與說明">
@@ -76,6 +77,7 @@
                     <option value="hot">Hot</option>
                     <option value="gray">Gray</option>
                     <option value="inferno">Inferno</option>
+                    <option value="bwr">BWR</option>
                 </select>
             </label>
 
@@ -106,6 +108,7 @@
         <!-- 群組：傳送 -->
         <div class="ctrl-group" id="viewerSendGroup" data-toolbar-priority="50">
             <button type="button" id="btnSendToEditor" disabled data-i18n="sendToEditor" data-i18n-title="sendToEditorTitle">傳送到編輯器</button>
+            <button type="button" id="btnSendToAnalysis" disabled data-i18n="sendToAnalysis" data-i18n-title="sendToAnalysisTitle">傳送到分析</button>
         </div>
 
         <!-- 群組：更多（儲存格式；視窗縮小時另收納顯示／工具） -->
@@ -347,6 +350,7 @@
                         <option value="hot">Hot</option>
                         <option value="gray">Gray</option>
                         <option value="inferno">Inferno</option>
+                        <option value="bwr">BWR</option>
                     </select>
                 </label>
             </div>
@@ -411,6 +415,7 @@
             <!-- 群組：傳送 -->
             <div class="ctrl-group" id="edSendGroup" data-toolbar-priority="55">
                 <button type="button" id="edSendToViewer" data-i18n="sendToViewer" data-i18n-title="sendToViewerTitle">傳送到檢視器</button>
+                <button type="button" id="edSendToAnalysis" data-i18n="sendToAnalysis" data-i18n-title="sendToAnalysisTitle">傳送到分析</button>
             </div>
 
             <span class="ctrl-sep ctrl-sep--more" id="edSepMore" aria-hidden="true"></span>
@@ -863,6 +868,692 @@
     </main>
 </div><!-- /#pageEditor -->
 
+<!-- 視窗：點雲分析 -->
+<div class="page" id="pageAnalysis" data-page="analysis">
+    <header id="anHeader">
+        <h1>
+            <span data-i18n="analysisTitle">點雲分析</span>
+            <span style="color:var(--muted);font-weight:400;font-size:13px;" data-i18n="analysisSubtitle">表面／輪廓粗糙度（高度圖）</span>
+        </h1>
+        <div class="controls" id="anControls">
+            <div class="ctrl-group">
+                <label class="file-btn toolbar-icon-btn" data-i18n-title="btnOpen" data-i18n-aria="btnOpen" title="讀取檔案" aria-label="讀取檔案">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
+                        <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
+                    </svg>
+                    <input type="file" id="anFileInput" accept=".bcrf,.asc,.tif,.tiff,.bmp,.png,.jpg,.jpeg" />
+                </label>
+                <button type="button" id="anBtnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="btnClearTitle" data-i18n-aria="btnClearTitle" title="清除目前載入的資料" aria-label="清除目前載入的資料" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 7h16"/>
+                        <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        <path d="M6 7l1 13a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/>
+                        <path d="M10 11v5"/>
+                        <path d="M14 11v5"/>
+                    </svg>
+                </button>
+            </div>
+            <span class="ctrl-sep" aria-hidden="true"></span>
+            <div class="ctrl-group">
+                <label class="ctrl-field ctrl-field--colormap">
+                    <span data-i18n="labelColormap">色彩：</span>
+                    <select id="anColormap">
+                        <option value="viridis">Viridis</option>
+                        <option value="jet" selected>Jet</option>
+                        <option value="hot">Hot</option>
+                        <option value="gray">Gray</option>
+                        <option value="inferno">Inferno</option>
+                        <option value="bwr">BWR</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+    </header>
+
+    <main class="an-main" id="anMain">
+        <nav class="an-nav" id="anNav" aria-label="分析子功能">
+            <div class="an-nav-head">
+                <span class="an-nav-title" data-i18n="anNavTitle">分析功能</span>
+                <button type="button" class="an-nav-toggle" id="anNavToggle" data-i18n-title="anNavCollapse" data-i18n-aria="anNavCollapse" title="收折選單" aria-label="收折選單" aria-expanded="true" aria-controls="anNavItems">
+                    <svg class="an-nav-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polyline points="15 6 9 12 15 18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="an-nav-items" id="anNavItems">
+                <button type="button" class="an-nav-item active" data-an-tool="profile" data-i18n="anToolProfile">輪廓粗糙度 (Ra)</button>
+                <button type="button" class="an-nav-item" data-an-tool="roughness" data-i18n="anToolRoughness">表面粗糙度 (Sa)</button>
+            </div>
+        </nav>
+
+        <div class="an-workspace">
+            <div class="viewer" id="anViewer">
+                <div class="placeholder" id="anPlaceholder" data-i18n="anPlaceholder">
+                    點選上方讀取高度圖，或從「點雲檢視／編輯」傳送資料
+                </div>
+                <canvas id="anCanvas" style="display:none;"></canvas>
+                <canvas id="anOverlay" class="overlay" style="display:none;"></canvas>
+                <div class="zoom-hint" id="anZoomHint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
+                <div class="zoom-indicator" id="anZoomIndicator">100%</div>
+                <div class="mode-indicator" id="anModeBadge" hidden>
+                    <span class="mi-dot" aria-hidden="true"></span>
+                    <span class="mi-label" data-i18n="anRoiMode">ROI 框選</span>
+                </div>
+                <div class="crop-overlay" id="anRoiOverlay" aria-hidden="true">
+                    <div class="crop-shape" id="anRoiShape" style="display:none;">
+                        <span class="crop-handle" data-h="nw"></span>
+                        <span class="crop-handle" data-h="n"></span>
+                        <span class="crop-handle" data-h="ne"></span>
+                        <span class="crop-handle" data-h="e"></span>
+                        <span class="crop-handle" data-h="se"></span>
+                        <span class="crop-handle" data-h="s"></span>
+                        <span class="crop-handle" data-h="sw"></span>
+                        <span class="crop-handle" data-h="w"></span>
+                    </div>
+                    <div class="crop-hint" id="anRoiHint" data-i18n="anRoiHint">在影像上拖曳以框選評估區域</div>
+                </div>
+                <div class="an-line-overlay" id="anLineOverlay" aria-hidden="true">
+                    <svg class="an-line-svg" id="anLineSvg" xmlns="http://www.w3.org/2000/svg">
+                        <line id="anLineSeg" class="an-line-seg" x1="0" y1="0" x2="0" y2="0"/>
+                        <circle id="anLineH0" class="an-line-handle" cx="0" cy="0" r="6"/>
+                        <circle id="anLineH1" class="an-line-handle" cx="0" cy="0" r="6"/>
+                    </svg>
+                    <div class="crop-hint" id="anLineHint" data-i18n="anLineHint">在影像上拖曳以繪製剖面線</div>
+                </div>
+                <div class="drop-hint" id="anDropHint">
+                    <div class="icon" id="anDropIcon">&#x2B07;</div>
+                    <div id="anDropText" data-i18n="dropSupported">放開以載入檔案</div>
+                </div>
+            </div>
+        </div>
+
+        <aside class="side an-side">
+            <h2 data-i18n="sideProgress">進度</h2>
+            <div class="progress" id="anProgress"><div class="progress-bar" id="anProgressBar"></div></div>
+            <div class="status" id="anStatus">尚未載入檔案</div>
+
+            <!-- ===== 表面粗糙度 (Sa) ===== -->
+            <div class="an-tool-panel" id="anPanelRoughness" data-an-panel="roughness" hidden>
+                <h2 style="margin-top:18px;" data-i18n="anParamsHeading">計算設定</h2>
+                <div class="an-params">
+                    <label class="an-field" for="anDetrend">
+                        <span data-i18n="anDetrendLabel">去趨勢</span>
+                        <select id="anDetrend">
+                            <option value="plane" data-i18n="anDetrend_plane" selected>最小平方平面</option>
+                            <option value="quadratic" data-i18n="anDetrend_quadratic">二次曲面</option>
+                            <option value="mean" data-i18n="anDetrend_mean">減平均值</option>
+                            <option value="none" data-i18n="anDetrend_none">不去除</option>
+                        </select>
+                    </label>
+                    <div class="an-field">
+                        <div class="an-field-label">
+                            <span data-i18n="anLambdaSLabel">λs 濾波（S-filter）</span>
+                            <button type="button" class="info-btn an-lambda-info-btn" id="anLambdaSInfo" data-i18n-title="anLambdaSInfoBtnTitle" data-i18n-aria="anLambdaSInfoBtnTitle" title="λs 濾波說明" aria-label="λs 濾波說明">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M9.1 8.5a3.2 3.2 0 1 1 4.7 2.8c-.9.5-1.3 1-1.3 2.2"/>
+                                    <circle cx="12" cy="17.5" r="1.2" fill="currentColor" stroke="none"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="an-lambda-row">
+                            <select id="anLambdaSPreset" disabled>
+                                <option value="0" data-i18n="anLambdaSOff" selected>關閉</option>
+                            </select>
+                            <input type="number" id="anLambdaS" min="0" step="any" value="0" placeholder="0" disabled />
+                            <span class="an-lambda-hint" id="anLambdaSUnit" data-i18n="anLambdaSHint">選預設或自行輸入；單位與 X/Y 相同</span>
+                        </div>
+                    </div>
+                    <div class="an-field">
+                        <div class="an-field-label">
+                            <span data-i18n="anLambdaCLabel">λc 濾波（L-filter）</span>
+                            <button type="button" class="info-btn an-lambda-info-btn" id="anLambdaCInfo" data-i18n-title="anLambdaCInfoBtnTitle" data-i18n-aria="anLambdaCInfoBtnTitle" title="λc 濾波說明" aria-label="λc 濾波說明">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M9.1 8.5a3.2 3.2 0 1 1 4.7 2.8c-.9.5-1.3 1-1.3 2.2"/>
+                                    <circle cx="12" cy="17.5" r="1.2" fill="currentColor" stroke="none"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="an-lambda-row">
+                            <select id="anLambdaCPreset" disabled>
+                                <option value="0" data-i18n="anLambdaCOff" selected>關閉</option>
+                            </select>
+                            <input type="number" id="anLambdaC" min="0" step="any" value="0" placeholder="0" disabled />
+                            <span class="an-lambda-hint" id="anLambdaCUnit" data-i18n="anLambdaCHint">選預設或自行輸入；單位與 X/Y 相同</span>
+                        </div>
+                    </div>
+                    <p class="an-note" data-i18n="anDetrendNote">可選 λs 高斯 S 濾波（低通）去除短波噪聲 → 去趨勢 → 可選 λc 高斯 L 濾波（高通）分離波紋；λs/λc=0 表示關閉。</p>
+                    <div class="an-btn-row">
+                        <button type="button" id="anBtnRoi" data-i18n="anBtnRoi" disabled>框選 ROI</button>
+                        <button type="button" id="anBtnRoiFull" class="btn-secondary" data-i18n="anBtnRoiFull" disabled>全圖</button>
+                        <button type="button" id="anBtnRoiClear" class="btn-secondary" data-i18n="anBtnRoiClear" disabled>清除 ROI</button>
+                    </div>
+                    <div class="an-btn-row">
+                        <button type="button" id="anBtnCompute" data-i18n="anBtnCompute" disabled>計算粗糙度</button>
+                        <button type="button" id="anBtnExport" class="btn-secondary" data-i18n="anBtnExport" disabled>匯出 CSV</button>
+                    </div>
+                    <label class="an-field" for="anViewMode">
+                        <span data-i18n="anViewModeLabel">顯示</span>
+                        <select id="anViewMode" disabled>
+                            <option value="height" data-i18n="anViewHeight" selected>原始高度</option>
+                            <option value="residual" data-i18n="anViewResidual">殘差圖</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="an-result-panel" id="anResultPanel">
+                    <div class="an-result-head">
+                        <h2 data-i18n="anResultHeading">結果</h2>
+                        <button type="button" class="info-btn an-lambda-info-btn" id="anSaParamsInfo" data-i18n-title="anSaParamsInfoBtnTitle" data-i18n-aria="anSaParamsInfoBtnTitle" title="參數說明" aria-label="參數說明">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M9.1 8.5a3.2 3.2 0 1 1 4.7 2.8c-.9.5-1.3 1-1.3 2.2"/>
+                                <circle cx="12" cy="17.5" r="1.2" fill="currentColor" stroke="none"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="an-result-meta" id="anResultMeta"></p>
+                    <div class="an-param-grid">
+                        <div class="an-param an-param--primary" data-i18n-title="anParamTipSa" title="算術平均高度"><span class="an-param-k">Sa</span><span class="an-param-v" id="anParamSa">-</span></div>
+                        <div class="an-param an-param--primary" data-i18n-title="anParamTipSq" title="均方根高度"><span class="an-param-k">Sq</span><span class="an-param-v" id="anParamSq">-</span></div>
+                        <div class="an-param an-param--primary" data-i18n-title="anParamTipSz" title="最大高度"><span class="an-param-k">Sz</span><span class="an-param-v" id="anParamSz">-</span></div>
+                        <div class="an-param" data-i18n-title="anParamTipSp" title="最大峰高"><span class="an-param-k">Sp</span><span class="an-param-v" id="anParamSp">-</span></div>
+                        <div class="an-param" data-i18n-title="anParamTipSv" title="最大谷深"><span class="an-param-k">Sv</span><span class="an-param-v" id="anParamSv">-</span></div>
+                        <div class="an-param" data-i18n-title="anParamTipSsk" title="偏度"><span class="an-param-k">Ssk</span><span class="an-param-v" id="anParamSsk">-</span></div>
+                        <div class="an-param" data-i18n-title="anParamTipSku" title="峰度"><span class="an-param-k">Sku</span><span class="an-param-v" id="anParamSku">-</span></div>
+                    </div>
+                    <div class="an-subhead-row">
+                        <h3 class="an-subhead" data-i18n="anResidualThumb">殘差預覽</h3>
+                        <button type="button" class="info-btn an-lambda-info-btn" id="anResidualInfo" data-i18n-title="anResidualInfoBtnTitle" data-i18n-aria="anResidualInfoBtnTitle" title="殘差圖說明" aria-label="殘差圖說明">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M9.1 8.5a3.2 3.2 0 1 1 4.7 2.8c-.9.5-1.3 1-1.3 2.2"/>
+                                <circle cx="12" cy="17.5" r="1.2" fill="currentColor" stroke="none"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <canvas id="anResidualCanvas" class="an-thumb-canvas" width="180" height="120" data-i18n-title="anResidualThumbTitle" title="右鍵可傳送到點雲檢視"></canvas>
+                    <h3 class="an-subhead" data-i18n="anResidualHist">殘差直方圖</h3>
+                    <canvas id="anHistCanvas" class="an-hist-canvas" width="240" height="98" data-i18n-title="anHistThumbTitle" title="單擊放大；右鍵開啟選單"></canvas>
+                </div>
+            </div>
+
+            <!-- ===== 輪廓粗糙度 (Ra) ===== -->
+            <div class="an-tool-panel" id="anPanelProfile" data-an-panel="profile">
+                <h2 style="margin-top:18px;" data-i18n="anPfParamsHeading">計算設定</h2>
+                <div class="an-params">
+                    <label class="an-field" for="anPfDetrend">
+                        <span data-i18n="anPfDetrendLabel">去趨勢</span>
+                        <select id="anPfDetrend">
+                            <option value="line" data-i18n="anPfDetrend_line" selected>最小平方直線</option>
+                            <option value="mean" data-i18n="anPfDetrend_mean">減平均值</option>
+                            <option value="none" data-i18n="anPfDetrend_none">不去除</option>
+                        </select>
+                    </label>
+                    <div class="an-field">
+                        <div class="an-field-label">
+                            <span data-i18n="anLambdaSLabel">λs 濾波（S-filter）</span>
+                            <button type="button" class="info-btn an-lambda-info-btn" id="anPfLambdaSInfo" data-i18n-title="anPfLambdaSInfoBtnTitle" data-i18n-aria="anPfLambdaSInfoBtnTitle" title="λs 濾波說明（輪廓）" aria-label="λs 濾波說明（輪廓）">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M9.1 8.5a3.2 3.2 0 1 1 4.7 2.8c-.9.5-1.3 1-1.3 2.2"/>
+                                    <circle cx="12" cy="17.5" r="1.2" fill="currentColor" stroke="none"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="an-lambda-row">
+                            <select id="anPfLambdaSPreset" disabled>
+                                <option value="0" data-i18n="anLambdaSOff" selected>關閉</option>
+                            </select>
+                            <input type="number" id="anPfLambdaS" min="0" step="any" value="0" placeholder="0" disabled />
+                            <span class="an-lambda-hint" data-i18n="anLambdaSHint">選預設或自行輸入；單位與 X/Y 相同</span>
+                        </div>
+                    </div>
+                    <div class="an-field">
+                        <div class="an-field-label">
+                            <span data-i18n="anLambdaCLabel">λc 濾波（L-filter）</span>
+                            <button type="button" class="info-btn an-lambda-info-btn" id="anPfLambdaCInfo" data-i18n-title="anPfLambdaCInfoBtnTitle" data-i18n-aria="anPfLambdaCInfoBtnTitle" title="λc 濾波說明（輪廓）" aria-label="λc 濾波說明（輪廓）">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M9.1 8.5a3.2 3.2 0 1 1 4.7 2.8c-.9.5-1.3 1-1.3 2.2"/>
+                                    <circle cx="12" cy="17.5" r="1.2" fill="currentColor" stroke="none"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="an-lambda-row">
+                            <select id="anPfLambdaCPreset" disabled>
+                                <option value="0" data-i18n="anLambdaCOff" selected>關閉</option>
+                            </select>
+                            <input type="number" id="anPfLambdaC" min="0" step="any" value="0" placeholder="0" disabled />
+                            <span class="an-lambda-hint" data-i18n="anLambdaCHint">選預設或自行輸入；單位與 X/Y 相同</span>
+                        </div>
+                    </div>
+                    <p class="an-note" data-i18n="anPfDetrendNote">沿剖面線取樣後：可選 λs → 去趨勢 → 可選 λc；有 λc 時以 λc 為取樣長度分段平均 Ra 等參數。λs/λc=0 表示關閉。</p>
+                    <div class="an-btn-row">
+                        <button type="button" id="anBtnLine" data-i18n="anBtnLine" disabled>繪製剖面線</button>
+                        <button type="button" id="anBtnLineH" class="btn-secondary" data-i18n="anBtnLineH" disabled>水平中線</button>
+                        <button type="button" id="anBtnLineV" class="btn-secondary" data-i18n="anBtnLineV" disabled>垂直中線</button>
+                    </div>
+                    <div class="an-btn-row">
+                        <button type="button" id="anBtnLineClear" class="btn-secondary" data-i18n="anBtnLineClear" disabled>清除剖面線</button>
+                    </div>
+                    <div class="an-btn-row">
+                        <button type="button" id="anBtnPfCompute" data-i18n="anBtnPfCompute" disabled>計算 Ra</button>
+                        <button type="button" id="anBtnPfExport" class="btn-secondary" data-i18n="anBtnPfExport" disabled>匯出 CSV</button>
+                    </div>
+                </div>
+
+                <div class="an-result-panel" id="anPfResultPanel">
+                    <div class="an-result-head">
+                        <h2 data-i18n="anResultHeading">結果</h2>
+                        <button type="button" class="info-btn an-lambda-info-btn" id="anRaParamsInfo" data-i18n-title="anRaParamsInfoBtnTitle" data-i18n-aria="anRaParamsInfoBtnTitle" title="參數說明" aria-label="參數說明">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M9.1 8.5a3.2 3.2 0 1 1 4.7 2.8c-.9.5-1.3 1-1.3 2.2"/>
+                                <circle cx="12" cy="17.5" r="1.2" fill="currentColor" stroke="none"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="an-result-meta" id="anPfResultMeta"></p>
+                    <div class="an-param-grid">
+                        <div class="an-param an-param--primary" data-i18n-title="anParamTipRa" title="算術平均粗糙度"><span class="an-param-k">Ra</span><span class="an-param-v" id="anParamRa">-</span></div>
+                        <div class="an-param an-param--primary" data-i18n-title="anParamTipRq" title="均方根粗糙度"><span class="an-param-k">Rq</span><span class="an-param-v" id="anParamRq">-</span></div>
+                        <div class="an-param an-param--primary" data-i18n-title="anParamTipRz" title="最大高度"><span class="an-param-k">Rz</span><span class="an-param-v" id="anParamRz">-</span></div>
+                        <div class="an-param" data-i18n-title="anParamTipRp" title="最大峰高"><span class="an-param-k">Rp</span><span class="an-param-v" id="anParamRp">-</span></div>
+                        <div class="an-param" data-i18n-title="anParamTipRv" title="最大谷深"><span class="an-param-k">Rv</span><span class="an-param-v" id="anParamRv">-</span></div>
+                        <div class="an-param" data-i18n-title="anParamTipRt" title="總高度"><span class="an-param-k">Rt</span><span class="an-param-v" id="anParamRt">-</span></div>
+                        <div class="an-param" data-i18n-title="anParamTipRsk" title="偏度"><span class="an-param-k">Rsk</span><span class="an-param-v" id="anParamRsk">-</span></div>
+                        <div class="an-param" data-i18n-title="anParamTipRku" title="峰度"><span class="an-param-k">Rku</span><span class="an-param-v" id="anParamRku">-</span></div>
+                    </div>
+                    <h3 class="an-subhead" data-i18n="anPfPlotHeading">粗糙度輪廓</h3>
+                    <canvas id="anPfPlotCanvas" class="an-pf-plot-canvas" width="240" height="140" data-i18n-title="anPfPlotThumbTitle" title="單擊放大；右鍵開啟選單"></canvas>
+                </div>
+            </div>
+
+            <h2 style="margin-top:18px;" data-i18n="sideColorbar">色階 (Z 值)</h2>
+            <div class="colorbar-adjust">
+                <div class="colorbar-track">
+                    <canvas id="anColorbarCanvas" width="240" height="14"></canvas>
+                </div>
+                <div class="minmax">
+                    <span class="mm-item mm-lo">
+                        <span class="mm-label" data-i18n="zMinLabel">最小值 (Min)</span>
+                        <span class="mm-val" id="anZMin">-</span>
+                    </span>
+                    <span class="mm-item mm-hi">
+                        <span class="mm-label" data-i18n="zMaxLabel">最大值 (Max)</span>
+                        <span class="mm-val" id="anZMax">-</span>
+                    </span>
+                </div>
+            </div>
+
+            <h2 style="margin-top:18px;" data-i18n="sideInfo">檔案資訊</h2>
+            <div id="anInfoList"></div>
+        </aside>
+    </main>
+</div><!-- /#pageAnalysis -->
+
+<!-- λs 濾波說明 modal -->
+<div class="info-overlay" id="anLambdaSInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="anLambdaSInfoTitle">
+    <div class="info-panel info-panel--wide">
+        <div class="info-header">
+            <h3 id="anLambdaSInfoTitle" data-i18n="anLambdaSInfoTitle">λs 濾波說明</h3>
+            <button type="button" class="info-close" id="anLambdaSInfoCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body">
+            <section class="info-section">
+                <h4 data-i18n="anLambdaSInfoWhatHeading">λs 是什麼？</h4>
+                <p data-i18n="anLambdaSInfoWhatText">λs（S-filter nesting index／短波截止）用來去除量測噪聲與微粗糙。比 λs 短的起伏被低通拿掉，比 λs 長的成分保留為 primary surface，再進行去趨勢與（可選）λc 濾波。</p>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anLambdaSInfoHowHeading">本軟體如何定義與計算</h4>
+                <ol class="info-steps">
+                    <li data-i18n="anLambdaSInfoHow1">若 λs &gt; 0，先對評估區域做高斯 S 濾波（低通），輸出即 primary surface。</li>
+                    <li data-i18n="anLambdaSInfoHow2">再對 primary surface 做去趨勢（減平均／平面／二次曲面等）。</li>
+                    <li data-i18n="anLambdaSInfoHow3">高斯尺度與 λc 相同：α = √(ln 2 / π)，σ = α · λs / √(2π)；核支撐內若有缺值（NaN），該點輸出 NaN。</li>
+                    <li data-i18n="anLambdaSInfoHow4">λs = 0（關閉）時跳過短波濾波，直接對原始高度去趨勢。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anLambdaSInfoUnitHeading">單位與選值建議</h4>
+                <ol class="info-steps">
+                    <li data-i18n="anLambdaSInfoUnit1">λs 單位與資料的 X／Y 長度相同（見檔案資訊中的 x-length、y-length）。</li>
+                    <li data-i18n="anLambdaSInfoUnit2">建議至少約 3～5 個像素間距；遠小於 1 個像素時幾乎無去噪效果。</li>
+                    <li data-i18n="anLambdaSInfoUnit3">若同時開啟 λc，應維持 λs &lt; λc，否則保留帶寬不合理。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anLambdaSInfoNoteHeading">注意事項</h4>
+                <p data-i18n="anLambdaSInfoNoteText">此為瀏覽器端實作的區域高斯 S 濾波低通，便於相對比較與短波噪聲抑制；若需與特定儀器報表完全一致，請確認對方採用的濾波標準與 λs 定義後再對照。</p>
+            </section>
+        </div>
+    </div>
+</div>
+
+<!-- λc 濾波說明 modal -->
+<div class="info-overlay" id="anLambdaCInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="anLambdaCInfoTitle">
+    <div class="info-panel info-panel--wide">
+        <div class="info-header">
+            <h3 id="anLambdaCInfoTitle" data-i18n="anLambdaCInfoTitle">λc 濾波說明</h3>
+            <button type="button" class="info-close" id="anLambdaCInfoCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body">
+            <section class="info-section">
+                <h4 data-i18n="anLambdaCInfoWhatHeading">λc 是什麼？</h4>
+                <p data-i18n="anLambdaCInfoWhatText">λc（截止波長／L-filter nesting index）用來區分「粗糙度」與「波紋／長波長起伏」。比 λc 長的起伏視為波紋（被拿掉），比 λc 短的起伏保留為粗糙度，再計算 Sa、Sq 等參數。</p>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anLambdaCInfoHowHeading">本軟體如何定義與計算</h4>
+                <ol class="info-steps">
+                    <li data-i18n="anLambdaCInfoHow1">可選先做 λs S 濾波（低通），再對評估區域做去趨勢（減平均／平面／二次曲面等），得到殘差面。</li>
+                    <li data-i18n="anLambdaCInfoHow2">若 λc &gt; 0，對殘差面做高斯 L 濾波（低通），再取高通：粗糙度 = 殘差 − 低通結果。核支撐內若有缺值（NaN），該點輸出 NaN 並自統計排除，不重正規化權重。</li>
+                    <li data-i18n="anLambdaCInfoHow3">高斯尺度採 ISO 16610：α = √(ln 2 / π)，常態核 σ = α · λc / √(2π)（截止波長處約 50% 傳輸）；再依像素間距 dx、dy 換成像素核寬，做可分離 2D 卷積。</li>
+                    <li data-i18n="anLambdaCInfoHow4">λc = 0（關閉）時不濾波，直接在去趨勢後的殘差上計算參數。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anLambdaCInfoUnitHeading">單位與選值建議</h4>
+                <ol class="info-steps">
+                    <li data-i18n="anLambdaCInfoUnit1">λc 單位與資料的 X／Y 長度相同（見檔案資訊中的 x-length、y-length）。</li>
+                    <li data-i18n="anLambdaCInfoUnit2">建議至少約數個像素間距；遠小於 1 個像素時，濾波核近乎恒等，高通殘差≈0，Sa 會接近 0。</li>
+                    <li data-i18n="anLambdaCInfoUnit3">可使用下拉預設（長度 ÷ 10ⁿ）。有儀器／客戶規格時，優先使用規格指定的 λc。若同時開啟 λs，應維持 λs &lt; λc。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anLambdaCInfoNoteHeading">注意事項</h4>
+                <p data-i18n="anLambdaCInfoNoteText">此為瀏覽器端實作的區域高斯 L 濾波高通，便於相對比較；若需與特定儀器報表完全一致，請確認對方採用的濾波標準與 λc 定義後再對照。</p>
+            </section>
+        </div>
+    </div>
+</div>
+
+<!-- λs 濾波說明 modal（輪廓 Ra） -->
+<div class="info-overlay" id="anPfLambdaSInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="anPfLambdaSInfoTitle">
+    <div class="info-panel info-panel--wide">
+        <div class="info-header">
+            <h3 id="anPfLambdaSInfoTitle" data-i18n="anPfLambdaSInfoTitle">λs 濾波說明（輪廓）</h3>
+            <button type="button" class="info-close" id="anPfLambdaSInfoCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body">
+            <section class="info-section">
+                <h4 data-i18n="anPfLambdaSInfoWhatHeading">λs 是什麼？</h4>
+                <p data-i18n="anPfLambdaSInfoWhatText">λs（S-filter nesting index／短波截止）用來去除量測噪聲與微粗糙。比 λs 短的起伏被低通拿掉，比 λs 長的成分保留為 primary profile，再進行去趨勢與（可選）λc 濾波。意義與表面粗糙度（Sa）相同，但此處作用在剖面線上。</p>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anPfLambdaSInfoHowHeading">本軟體如何定義與計算</h4>
+                <ol class="info-steps">
+                    <li data-i18n="anPfLambdaSInfoHow1">先沿剖面線從高度圖取樣，得到一維高度序列。</li>
+                    <li data-i18n="anPfLambdaSInfoHow2">若 λs &gt; 0，對該序列做一維高斯 S 濾波（低通），輸出即 primary profile。</li>
+                    <li data-i18n="anPfLambdaSInfoHow3">再對 primary profile 做去趨勢（減平均／最小平方直線等）。</li>
+                    <li data-i18n="anPfLambdaSInfoHow4">高斯尺度與 Sa 相同：α = √(ln 2 / π)，σ = α · λs / √(2π)；再依沿線取樣間距換成像素核寬。核支撐內若有缺值（NaN），該點輸出 NaN。</li>
+                    <li data-i18n="anPfLambdaSInfoHow5">λs = 0（關閉）時跳過短波濾波，直接對原始剖面去趨勢。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anPfLambdaSInfoUnitHeading">單位與選值建議</h4>
+                <ol class="info-steps">
+                    <li data-i18n="anPfLambdaSInfoUnit1">λs 單位與資料的 X／Y 長度相同（見檔案資訊中的 x-length、y-length）。</li>
+                    <li data-i18n="anPfLambdaSInfoUnit2">建議至少約 3～5 個沿線取樣間距；遠小於 1 個取樣點時幾乎無去噪效果。</li>
+                    <li data-i18n="anPfLambdaSInfoUnit3">若同時開啟 λc，應維持 λs &lt; λc，否則保留帶寬不合理。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anPfLambdaSInfoNoteHeading">注意事項</h4>
+                <p data-i18n="anPfLambdaSInfoNoteText">此為瀏覽器端實作的一維高斯 S 濾波低通，便於相對比較與短波噪聲抑制。概念與 Sa 分頁相同，但濾波維度為剖面而非區域面；若需與特定儀器報表完全一致，請確認對方採用的濾波標準與 λs 定義後再對照。</p>
+            </section>
+        </div>
+    </div>
+</div>
+
+<!-- λc 濾波說明 modal（輪廓 Ra） -->
+<div class="info-overlay" id="anPfLambdaCInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="anPfLambdaCInfoTitle">
+    <div class="info-panel info-panel--wide">
+        <div class="info-header">
+            <h3 id="anPfLambdaCInfoTitle" data-i18n="anPfLambdaCInfoTitle">λc 濾波說明（輪廓）</h3>
+            <button type="button" class="info-close" id="anPfLambdaCInfoCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body">
+            <section class="info-section">
+                <h4 data-i18n="anPfLambdaCInfoWhatHeading">λc 是什麼？</h4>
+                <p data-i18n="anPfLambdaCInfoWhatText">λc（截止波長／L-filter nesting index）用來區分「粗糙度」與「波紋／長波長起伏」。比 λc 長的起伏視為波紋（被拿掉），比 λc 短的起伏保留為粗糙度，再計算 Ra、Rq 等參數。意義與表面粗糙度（Sa）相同，但此處作用在剖面線上。</p>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anPfLambdaCInfoHowHeading">本軟體如何定義與計算</h4>
+                <ol class="info-steps">
+                    <li data-i18n="anPfLambdaCInfoHow1">先沿剖面線取樣；可選先做 λs S 濾波（低通），再做去趨勢（減平均／直線等），得到殘差剖面。</li>
+                    <li data-i18n="anPfLambdaCInfoHow2">若 λc &gt; 0，對殘差剖面做一維高斯 L 濾波（低通），再取高通：粗糙度 = 殘差 − 低通結果。核支撐內若有缺值（NaN），該點輸出 NaN 並自統計排除，不重正規化權重。</li>
+                    <li data-i18n="anPfLambdaCInfoHow3">高斯尺度採 ISO 16610：α = √(ln 2 / π)，常態核 σ = α · λc / √(2π)（截止波長處約 50% 傳輸）；再依沿線取樣間距換成像素核寬，做一維卷積（與 Sa 的可分離 2D 卷積不同）。</li>
+                    <li data-i18n="anPfLambdaCInfoHow4">開啟 λc 時，另以 λc 作為取樣長度（sampling length），將評估長度分成數段，對各段計算 Ra／Rq／Rz 等後再平均（ISO 4287 風格）。</li>
+                    <li data-i18n="anPfLambdaCInfoHow5">λc = 0（關閉）時不濾波，也不分段，直接在整段去趨勢後的剖面上計算參數。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anPfLambdaCInfoUnitHeading">單位與選值建議</h4>
+                <ol class="info-steps">
+                    <li data-i18n="anPfLambdaCInfoUnit1">λc 單位與資料的 X／Y 長度相同（見檔案資訊中的 x-length、y-length）。</li>
+                    <li data-i18n="anPfLambdaCInfoUnit2">建議至少約數個沿線取樣間距；遠小於 1 個取樣點時，濾波核近乎恒等，高通殘差≈0，Ra 會接近 0。</li>
+                    <li data-i18n="anPfLambdaCInfoUnit3">可使用下拉預設（長度 ÷ 10ⁿ）。有儀器／客戶規格時，優先使用規格指定的 λc。若同時開啟 λs，應維持 λs &lt; λc。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anPfLambdaCInfoNoteHeading">注意事項</h4>
+                <p data-i18n="anPfLambdaCInfoNoteText">此為瀏覽器端實作的一維高斯 L 濾波高通，便於相對比較。概念與 Sa 分頁相同，但濾波為剖面一維，且 λc 同時作為取樣長度；若需與特定儀器報表完全一致，請確認對方採用的濾波標準與 λc 定義後再對照。</p>
+            </section>
+        </div>
+    </div>
+</div>
+
+<!-- 表面參數說明 modal（Sa） -->
+<div class="info-overlay" id="anSaParamsInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="anSaParamsInfoTitle">
+    <div class="info-panel info-panel--wide">
+        <div class="info-header">
+            <h3 id="anSaParamsInfoTitle" data-i18n="anSaParamsInfoTitle">表面參數說明</h3>
+            <button type="button" class="info-close" id="anSaParamsInfoCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body">
+            <section class="info-section">
+                <h4 data-i18n="anSaParamsInfoIntroHeading">計算基礎</h4>
+                <p data-i18n="anSaParamsInfoIntroText">下列參數皆在濾波與去趨勢後的殘差面 z(x,y) 上統計（單位與 Z 相同）。本軟體以有效像素離散近似：N 為有效點數，zi 為第 i 點殘差高度。</p>
+            </section>
+            <section class="info-section">
+                <h4>Sa</h4>
+                <p data-i18n="anSaParamsInfoSaMeaning">算術平均高度：殘差絕對值的平均，最常用的整體粗糙度指標。</p>
+                <p class="info-formula" data-i18n="anSaParamsInfoSaFormula">Sa ≈ (1/N) · Σ |zi|</p>
+                <p data-i18n="anSaParamsInfoSaNote">越大代表表面整體起伏越大；對極端尖峰不如 Sz／Sp／Sv 敏感。</p>
+            </section>
+            <section class="info-section">
+                <h4>Sq</h4>
+                <p data-i18n="anSaParamsInfoSqMeaning">均方根高度：殘差平方平均再開根號，類似標準差。</p>
+                <p class="info-formula" data-i18n="anSaParamsInfoSqFormula">Sq ≈ √[(1/N) · Σ zi²]</p>
+                <p data-i18n="anSaParamsInfoSqNote">對較大偏差比 Sa 更敏感；高斯分布時約 Sq ≈ 1.25 · Sa。</p>
+            </section>
+            <section class="info-section">
+                <h4>Sp</h4>
+                <p data-i18n="anSaParamsInfoSpMeaning">最大峰高：殘差中最高正值（最高凸起相對基準面的高度）。</p>
+                <p class="info-formula" data-i18n="anSaParamsInfoSpFormula">Sp = max(zi)</p>
+            </section>
+            <section class="info-section">
+                <h4>Sv</h4>
+                <p data-i18n="anSaParamsInfoSvMeaning">最大谷深：殘差中最低負值的絕對值（最深凹谷相對基準面的深度）。</p>
+                <p class="info-formula" data-i18n="anSaParamsInfoSvFormula">Sv = |min(zi)|</p>
+            </section>
+            <section class="info-section">
+                <h4>Sz</h4>
+                <p data-i18n="anSaParamsInfoSzMeaning">最大高度：最高峰與最深谷的總落差。</p>
+                <p class="info-formula" data-i18n="anSaParamsInfoSzFormula">Sz = Sp + Sv = max(zi) − min(zi)</p>
+                <p data-i18n="anSaParamsInfoSzNote">對毛刺、凹坑等局部極端值非常敏感，常搭配殘差圖檢查異常點。</p>
+            </section>
+            <section class="info-section">
+                <h4>Ssk</h4>
+                <p data-i18n="anSaParamsInfoSskMeaning">偏度（skewness）：描述高度分布是否左右對稱。</p>
+                <p class="info-formula" data-i18n="anSaParamsInfoSskFormula">Ssk ≈ [ (1/N) · Σ zi³ ] / Sq³</p>
+                <p data-i18n="anSaParamsInfoSskNote">≈0 近似對稱；&gt;0 高峰（凸峰）較突出；&lt;0 深谷較突出。平坦或近似零殘差時可能無定義（顯示為 -）。</p>
+            </section>
+            <section class="info-section">
+                <h4>Sku</h4>
+                <p data-i18n="anSaParamsInfoSkuMeaning">峰度（kurtosis）：描述高度分布尖銳／尾部輕重程度。</p>
+                <p class="info-formula" data-i18n="anSaParamsInfoSkuFormula">Sku ≈ [ (1/N) · Σ zi⁴ ] / Sq⁴</p>
+                <p data-i18n="anSaParamsInfoSkuNote">常態分布約為 3；&gt;3 表示尖峰／長尾較明顯；&lt;3 表示較平坦。近似零殘差時可能無定義。</p>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anSaParamsInfoRefHeading">參考</h4>
+                <p data-i18n="anSaParamsInfoRefText">定義風格對應 ISO 25178 區域參數。實際數值仍取決於去趨勢與 λs／λc 設定。</p>
+            </section>
+        </div>
+    </div>
+</div>
+
+<!-- 輪廓參數說明 modal（Ra） -->
+<div class="info-overlay" id="anRaParamsInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="anRaParamsInfoTitle">
+    <div class="info-panel info-panel--wide">
+        <div class="info-header">
+            <h3 id="anRaParamsInfoTitle" data-i18n="anRaParamsInfoTitle">輪廓參數說明</h3>
+            <button type="button" class="info-close" id="anRaParamsInfoCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body">
+            <section class="info-section">
+                <h4 data-i18n="anRaParamsInfoIntroHeading">計算基礎</h4>
+                <p data-i18n="anRaParamsInfoIntroText">下列參數皆在剖面濾波與去趨勢後的粗糙度輪廓 z(s) 上統計（s 為沿線弧長）。本軟體以有效取樣點離散近似：N 為有效點數。若開啟 λc，會以 λc 為取樣長度分段，對各段計算後再平均（Rt、Rsk、Rku 除外，見各項）。</p>
+            </section>
+            <section class="info-section">
+                <h4>Ra</h4>
+                <p data-i18n="anRaParamsInfoRaMeaning">算術平均粗糙度：輪廓絕對高度的平均，最常用的線粗糙度指標。</p>
+                <p class="info-formula" data-i18n="anRaParamsInfoRaFormula">Ra ≈ (1/N) · Σ |zi|　（有 λc 時為各取樣段平均）</p>
+                <p data-i18n="anRaParamsInfoRaNote">越大代表輪廓整體起伏越大；對極端尖峰不如 Rz／Rt 敏感。</p>
+            </section>
+            <section class="info-section">
+                <h4>Rq</h4>
+                <p data-i18n="anRaParamsInfoRqMeaning">均方根粗糙度：輪廓高度平方平均再開根號。</p>
+                <p class="info-formula" data-i18n="anRaParamsInfoRqFormula">Rq ≈ √[(1/N) · Σ zi²]　（有 λc 時為各取樣段平均）</p>
+                <p data-i18n="anRaParamsInfoRqNote">對較大偏差比 Ra 更敏感；高斯分布時約 Rq ≈ 1.25 · Ra。</p>
+            </section>
+            <section class="info-section">
+                <h4>Rp</h4>
+                <p data-i18n="anRaParamsInfoRpMeaning">最大峰高：取樣段內最高正值；有 λc 時為各段 Rp 的平均。</p>
+                <p class="info-formula" data-i18n="anRaParamsInfoRpFormula">Rp = max(zi)　（段內；再開段平均）</p>
+            </section>
+            <section class="info-section">
+                <h4>Rv</h4>
+                <p data-i18n="anRaParamsInfoRvMeaning">最大谷深：取樣段內最低負值的絕對值；有 λc 時為各段 Rv 的平均。</p>
+                <p class="info-formula" data-i18n="anRaParamsInfoRvFormula">Rv = |min(zi)|　（段內；再開段平均）</p>
+            </section>
+            <section class="info-section">
+                <h4>Rz</h4>
+                <p data-i18n="anRaParamsInfoRzMeaning">最大高度（段平均）：各取樣段內（Rp + Rv）再平均。</p>
+                <p class="info-formula" data-i18n="anRaParamsInfoRzFormula">Rzi = Rpi + Rvi；　Rz = mean(Rzi)</p>
+                <p data-i18n="anRaParamsInfoRzNote">反映典型峰谷落差；比 Rt 較不受單一極端點支配（因分段平均）。</p>
+            </section>
+            <section class="info-section">
+                <h4>Rt</h4>
+                <p data-i18n="anRaParamsInfoRtMeaning">總高度：整段評估長度上最高峰與最深谷的總落差（不分段平均）。</p>
+                <p class="info-formula" data-i18n="anRaParamsInfoRtFormula">Rt = max(zi) − min(zi)　（整段評估長度）</p>
+                <p data-i18n="anRaParamsInfoRtNote">對局部極端值最敏感，常用來檢查毛刺或異常凹坑。</p>
+            </section>
+            <section class="info-section">
+                <h4>Rsk</h4>
+                <p data-i18n="anRaParamsInfoRskMeaning">偏度：輪廓高度分布是否對稱（在整段評估長度上計算）。</p>
+                <p class="info-formula" data-i18n="anRaParamsInfoRskFormula">Rsk ≈ [ (1/N) · Σ zi³ ] / Rq_eval³</p>
+                <p data-i18n="anRaParamsInfoRskNote">≈0 近似對稱；&gt;0 高峰較突出；&lt;0 深谷較突出。近似零殘差時可能無定義。</p>
+            </section>
+            <section class="info-section">
+                <h4>Rku</h4>
+                <p data-i18n="anRaParamsInfoRkuMeaning">峰度：輪廓高度分布尖銳／尾部輕重程度（在整段評估長度上計算）。</p>
+                <p class="info-formula" data-i18n="anRaParamsInfoRkuFormula">Rku ≈ [ (1/N) · Σ zi⁴ ] / Rq_eval⁴</p>
+                <p data-i18n="anRaParamsInfoRkuNote">常態分布約為 3；&gt;3 尖峰／長尾較明顯；&lt;3 較平坦。近似零殘差時可能無定義。</p>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anRaParamsInfoRefHeading">參考</h4>
+                <p data-i18n="anRaParamsInfoRefText">定義風格對應 ISO 4287 輪廓參數。實際數值仍取決於剖面線、去趨勢與 λs／λc 設定。</p>
+            </section>
+        </div>
+    </div>
+</div>
+
+<!-- 粗糙度輪廓放大檢視 -->
+<div class="info-overlay" id="anPfPlotOverlay" role="dialog" aria-modal="true" aria-labelledby="anPfPlotDialogTitle">
+    <div class="info-panel info-panel--plot">
+        <div class="info-header">
+            <h3 id="anPfPlotDialogTitle" data-i18n="anPfPlotDialogTitle">粗糙度輪廓</h3>
+            <button type="button" class="info-close" id="anPfPlotCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body an-pf-plot-dialog-body">
+            <p class="an-pf-plot-hint" data-i18n="anPfPlotHint">在圖上移動游標可讀取弧長 s 與高度 z</p>
+            <div class="an-pf-plot-large-wrap">
+                <canvas id="anPfPlotLargeCanvas" class="an-pf-plot-large-canvas" width="720" height="360"></canvas>
+            </div>
+            <div class="an-pf-plot-readout" id="anPfPlotReadout" data-i18n="anPfPlotReadoutIdle">將游標移到曲線上以顯示數值</div>
+        </div>
+    </div>
+</div>
+
+<!-- 殘差直方圖放大檢視 -->
+<div class="info-overlay" id="anHistOverlay" role="dialog" aria-modal="true" aria-labelledby="anHistDialogTitle">
+    <div class="info-panel info-panel--plot">
+        <div class="info-header">
+            <h3 id="anHistDialogTitle" data-i18n="anHistDialogTitle">殘差直方圖</h3>
+            <button type="button" class="info-close" id="anHistCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body an-pf-plot-dialog-body">
+            <p class="an-pf-plot-hint" data-i18n="anHistHint">在圖上移動游標可讀取殘差值區間與計數</p>
+            <div class="an-pf-plot-large-wrap">
+                <canvas id="anHistLargeCanvas" class="an-hist-large-canvas" width="720" height="320"></canvas>
+            </div>
+            <div class="an-pf-plot-readout" id="anHistReadout" data-i18n="anHistReadoutIdle">將游標移到直方圖上以顯示數值</div>
+        </div>
+    </div>
+</div>
+
+<!-- 殘差圖說明 modal -->
+<div class="info-overlay" id="anResidualInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="anResidualInfoTitle">
+    <div class="info-panel info-panel--wide">
+        <div class="info-header">
+            <h3 id="anResidualInfoTitle" data-i18n="anResidualInfoTitle">殘差圖說明</h3>
+            <button type="button" class="info-close" id="anResidualInfoCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body">
+            <section class="info-section">
+                <h4 data-i18n="anResidualInfoWhatHeading">殘差圖是什麼？</h4>
+                <p data-i18n="anResidualInfoWhatText">殘差圖顯示「去掉整體形狀／傾斜／波紋之後」真正用來計算粗糙度的表面。數字（Sa、Sq、Sz）告訴你「有多粗」；殘差圖告訴你「粗在哪裡、呈現什麼形態」，也可檢查計算結果是否合理。</p>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anResidualInfoHowHeading">它怎麼算出來？</h4>
+                <ol class="info-steps">
+                    <li data-i18n="anResidualInfoHow1">可選先做 λs 短波濾波去除噪聲，再對評估區域去趨勢（減平均／平面／二次曲面等）。</li>
+                    <li data-i18n="anResidualInfoHow2">殘差 = 表面高度 − 擬合基準面。若開啟 λc，會再拿掉長波波紋，只留下粗糙度分量。</li>
+                    <li data-i18n="anResidualInfoHow3">Sa、Sq、Sp、Sv、Sz 等參數都是對這張圖上的有效點統計而來。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anResidualInfoColorHeading">怎麼看顏色？</h4>
+                <ol class="info-steps">
+                    <li data-i18n="anResidualInfoColor1">白色：接近基準面，殘差約為 0。</li>
+                    <li data-i18n="anResidualInfoColor2">紅色：高於基準面（凸起、顆粒、毛刺）。</li>
+                    <li data-i18n="anResidualInfoColor3">藍色：低於基準面（凹坑、刮痕、孔洞）。</li>
+                    <li data-i18n="anResidualInfoColor4">顏色越深：偏離基準面越多。色階正負對稱，紅、藍強度可直接比較。</li>
+                    <li data-i18n="anResidualInfoColor5">黑色：無效或缺測點（NaN），不參與統計。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anResidualInfoLookHeading">初學者可以這樣觀察</h4>
+                <ol class="info-steps">
+                    <li data-i18n="anResidualInfoLook1">紅藍均勻、隨機分布：通常是一般微觀粗糙。</li>
+                    <li data-i18n="anResidualInfoLook2">仍有大面積漸層：可能去趨勢不足（例如應改用二次曲面），或還有未去除的波紋。</li>
+                    <li data-i18n="anResidualInfoLook3">明顯條紋或週期圖案：可能來自加工紋路、掃描方向、震動或週期性誤差。</li>
+                    <li data-i18n="anResidualInfoLook4">局部極端紅／藍點：可能是毛刺、刮痕、凹坑或量測異常，會明顯影響 Sp、Sv、Sz。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anResidualInfoHistHeading">搭配殘差直方圖</h4>
+                <ol class="info-steps">
+                    <li data-i18n="anResidualInfoHist1">橫軸中間的 0 是基準面；柱子越靠近 0，多數區域越貼近基準。</li>
+                    <li data-i18n="anResidualInfoHist2">分布越寬：Sa、Sq 通常越大（整體更粗）。</li>
+                    <li data-i18n="anResidualInfoHist3">偏向正值：凸峰較突出，Ssk 可能為正；偏向負值：凹谷較突出，Ssk 可能為負。</li>
+                    <li data-i18n="anResidualInfoHist4">出現長尾或少數極端值：可能有局部缺陷，請對照殘差圖位置檢查。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="anResidualInfoNoteHeading">一句話記住</h4>
+                <p data-i18n="anResidualInfoNoteText">參數回答「有多粗」；殘差圖回答「粗在哪裡、長什麼樣，以及這次計算是否可信」。</p>
+            </section>
+        </div>
+    </div>
+</div>
+
 <!-- 視窗三：批次轉檔 -->
 <div class="page batch-page" id="pageBatch" data-page="batch">
     <header id="batchHeader">
@@ -1255,6 +1946,8 @@
 <script src="js/batch-convert.js"></script>
 <script src="js/batch-file-manager.js"></script>
 <script src="js/batch-edit.js"></script>
+<script src="js/roughness.js"></script>
+<script src="js/analysis-ui.js"></script>
 <script src="js/info-dialog.js"></script>
 <script src="js/app.js"></script>
 

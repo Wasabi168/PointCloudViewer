@@ -36,7 +36,9 @@ alwaysApply: false
 15. `batch-convert.js` — 批次轉檔頁
 16. `batch-file-manager.js` — 批次檔 (.wbatch) 管理
 17. `batch-edit.js` — 批次編輯頁
-18. `app.js` — 頁面切換與啟動初始化
+18. `roughness.js` — 表面粗糙度演算（Sa/Sq 等）
+19. `analysis-ui.js` — 點雲分析頁
+20. `app.js` — 頁面切換與啟動初始化
 
 ## 編輯慣例
 
@@ -57,4 +59,6 @@ alwaysApply: false
 - 自動分區水平校正 → `segment-level.js`、`image-view.js`
 - 自動分區錯位校正 → `segment-skew.js`、`image-view.js`
 - 中值濾波 → `median-filter.js`、`image-view.js`
+- 點雲分析／粗糙度 → `roughness.js`、`analysis-ui.js`
+  - 區域參數（Sa/Sq…）與輪廓參數（Ra/Rq…）
 - 翻譯字串 → `i18n.js`

@@ -6,7 +6,7 @@
 /* =========================================================================
  *  7. 視窗切換 (點雲檢視器 / 點雲編輯器 / 批次編輯 / 批次轉檔)
  * ========================================================================= */
-const APP_PAGES = ['viewer', 'editor', 'batchEdit', 'batch'];
+const APP_PAGES = ['viewer', 'editor', 'analysis', 'batchEdit', 'batch'];
 let currentPage = 'viewer';
 
 function switchPage(page) {
@@ -31,6 +31,8 @@ function switchPage(page) {
             if (typeof layoutEdToolbar === 'function') layoutEdToolbar();
         } else if (page === 'viewer') {
             if (typeof layoutViewerToolbar === 'function') layoutViewerToolbar();
+        } else if (page === 'analysis') {
+            if (typeof AnalysisView !== 'undefined' && AnalysisView.refit) AnalysisView.refit();
         }
     });
 }
@@ -48,7 +50,9 @@ if (btnMinMax) {
 
 // 還原上次使用的頁面
 const savedPage = getUserPref('page');
-if (savedPage === 'editor' || savedPage === 'batch' || savedPage === 'batchEdit') switchPage(savedPage);
+if (savedPage === 'editor' || savedPage === 'analysis' || savedPage === 'batch' || savedPage === 'batchEdit') {
+    switchPage(savedPage);
+}
 else if (typeof BatchFileManager !== 'undefined' && BatchFileManager.setPageContext) {
     BatchFileManager.setPageContext(currentPage);
 }

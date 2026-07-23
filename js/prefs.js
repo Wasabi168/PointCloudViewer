@@ -17,6 +17,7 @@ const PREFS_DEFAULTS = {
     viewMode: '2d',
     showMinMax: false,
     profileChartStyle: 'line',
+    anNavCollapsed: false,
 };
 
 let userPrefs = (() => {
@@ -114,6 +115,10 @@ function applyLanguage(lang) {
     if (cursorAreaBtn) cursorAreaBtn.title = t('cursorAreaTitle');
     const btnSendToEditor = document.getElementById('btnSendToEditor');
     if (btnSendToEditor) btnSendToEditor.title = t('sendToEditorTitle');
+    const btnSendToAnalysis = document.getElementById('btnSendToAnalysis');
+    if (btnSendToAnalysis) btnSendToAnalysis.title = t('sendToAnalysisTitle');
+    const edSendToAnalysis = document.getElementById('edSendToAnalysis');
+    if (edSendToAnalysis) edSendToAnalysis.title = t('sendToAnalysisTitle');
 
     // 目前模式標章文字（隨語言更新）
     if (typeof updateModeIndicator === 'function') updateModeIndicator();
@@ -177,6 +182,9 @@ function applyLanguage(lang) {
     // 同步「點雲編輯器」的動態文字（狀態列、儲存按鈕）
     if (typeof editorView !== 'undefined' && editorView && editorView.syncLang) {
         editorView.syncLang();
+    }
+    if (typeof AnalysisView !== 'undefined' && AnalysisView && AnalysisView.syncLang) {
+        AnalysisView.syncLang();
     }
 
     if (typeof BatchFileManager !== 'undefined' && BatchFileManager.refreshLastEditHint) {

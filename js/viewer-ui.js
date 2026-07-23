@@ -207,6 +207,9 @@ async function loadFile(file) {
         if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) {
             btnSendToEditor.disabled = !currentDataset;
         }
+        if (typeof btnSendToAnalysis !== 'undefined' && btnSendToAnalysis) {
+            btnSendToAnalysis.disabled = !currentDataset;
+        }
         if (typeof btnClear !== 'undefined' && btnClear) {
             btnClear.disabled = !currentDataset;
         }
@@ -253,6 +256,7 @@ function clearViewerData() {
     fileInput.value = '';
 
     if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) btnSendToEditor.disabled = true;
+    if (typeof btnSendToAnalysis !== 'undefined' && btnSendToAnalysis) btnSendToAnalysis.disabled = true;
     if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = true;
     if (typeof updateModeIndicator === 'function') updateModeIndicator();
     resetViewerPointSizeSession();
@@ -273,11 +277,26 @@ function cloneDatasetForTransfer(ds) {
     return c;
 }
 
-/* 直接把一個資料集物件載入檢視器（供「點雲編輯器」傳送資料使用） */
-function loadDatasetIntoViewer(ds) {
+/**
+ * 直接把一個資料集物件載入檢視器（供編輯器／分析頁傳送資料使用）
+ * @param {object} ds
+ * @param {{ colormap?: string, vmin?: number, vmax?: number }} [opts]
+ */
+function loadDatasetIntoViewer(ds, opts) {
     if (!ds) return false;
+    opts = opts || {};
+    if (opts.colormap && [...cmapSelect.options].some((o) => o.value === opts.colormap)) {
+        cmapSelect.value = opts.colormap;
+        if (typeof syncColormapPicker === 'function') syncColormapPicker(cmapSelect);
+    }
     const rangeSrc = ds.type === 'pcd-scatter' ? ds.z : ds.data;
-    const { vmin, vmax } = computeRange(rangeSrc);
+    let vmin, vmax;
+    if (Number.isFinite(opts.vmin) && Number.isFinite(opts.vmax) && opts.vmin < opts.vmax) {
+        vmin = opts.vmin;
+        vmax = opts.vmax;
+    } else {
+        ({ vmin, vmax } = computeRange(rangeSrc));
+    }
     currentDataset = { ...ds, vmin, vmax };
     if (typeof clearProfile === 'function') clearProfile();
     resetViewerPointSizeSession({ sync: false });
@@ -297,6 +316,7 @@ function loadDatasetIntoViewer(ds) {
     applyPreferredViewMode();
     syncPointSizeControls();
     if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) btnSendToEditor.disabled = false;
+    if (typeof btnSendToAnalysis !== 'undefined' && btnSendToAnalysis) btnSendToAnalysis.disabled = false;
     if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = false;
     return true;
 }
@@ -318,16 +338,36 @@ function buildPreviewSendMenuItems(opts) {
             label: t('batchEditPreviewSendToEditor'),
             action: wrap(() => transferDatasetToEditor({ file, entry, ds })),
         },
+        {
+            label: t('batchEditPreviewSendToAnalysis'),
+            action: wrap(() => transferDatasetToAnalysis({ file, entry, ds })),
+        },
     ];
 }
 
-/** 非同步載入大型資料集到檢視器，分塊繪製以避免卡住 UI */
-async function loadDatasetIntoViewerAsync(ds, onProgress) {
+/**
+ * 非同步載入大型資料集到檢視器，分塊繪製以避免卡住 UI
+ * @param {object} ds
+ * @param {(p:number)=>void} [onProgress]
+ * @param {{ colormap?: string, vmin?: number, vmax?: number }} [opts]
+ */
+async function loadDatasetIntoViewerAsync(ds, onProgress, opts) {
     if (!ds) return false;
+    opts = opts || {};
+    if (opts.colormap && [...cmapSelect.options].some((o) => o.value === opts.colormap)) {
+        cmapSelect.value = opts.colormap;
+        if (typeof syncColormapPicker === 'function') syncColormapPicker(cmapSelect);
+    }
     const rangeSrc = ds.type === 'pcd-scatter' ? ds.z : ds.data;
-    const { vmin, vmax } = rangeSrc.length >= LARGE_PIXEL_THRESHOLD
-        ? await computeRangeAsync(rangeSrc)
-        : computeRange(rangeSrc);
+    let vmin, vmax;
+    if (Number.isFinite(opts.vmin) && Number.isFinite(opts.vmax) && opts.vmin < opts.vmax) {
+        vmin = opts.vmin;
+        vmax = opts.vmax;
+    } else {
+        ({ vmin, vmax } = rangeSrc.length >= LARGE_PIXEL_THRESHOLD
+            ? await computeRangeAsync(rangeSrc)
+            : computeRange(rangeSrc));
+    }
     currentDataset = { ...ds, vmin, vmax };
     if (typeof clearProfile === 'function') clearProfile();
     resetViewerPointSizeSession({ sync: false });
@@ -371,17 +411,18 @@ async function loadDatasetIntoViewerAsync(ds, onProgress) {
     applyPreferredViewMode();
     syncPointSizeControls();
     if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) btnSendToEditor.disabled = false;
+    if (typeof btnSendToAnalysis !== 'undefined' && btnSendToAnalysis) btnSendToAnalysis.disabled = false;
     if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = false;
     return true;
 }
 
 /**
  * 非同步傳送資料到點雲檢視：先切換頁面並顯示進度，再分塊解析／繪製大型檔案。
- * @param {{ file?: File, entry?: object, ds?: object }} opts
+ * @param {{ file?: File, entry?: object, ds?: object, colormap?: string, vmin?: number, vmax?: number }} opts
  */
 async function transferDatasetToViewer(opts = {}) {
     if (datasetTransferInProgress) return false;
-    const { file, entry, ds } = opts;
+    const { file, entry, ds, colormap, vmin, vmax } = opts;
     const filename = ds?.filename || file?.name || '';
     if (!ds && !file) {
         showToast(t('sendNoData'), 'info');
@@ -394,6 +435,13 @@ async function transferDatasetToViewer(opts = {}) {
     statusEl.textContent = t('statusSendingToViewer', filename);
     setProgress(0);
     await yieldToMain();
+
+    const loadOpts = {};
+    if (colormap) loadOpts.colormap = colormap;
+    if (Number.isFinite(vmin) && Number.isFinite(vmax)) {
+        loadOpts.vmin = vmin;
+        loadOpts.vmax = vmax;
+    }
 
     try {
         let dataset = ds;
@@ -409,9 +457,9 @@ async function transferDatasetToViewer(opts = {}) {
         await yieldToMain();
 
         if (isLargeDataset(dataset)) {
-            await loadDatasetIntoViewerAsync(dataset, (p) => setProgress(0.7 + p * 0.3));
+            await loadDatasetIntoViewerAsync(dataset, (p) => setProgress(0.7 + p * 0.3), loadOpts);
         } else {
-            loadDatasetIntoViewer(dataset);
+            loadDatasetIntoViewer(dataset, loadOpts);
             setProgress(1);
         }
         showToast(t('sentToViewer'), 'info');
@@ -609,6 +657,7 @@ function applyPreferredViewMode() {
 const btnSave = document.getElementById('btnSave');
 const btnClear = document.getElementById('btnClear');
 const btnSendToEditor = document.getElementById('btnSendToEditor');
+const btnSendToAnalysis = document.getElementById('btnSendToAnalysis');
 
 function sendToEditor() {
     if (!currentDataset) { showToast(t('sendNoData'), 'info'); return; }
@@ -623,7 +672,15 @@ function sendToEditor() {
     });
 }
 
+function sendToAnalysis() {
+    if (!currentDataset) { showToast(t('sendNoData'), 'info'); return; }
+    if (typeof transferDatasetToAnalysis !== 'function') return;
+    const clone = cloneDatasetForTransfer(currentDataset);
+    transferDatasetToAnalysis({ ds: clone });
+}
+
 if (btnSendToEditor) btnSendToEditor.addEventListener('click', sendToEditor);
+if (btnSendToAnalysis) btnSendToAnalysis.addEventListener('click', sendToAnalysis);
 
 const supportsSavePicker = (typeof window.showSaveFilePicker === 'function');
 

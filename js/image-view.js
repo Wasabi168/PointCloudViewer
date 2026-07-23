@@ -740,7 +740,7 @@ function createImageView(ids, options) {
     function updateEditButtons() {
         if (!editing) return;
         const has = !!st.dataset;
-        [el.cropRect, el.cropCircle, el.denoise, el.medianFilter, el.nanPatch, el.segLevel, el.segSkew, el.globalLevel, el.btnCalc, el.sendToViewer].forEach(b => { if (b) b.disabled = !has; });
+        [el.cropRect, el.cropCircle, el.denoise, el.medianFilter, el.nanPatch, el.segLevel, el.segSkew, el.globalLevel, el.btnCalc, el.sendToViewer, el.sendToAnalysis].forEach(b => { if (b) b.disabled = !has; });
         if (el.btnClear) el.btnClear.disabled = !has;
         if (el.cropApply) el.cropApply.disabled = !(has && st.edit.cropMode && st.edit.cropSel);
         if (el.cropCancel) el.cropCancel.disabled = !(has && st.edit.cropMode);
@@ -3873,19 +3873,33 @@ function createImageView(ids, options) {
         showToast(msg, 'info');
     }
 
-    /* 複製目前資料集（深拷貝陣列、移除畫布參照）以便安全傳送到檢視器 */
-    function sendToViewer() {
-        if (!st.dataset) { showToast(t('sendNoData'), 'info'); return; }
+    /* 結束暫態模式後複製資料集，供傳送到其他頁面 */
+    function prepareDatasetForSend() {
+        if (!st.dataset) { showToast(t('sendNoData'), 'info'); return null; }
         if (st.edit.denoise) toggleDenoise(false); // 先套用雜點篩除結果
         if (st.edit.segLevel) cancelSegLevel();
         if (st.edit.segSkew) cancelSegSkew();
         if (st.edit.medianFilter) cancelMedianFilter();
         if (st.edit.nanPatch) cancelNanPatch();
-        const clone = cloneDatasetForTransfer(st.dataset);
+        return cloneDatasetForTransfer(st.dataset);
+    }
+
+    /* 複製目前資料集（深拷貝陣列、移除畫布參照）以便安全傳送到檢視器 */
+    function sendToViewer() {
+        const clone = prepareDatasetForSend();
+        if (!clone) return;
         // 先切到檢視器頁面，讓畫布有正確尺寸後再載入，避免 fit 計算到 0
         if (typeof switchPage === 'function') switchPage('viewer');
         if (typeof loadDatasetIntoViewer === 'function' && loadDatasetIntoViewer(clone)) {
             showToast(t('sentToViewer'), 'info');
+        }
+    }
+
+    function sendToAnalysis() {
+        const clone = prepareDatasetForSend();
+        if (!clone) return;
+        if (typeof transferDatasetToAnalysis === 'function') {
+            transferDatasetToAnalysis({ ds: clone });
         }
     }
 
@@ -4429,6 +4443,7 @@ function createImageView(ids, options) {
         if (el.histAuto) el.histAuto.addEventListener('click', () => autoDenoiseBounds());
         if (el.histApply) el.histApply.addEventListener('click', () => toggleDenoise(false));
         if (el.sendToViewer) el.sendToViewer.addEventListener('click', sendToViewer);
+        if (el.sendToAnalysis) el.sendToAnalysis.addEventListener('click', sendToAnalysis);
         if (el.undo) el.undo.addEventListener('click', doUndo);
         if (el.redo) el.redo.addEventListener('click', doRedo);
         // 鍵盤快捷鍵：Ctrl/Cmd+Z 上一步、Ctrl/Cmd+Y 或 Ctrl/Cmd+Shift+Z 下一步
@@ -4579,7 +4594,8 @@ const editorView = createImageView({
     histValLo: 'edHistValLo', histValHi: 'edHistValHi',
     histStats: 'edHistStats', histAxisMin: 'edHistAxisMin', histAxisMax: 'edHistAxisMax',
     histAuto: 'edDenoiseAuto', histApply: 'edDenoiseApply',
-    sendToViewer: 'edSendToViewer', undo: 'edUndo', redo: 'edRedo',
+    sendToViewer: 'edSendToViewer', sendToAnalysis: 'edSendToAnalysis',
+    undo: 'edUndo', redo: 'edRedo',
     btnCalc: 'edBtnCalc',
 }, { editing: true });
 setupColormapPicker(document.getElementById('edColormap'));
