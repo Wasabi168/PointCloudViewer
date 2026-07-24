@@ -54,6 +54,7 @@ const AnalysisView = (() => {
         navToggle: document.getElementById('anNavToggle'),
         panelRoughness: document.getElementById('anPanelRoughness'),
         panelProfile: document.getElementById('anPanelProfile'),
+        panelOverlay: document.getElementById('anPanelOverlay'),
         // 輪廓粗糙度
         pfDetrend: document.getElementById('anPfDetrend'),
         pfLambdaS: document.getElementById('anPfLambdaS'),
@@ -86,7 +87,7 @@ const AnalysisView = (() => {
 
     const st = {
         dataset: null,
-        tool: 'profile', // 'roughness' | 'profile'
+        tool: 'profile', // 'roughness' | 'profile' | 'overlay'
         view: { scale: 1, tx: 0, ty: 0 },
         roiMode: false,
         roiSel: null,       // 視埠 CSS px
@@ -628,7 +629,14 @@ const AnalysisView = (() => {
 
     function updateButtons() {
         const has = !!st.dataset;
-        if (el.btnClear) el.btnClear.disabled = !has;
+        const isOv = st.tool === 'overlay';
+        if (el.btnClear) {
+            if (isOv) {
+                el.btnClear.disabled = !(typeof OverlayAnalysis !== 'undefined' && OverlayAnalysis.hasData());
+            } else {
+                el.btnClear.disabled = !has;
+            }
+        }
         if (el.btnRoi) el.btnRoi.disabled = !has;
         if (el.btnRoiClear) el.btnRoiClear.disabled = !has || st.useFullImage;
         if (el.btnRoiFull) el.btnRoiFull.disabled = !has;
@@ -654,6 +662,7 @@ const AnalysisView = (() => {
         if (el.pfLambdaCPreset) el.pfLambdaCPreset.disabled = !has;
         updateRoiButtons();
         updateLineButtons();
+        syncHeaderForTool();
     }
 
     function updateRoiButtons() {
@@ -1896,13 +1905,15 @@ const AnalysisView = (() => {
     }
 
     function setTool(tool) {
-        if (tool !== 'roughness' && tool !== 'profile') return;
+        if (tool !== 'roughness' && tool !== 'profile' && tool !== 'overlay') return;
         st.tool = tool;
         document.querySelectorAll('.an-nav-item[data-an-tool]').forEach((b) => {
             b.classList.toggle('active', b.getAttribute('data-an-tool') === tool);
         });
         if (el.panelRoughness) el.panelRoughness.hidden = tool !== 'roughness';
         if (el.panelProfile) el.panelProfile.hidden = tool !== 'profile';
+        if (el.panelOverlay) el.panelOverlay.hidden = tool !== 'overlay';
+        if (el.main) el.main.classList.toggle('an-tool-overlay', tool === 'overlay');
 
         // 離開時關閉對應互動模式
         if (tool !== 'roughness') {
@@ -1921,9 +1932,30 @@ const AnalysisView = (() => {
             if (st.dataset) render(false);
         }
 
+        // 疊圖分析：切換工作區與表頭檔案控件
+        const ov = typeof OverlayAnalysis !== 'undefined' ? OverlayAnalysis : null;
+        if (ov) ov.setActive(tool === 'overlay');
+        syncHeaderForTool();
+
         syncLineFromImage();
         updateButtons();
-        if (st.dataset) applyTransform();
+        if (tool !== 'overlay' && st.dataset) applyTransform();
+    }
+
+    function syncHeaderForTool() {
+        const isOv = st.tool === 'overlay';
+        // 疊圖模式改由各窗格載入；主檔案按鈕改為停用避免混淆
+        if (el.fileInput) {
+            const label = el.fileInput.closest('label');
+            if (label) label.style.display = isOv ? 'none' : '';
+        }
+        if (el.btnClear) {
+            // 疊圖模式：有任一圖即可清除全部
+            if (isOv) {
+                const hasOv = typeof OverlayAnalysis !== 'undefined' && OverlayAnalysis.hasData();
+                el.btnClear.disabled = !hasOv;
+            }
+        }
     }
 
     function setupRoiOverlay() {
@@ -2237,9 +2269,20 @@ const AnalysisView = (() => {
                 el.fileInput.value = '';
             });
         }
-        if (el.btnClear) el.btnClear.addEventListener('click', clearData);
+        if (el.btnClear) el.btnClear.addEventListener('click', () => {
+            if (st.tool === 'overlay' && typeof OverlayAnalysis !== 'undefined') {
+                OverlayAnalysis.clearAll();
+                updateButtons();
+                return;
+            }
+            clearData();
+        });
         if (el.colormap) {
             el.colormap.addEventListener('change', () => {
+                if (st.tool === 'overlay' && typeof OverlayAnalysis !== 'undefined') {
+                    OverlayAnalysis.onColormapChange();
+                    return;
+                }
                 if (st.dataset && st.displayMode === 'height') render(false);
                 else renderColorbar();
             });
@@ -2386,7 +2429,7 @@ const AnalysisView = (() => {
             btn.addEventListener('click', () => {
                 if (btn.disabled) return;
                 const tool = btn.getAttribute('data-an-tool');
-                if (tool === 'roughness' || tool === 'profile') setTool(tool);
+                if (tool === 'roughness' || tool === 'profile' || tool === 'overlay') setTool(tool);
             });
         });
 
@@ -2421,7 +2464,11 @@ const AnalysisView = (() => {
         }
         if (opts.refit !== false) {
             requestAnimationFrame(() => {
-                if (st.dataset) fitImage();
+                if (st.tool === 'overlay' && typeof OverlayAnalysis !== 'undefined') {
+                    OverlayAnalysis.refit();
+                } else if (st.dataset) {
+                    fitImage();
+                }
             });
         }
     }
@@ -2437,12 +2484,23 @@ const AnalysisView = (() => {
     }
 
     function refit() {
+        if (st.tool === 'overlay' && typeof OverlayAnalysis !== 'undefined') {
+            OverlayAnalysis.refit();
+            return;
+        }
         if (st.dataset && el.viewer && el.viewer.clientWidth > 0) {
             fitImage();
         }
     }
 
     function syncLang() {
+        if (st.tool === 'overlay' && typeof OverlayAnalysis !== 'undefined') {
+            OverlayAnalysis.syncLang();
+            const collapsed = el.main && el.main.classList.contains('an-nav-collapsed');
+            syncNavToggleLabel(!!collapsed);
+            updateButtons();
+            return;
+        }
         if (!el.status) return;
         if (!st.dataset) el.status.textContent = t('statusIdle');
         else if (st.tool === 'profile' && st.pfResult && st.pfResult.ok) {

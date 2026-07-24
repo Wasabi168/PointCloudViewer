@@ -388,7 +388,7 @@
     }
     .toast.info { background: #4f8cff; }
 
-    #canvas, #edCanvas, #anCanvas {
+    #canvas, #edCanvas, #anCanvas, #ovCanvasA, #ovCanvasB {
         position: absolute;
         top: 0;
         left: 0;
@@ -399,7 +399,8 @@
         cursor: grab;
         will-change: transform;
     }
-    #canvas.grabbing, #edCanvas.grabbing, #anCanvas.grabbing { cursor: grabbing; }
+    #canvas.grabbing, #edCanvas.grabbing, #anCanvas.grabbing,
+    #ovCanvasA.grabbing, #ovCanvasB.grabbing { cursor: grabbing; }
 
     /* 3D ??????????? viewer???????? 3D ????? */
     .canvas3d {
@@ -2866,6 +2867,166 @@
         flex: 1;
         min-height: 280px;
     }
+
+    /* ---- 疊圖分析雙視窗 ---- */
+    .ov-workspace {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+    .ov-workspace[hidden] { display: none !important; }
+    .ov-pane {
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        background: #1a1a24;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px;
+    }
+    .ov-pane-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+        min-height: 32px;
+    }
+    .ov-pane-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #fff;
+        background: rgba(79, 140, 255, 0.22);
+        border: 1px solid rgba(79, 140, 255, 0.4);
+        border-radius: 6px;
+        padding: 3px 8px;
+        flex-shrink: 0;
+    }
+    .ov-pane-name {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: 12px;
+        color: var(--muted);
+        font-family: Consolas, monospace;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .ov-pane-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+    .ov-viewer {
+        flex: 1 1 auto;
+        min-height: 180px;
+        position: relative;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .ov-viewer .zoom-hint,
+    .ov-viewer .zoom-indicator {
+        display: none;
+    }
+    .ov-viewer.has-data .zoom-hint,
+    .ov-viewer.has-data .zoom-indicator {
+        display: block;
+    }
+    .ov-line-overlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        z-index: 6;
+        pointer-events: none;
+    }
+    .ov-viewer.line-active .ov-line-overlay {
+        display: block;
+        pointer-events: auto;
+        cursor: crosshair;
+    }
+    .ov-viewer.has-line:not(.line-active) .ov-line-overlay {
+        display: block;
+        pointer-events: none;
+    }
+    .ov-viewer.line-active .ov-line-overlay .an-line-handle {
+        pointer-events: auto;
+        cursor: pointer;
+    }
+    .ov-viewer.line-active .ov-line-overlay .crop-hint {
+        display: block;
+    }
+    .ov-line-overlay .crop-hint { display: none; }
+    .ov-line-hover {
+        fill: #ffd24a;
+        stroke: #000;
+        stroke-width: 1.5;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    .ov-line-measure {
+        stroke: #fff;
+        stroke-width: 1.5;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    .ov-line-measure[data-m="0"] { fill: #ff6b6b; }
+    .ov-line-measure[data-m="1"] { fill: #51cf66; }
+    .ov-profile-plot.measure-mode,
+    .ov-profile-plot.measure-mode canvas {
+        cursor: crosshair;
+    }
+    .ov-profile-panel {
+        flex: 0 0 auto;
+        background: rgba(20, 20, 28, 0.92);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 10px 6px;
+        display: none;
+    }
+    .ov-profile-panel.show { display: block; }
+    .ov-profile-plot {
+        position: relative;
+        height: 140px;
+    }
+    .ov-profile-plot canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+    }
+    .an-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+        cursor: pointer;
+        user-select: none;
+    }
+    .an-check input {
+        margin: 0;
+        accent-color: #4f8cff;
+    }
+    main.an-main.an-tool-overlay .an-workspace {
+        padding: 8px;
+    }
+    main.an-main.an-tool-overlay #anViewer {
+        display: none;
+    }
+    main.an-main.an-tool-overlay #ovWorkspace {
+        display: grid;
+    }
+    @media (max-width: 1100px) {
+        .ov-workspace {
+            grid-template-columns: 1fr;
+            overflow-y: auto;
+        }
+        .ov-viewer { min-height: 220px; }
+    }
+
     .an-side {
         border-left: 1px solid var(--border);
         overflow-y: auto;
@@ -3093,7 +3254,8 @@
         vector-effect: non-scaling-stroke;
         pointer-events: none;
     }
-    #anViewer.line-active .an-line-seg {
+    #anViewer.line-active .an-line-seg,
+    .ov-viewer.line-active .an-line-seg {
         pointer-events: stroke;
         cursor: crosshair;
     }
