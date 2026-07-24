@@ -11,7 +11,7 @@ const OverlayAnalysis = (() => {
     const MIN_LINE = 1;
     const VIEW_MIN = 0.02;
     const VIEW_MAX = 100;
-    const OV_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'bmp', 'png', 'jpg', 'jpeg'];
+    const OV_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'pcd', 'txt', 'bmp', 'png', 'jpg', 'jpeg'];
     const MEASURE_COLORS = ['#ff6b6b', '#51cf66'];
     const MEASURE_DIST_COLOR = '#ffd24a';
     const MEASURE_STEP_COLOR = '#ff7b72';
@@ -1120,16 +1120,18 @@ const OverlayAnalysis = (() => {
             case 'asc':  result = await readAsc(file, setProgress); break;
             case 'tif':
             case 'tiff': result = await readTiff(file, setProgress); break;
+            case 'pcd':  result = await readPcd(file, setProgress); break;
+            case 'txt':  result = await readTxt(file, setProgress); break;
             case 'bmp':  result = await readBmp(file, setProgress); break;
             case 'png':  result = await readPng(file, setProgress); break;
             case 'jpg':
             case 'jpeg': result = await readJpg(file, setProgress); break;
-            case 'pcd':
-            case 'txt':
-                throw new Error(t('anScatterUnsupported'));
             default: throw new Error(t('errUnknownExt', ext));
         }
-        if (!result || result.type === 'pcd-scatter' || !result.data || !result.width || !result.height) {
+        if (result && result.type === 'pcd-scatter') {
+            throw new Error(t('ovScatterUnsupported'));
+        }
+        if (!result || !result.data || !result.width || !result.height) {
             throw new Error(t('anNoHeightMap'));
         }
         const rangeSrc = result.data;
