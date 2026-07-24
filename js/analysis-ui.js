@@ -52,6 +52,7 @@ const AnalysisView = (() => {
         modeBadge: document.getElementById('anModeBadge'),
         main: document.getElementById('anMain'),
         navToggle: document.getElementById('anNavToggle'),
+        subtitle: document.getElementById('anSubtitle'),
         panelRoughness: document.getElementById('anPanelRoughness'),
         panelProfile: document.getElementById('anPanelProfile'),
         panelOverlay: document.getElementById('anPanelOverlay'),
@@ -1904,6 +1905,19 @@ const AnalysisView = (() => {
         updateLineButtons();
     }
 
+    function toolSubtitleKey(tool) {
+        if (tool === 'roughness') return 'anToolRoughness';
+        if (tool === 'overlay') return 'anToolOverlay';
+        return 'anToolProfile';
+    }
+
+    function updateHeaderSubtitle() {
+        if (!el.subtitle) return;
+        const key = toolSubtitleKey(st.tool);
+        el.subtitle.setAttribute('data-i18n', key);
+        el.subtitle.textContent = t(key);
+    }
+
     function setTool(tool) {
         if (tool !== 'roughness' && tool !== 'profile' && tool !== 'overlay') return;
         st.tool = tool;
@@ -1914,6 +1928,7 @@ const AnalysisView = (() => {
         if (el.panelProfile) el.panelProfile.hidden = tool !== 'profile';
         if (el.panelOverlay) el.panelOverlay.hidden = tool !== 'overlay';
         if (el.main) el.main.classList.toggle('an-tool-overlay', tool === 'overlay');
+        updateHeaderSubtitle();
 
         // 離開時關閉對應互動模式
         if (tool !== 'roughness') {
@@ -2494,6 +2509,7 @@ const AnalysisView = (() => {
     }
 
     function syncLang() {
+        updateHeaderSubtitle();
         if (st.tool === 'overlay' && typeof OverlayAnalysis !== 'undefined') {
             OverlayAnalysis.syncLang();
             const collapsed = el.main && el.main.classList.contains('an-nav-collapsed');
