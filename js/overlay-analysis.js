@@ -1178,6 +1178,71 @@ const OverlayAnalysis = (() => {
         if (st.lineImage) recomputeProfiles();
     }
 
+    /** 載入後共用：視埠／色階／剖線／狀態 */
+    function afterSideLoaded(side, ds, other) {
+        if (st.dsA && st.dsB) fitImage();
+        else if (!other) fitImage();
+        else applyTransform();
+        if (st.lineImage) {
+            const ref = refDs();
+            if (!ref || st.lineImage.x1 >= ref.width || st.lineImage.y1 >= ref.height) {
+                clearLine();
+            }
+        }
+        renderColorbarFrom(ds);
+        renderInfoBoth();
+        updateStatusMeta();
+        updateLineButtons();
+        syncLineOverlays();
+        if (st.lineImage) recomputeProfiles();
+        el.status.textContent = t('statusLoaded', ds.filename || '', ds.width, ds.height);
+        showToast(t('ovLoadedSide', side.toUpperCase(), ds.filename || ''), 'info');
+    }
+
+    /** 直接以資料集載入單側（供其他頁面傳送） */
+    async function loadDataset(side, dsIn) {
+        if (side !== 'a' && side !== 'b') return false;
+        if (!dsIn) return false;
+        if (dsIn.type === 'pcd-scatter') {
+            showToast(t('ovScatterUnsupported'), 'info');
+            if (el.status) el.status.textContent = t('ovScatterUnsupported');
+            return false;
+        }
+        if (!dsIn.data || !dsIn.width || !dsIn.height) {
+            showToast(t('anNoHeightMap'), 'error');
+            return false;
+        }
+        try {
+            const clone = typeof cloneDatasetForTransfer === 'function'
+                ? cloneDatasetForTransfer(dsIn)
+                : { ...dsIn, data: dsIn.data.slice(0), header: dsIn.header ? { ...dsIn.header } : dsIn.header };
+            const rangeSrc = clone.data;
+            if (!(Number.isFinite(clone.vmin) && Number.isFinite(clone.vmax))) {
+                const { vmin, vmax } = rangeSrc.length >= LARGE_PIXEL_THRESHOLD
+                    ? await computeRangeAsync(rangeSrc)
+                    : computeRange(rangeSrc);
+                clone.vmin = vmin;
+                clone.vmax = vmax;
+            }
+            const other = side === 'a' ? st.dsB : st.dsA;
+            if (other && (other.width !== clone.width || other.height !== clone.height)) {
+                showToast(t('ovSizeReject',
+                    clone.width, clone.height, other.width, other.height), 'error');
+                el.status.textContent = t('ovSizeReject',
+                    clone.width, clone.height, other.width, other.height);
+                return false;
+            }
+            await applyLoadedSide(side, clone);
+            afterSideLoaded(side, clone, other);
+            return true;
+        } catch (err) {
+            console.error(err);
+            el.status.textContent = t('statusReadFailed', err.message);
+            showToast(t('statusReadFailed', err.message), 'error');
+            return false;
+        }
+    }
+
     async function loadSide(side, file) {
         if (!file) return false;
         el.status.textContent = t('statusReading', file.name);
@@ -1193,24 +1258,7 @@ const OverlayAnalysis = (() => {
                 return false;
             }
             await applyLoadedSide(side, ds);
-            // 僅單側載入時：另一側已在則沿用視埠，否則 fit
-            if (st.dsA && st.dsB) fitImage();
-            else if (!other) fitImage();
-            else applyTransform();
-            if (st.lineImage) {
-                const ref = refDs();
-                if (!ref || st.lineImage.x1 >= ref.width || st.lineImage.y1 >= ref.height) {
-                    clearLine();
-                }
-            }
-            renderColorbarFrom(ds);
-            renderInfoBoth();
-            updateStatusMeta();
-            updateLineButtons();
-            syncLineOverlays();
-            if (st.lineImage) recomputeProfiles();
-            el.status.textContent = t('statusLoaded', ds.filename || '', ds.width, ds.height);
-            showToast(t('ovLoadedSide', side.toUpperCase(), ds.filename || ''), 'info');
+            afterSideLoaded(side, ds, other);
             return true;
         } catch (err) {
             console.error(err);
@@ -1892,6 +1940,7 @@ const OverlayAnalysis = (() => {
         setActive,
         clearAll,
         clearSide,
+        loadDataset,
         hasData,
         onColormapChange,
         refit,

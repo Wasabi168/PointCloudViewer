@@ -204,11 +204,8 @@ async function loadFile(file) {
         hideProgress();
         setBusy(openLabel, false);
         if (typeof btnSave !== 'undefined' && btnSave) btnSave.disabled = false;
-        if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) {
-            btnSendToEditor.disabled = !currentDataset;
-        }
-        if (typeof btnSendToAnalysis !== 'undefined' && btnSendToAnalysis) {
-            btnSendToAnalysis.disabled = !currentDataset;
+        if (typeof btnSendMenu !== 'undefined' && btnSendMenu) {
+            btnSendMenu.disabled = !currentDataset;
         }
         if (typeof btnClear !== 'undefined' && btnClear) {
             btnClear.disabled = !currentDataset;
@@ -255,8 +252,7 @@ function clearViewerData() {
     statusEl.textContent = t('statusIdle');
     fileInput.value = '';
 
-    if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) btnSendToEditor.disabled = true;
-    if (typeof btnSendToAnalysis !== 'undefined' && btnSendToAnalysis) btnSendToAnalysis.disabled = true;
+    if (typeof btnSendMenu !== 'undefined' && btnSendMenu) btnSendMenu.disabled = true;
     if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = true;
     if (typeof updateModeIndicator === 'function') updateModeIndicator();
     resetViewerPointSizeSession();
@@ -315,8 +311,7 @@ function loadDatasetIntoViewer(ds, opts) {
     else statusEl.textContent = t('statusLoaded', ds.filename, ds.width, ds.height);
     applyPreferredViewMode();
     syncPointSizeControls();
-    if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) btnSendToEditor.disabled = false;
-    if (typeof btnSendToAnalysis !== 'undefined' && btnSendToAnalysis) btnSendToAnalysis.disabled = false;
+    if (typeof btnSendMenu !== 'undefined' && btnSendMenu) btnSendMenu.disabled = false;
     if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = false;
     return true;
 }
@@ -341,6 +336,14 @@ function buildPreviewSendMenuItems(opts) {
         {
             label: t('batchEditPreviewSendToAnalysis'),
             action: wrap(() => transferDatasetToAnalysis({ file, entry, ds })),
+        },
+        {
+            label: t('batchEditPreviewSendToOverlayA'),
+            action: wrap(() => transferDatasetToOverlayAnalysis('a', { file, entry, ds })),
+        },
+        {
+            label: t('batchEditPreviewSendToOverlayB'),
+            action: wrap(() => transferDatasetToOverlayAnalysis('b', { file, entry, ds })),
         },
     ];
 }
@@ -410,8 +413,7 @@ async function loadDatasetIntoViewerAsync(ds, onProgress, opts) {
     else statusEl.textContent = t('statusLoaded', ds.filename, ds.width, ds.height);
     applyPreferredViewMode();
     syncPointSizeControls();
-    if (typeof btnSendToEditor !== 'undefined' && btnSendToEditor) btnSendToEditor.disabled = false;
-    if (typeof btnSendToAnalysis !== 'undefined' && btnSendToAnalysis) btnSendToAnalysis.disabled = false;
+    if (typeof btnSendMenu !== 'undefined' && btnSendMenu) btnSendMenu.disabled = false;
     if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = false;
     return true;
 }
@@ -656,8 +658,46 @@ function applyPreferredViewMode() {
 }
 const btnSave = document.getElementById('btnSave');
 const btnClear = document.getElementById('btnClear');
+const btnSendMenu = document.getElementById('btnSendMenu');
 const btnSendToEditor = document.getElementById('btnSendToEditor');
 const btnSendToAnalysis = document.getElementById('btnSendToAnalysis');
+const btnSendToOverlayA = document.getElementById('btnSendToOverlayA');
+const btnSendToOverlayB = document.getElementById('btnSendToOverlayB');
+const viewerSendWrap = document.getElementById('viewerSendWrap');
+
+/** 綁定工具列「傳送」下拉選單 */
+function bindSendDropdown(wrap, trigger, items) {
+    if (!wrap || !trigger) return;
+    const menu = wrap.querySelector('.send-menu');
+    const setOpen = (open) => {
+        wrap.classList.toggle('open', open);
+        trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (menu) {
+            if (open) menu.removeAttribute('hidden');
+            else menu.setAttribute('hidden', '');
+        }
+    };
+    const close = () => setOpen(false);
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (trigger.disabled) return;
+        setOpen(!wrap.classList.contains('open'));
+    });
+    items.forEach(({ el: btn, action }) => {
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+            close();
+            action();
+        });
+    });
+    document.addEventListener('click', (e) => {
+        if (!wrap.classList.contains('open')) return;
+        if (!wrap.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && wrap.classList.contains('open')) close();
+    });
+}
 
 function sendToEditor() {
     if (!currentDataset) { showToast(t('sendNoData'), 'info'); return; }
@@ -679,8 +719,19 @@ function sendToAnalysis() {
     transferDatasetToAnalysis({ ds: clone });
 }
 
-if (btnSendToEditor) btnSendToEditor.addEventListener('click', sendToEditor);
-if (btnSendToAnalysis) btnSendToAnalysis.addEventListener('click', sendToAnalysis);
+function sendToOverlay(side) {
+    if (!currentDataset) { showToast(t('sendNoData'), 'info'); return; }
+    if (typeof transferDatasetToOverlayAnalysis !== 'function') return;
+    const clone = cloneDatasetForTransfer(currentDataset);
+    transferDatasetToOverlayAnalysis(side, { ds: clone });
+}
+
+bindSendDropdown(viewerSendWrap, btnSendMenu, [
+    { el: btnSendToEditor, action: sendToEditor },
+    { el: btnSendToAnalysis, action: sendToAnalysis },
+    { el: btnSendToOverlayA, action: () => sendToOverlay('a') },
+    { el: btnSendToOverlayB, action: () => sendToOverlay('b') },
+]);
 
 const supportsSavePicker = (typeof window.showSaveFilePicker === 'function');
 

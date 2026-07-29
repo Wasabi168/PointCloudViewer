@@ -130,7 +130,18 @@ function setupOverflowToolbar(cfg) {
             btnMore.setAttribute('aria-expanded', open ? 'true' : 'false');
         });
     }
-    moreMenu.addEventListener('click', (ev) => ev.stopPropagation());
+    moreMenu.addEventListener('click', (ev) => {
+        // 避免冒泡到 document 立刻關閉；但點到操作按鈕時主動收合
+        ev.stopPropagation();
+        const t = ev.target;
+        if (!(t instanceof Element)) return;
+        // 巢狀選單觸發、色彩選單、格式下拉：保持展開以便繼續操作
+        if (t.closest('select, option, .colormap-picker, .send-btn')) return;
+        const action = t.closest('button, label.file-btn');
+        if (!action) return;
+        moreWrap.classList.remove('open');
+        if (btnMore) btnMore.setAttribute('aria-expanded', 'false');
+    });
 
     if (typeof ResizeObserver !== 'undefined') {
         new ResizeObserver(() => layout()).observe(observeEl);

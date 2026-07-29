@@ -107,8 +107,15 @@
 
         <!-- 群組：傳送 -->
         <div class="ctrl-group" id="viewerSendGroup" data-toolbar-priority="50">
-            <button type="button" id="btnSendToEditor" disabled data-i18n="sendToEditor" data-i18n-title="sendToEditorTitle">傳送到編輯器</button>
-            <button type="button" id="btnSendToAnalysis" disabled data-i18n="sendToAnalysis" data-i18n-title="sendToAnalysisTitle">傳送到分析</button>
+            <div class="send-wrap" id="viewerSendWrap">
+                <button type="button" id="btnSendMenu" class="send-btn" disabled aria-haspopup="true" aria-expanded="false" data-i18n="sendMenu" data-i18n-title="sendMenuTitle" data-i18n-aria="sendMenuTitle" title="傳送目前資料到其他頁面" aria-label="傳送目前資料到其他頁面">傳送</button>
+                <div class="send-menu" id="viewerSendMenu" role="menu" hidden>
+                    <button type="button" role="menuitem" id="btnSendToEditor" data-i18n="sendToEditor" data-i18n-title="sendToEditorTitle">編輯器</button>
+                    <button type="button" role="menuitem" id="btnSendToAnalysis" data-i18n="sendToAnalysis" data-i18n-title="sendToAnalysisTitle">分析</button>
+                    <button type="button" role="menuitem" id="btnSendToOverlayA" data-i18n="sendToOverlayA" data-i18n-title="sendToOverlayATitle">疊圖分析圖 A</button>
+                    <button type="button" role="menuitem" id="btnSendToOverlayB" data-i18n="sendToOverlayB" data-i18n-title="sendToOverlayBTitle">疊圖分析圖 B</button>
+                </div>
+            </div>
         </div>
 
         <!-- 群組：更多（儲存格式；視窗縮小時另收納顯示／工具） -->
@@ -417,8 +424,15 @@
 
             <!-- 群組：傳送 -->
             <div class="ctrl-group" id="edSendGroup" data-toolbar-priority="55">
-                <button type="button" id="edSendToViewer" data-i18n="sendToViewer" data-i18n-title="sendToViewerTitle">傳送到檢視器</button>
-                <button type="button" id="edSendToAnalysis" data-i18n="sendToAnalysis" data-i18n-title="sendToAnalysisTitle">傳送到分析</button>
+                <div class="send-wrap" id="edSendWrap">
+                    <button type="button" id="edSendMenu" class="send-btn" disabled aria-haspopup="true" aria-expanded="false" data-i18n="sendMenu" data-i18n-title="sendMenuTitle" data-i18n-aria="sendMenuTitle" title="傳送目前資料到其他頁面" aria-label="傳送目前資料到其他頁面">傳送</button>
+                    <div class="send-menu" id="edSendMenuPanel" role="menu" hidden>
+                        <button type="button" role="menuitem" id="edSendToViewer" data-i18n="sendToViewer" data-i18n-title="sendToViewerTitle">檢視器</button>
+                        <button type="button" role="menuitem" id="edSendToAnalysis" data-i18n="sendToAnalysis" data-i18n-title="sendToAnalysisTitle">分析</button>
+                        <button type="button" role="menuitem" id="edSendToOverlayA" data-i18n="sendToOverlayA" data-i18n-title="sendToOverlayATitle">疊圖分析圖 A</button>
+                        <button type="button" role="menuitem" id="edSendToOverlayB" data-i18n="sendToOverlayB" data-i18n-title="sendToOverlayBTitle">疊圖分析圖 B</button>
+                    </div>
+                </div>
             </div>
 
             <span class="ctrl-sep ctrl-sep--more" id="edSepMore" aria-hidden="true"></span>
@@ -1036,7 +1050,7 @@
                         <circle id="anLineH0" class="an-line-handle" cx="0" cy="0" r="6"/>
                         <circle id="anLineH1" class="an-line-handle" cx="0" cy="0" r="6"/>
                     </svg>
-                    <div class="crop-hint" id="anLineHint" data-i18n="anLineHint">在影像上拖曳以繪製剖面線</div>
+                    <div class="crop-hint" id="anLineHint" data-i18n="anLineHint">剖面模式：按住左鍵拖曳一條線；可拖曳端點或線段調整 · 中鍵拖曳平移</div>
                 </div>
                 <div class="drop-hint" id="anDropHint">
                     <div class="icon" id="anDropIcon">&#x2B07;</div>
@@ -1081,7 +1095,7 @@
                                 <circle id="ovLineM0A" class="ov-line-measure" data-m="0" cx="0" cy="0" r="5" visibility="hidden"/>
                                 <circle id="ovLineM1A" class="ov-line-measure" data-m="1" cx="0" cy="0" r="5" visibility="hidden"/>
                             </svg>
-                            <div class="crop-hint" id="ovLineHintA" data-i18n="anLineHint">在影像上拖曳以繪製剖面線</div>
+                            <div class="crop-hint" id="ovLineHintA" data-i18n="anLineHint">剖面模式：按住左鍵拖曳一條線；可拖曳端點或線段調整 · 中鍵拖曳平移</div>
                         </div>
                         <div class="zoom-hint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
                         <div class="zoom-indicator" id="ovZoomA">100%</div>
@@ -1168,7 +1182,7 @@
                                 <circle id="ovLineM0B" class="ov-line-measure" data-m="0" cx="0" cy="0" r="5" visibility="hidden"/>
                                 <circle id="ovLineM1B" class="ov-line-measure" data-m="1" cx="0" cy="0" r="5" visibility="hidden"/>
                             </svg>
-                            <div class="crop-hint" id="ovLineHintB" data-i18n="anLineHint">在影像上拖曳以繪製剖面線</div>
+                            <div class="crop-hint" id="ovLineHintB" data-i18n="anLineHint">剖面模式：按住左鍵拖曳一條線；可拖曳端點或線段調整 · 中鍵拖曳平移</div>
                         </div>
                         <div class="zoom-hint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
                         <div class="zoom-indicator" id="ovZoomB">100%</div>

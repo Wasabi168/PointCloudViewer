@@ -113,12 +113,26 @@ function applyLanguage(lang) {
     if (cursorProfileBtn) cursorProfileBtn.title = t('cursorProfileTitle');
     if (cursorMeasureBtn) cursorMeasureBtn.title = t('cursorMeasureTitle');
     if (cursorAreaBtn) cursorAreaBtn.title = t('cursorAreaTitle');
+    const btnSendMenu = document.getElementById('btnSendMenu');
+    if (btnSendMenu) btnSendMenu.title = t('sendMenuTitle');
+    const edSendMenu = document.getElementById('edSendMenu');
+    if (edSendMenu) edSendMenu.title = t('sendMenuTitle');
     const btnSendToEditor = document.getElementById('btnSendToEditor');
     if (btnSendToEditor) btnSendToEditor.title = t('sendToEditorTitle');
     const btnSendToAnalysis = document.getElementById('btnSendToAnalysis');
     if (btnSendToAnalysis) btnSendToAnalysis.title = t('sendToAnalysisTitle');
+    const btnSendToOverlayA = document.getElementById('btnSendToOverlayA');
+    if (btnSendToOverlayA) btnSendToOverlayA.title = t('sendToOverlayATitle');
+    const btnSendToOverlayB = document.getElementById('btnSendToOverlayB');
+    if (btnSendToOverlayB) btnSendToOverlayB.title = t('sendToOverlayBTitle');
+    const edSendToViewer = document.getElementById('edSendToViewer');
+    if (edSendToViewer) edSendToViewer.title = t('sendToViewerTitle');
     const edSendToAnalysis = document.getElementById('edSendToAnalysis');
     if (edSendToAnalysis) edSendToAnalysis.title = t('sendToAnalysisTitle');
+    const edSendToOverlayA = document.getElementById('edSendToOverlayA');
+    if (edSendToOverlayA) edSendToOverlayA.title = t('sendToOverlayATitle');
+    const edSendToOverlayB = document.getElementById('edSendToOverlayB');
+    if (edSendToOverlayB) edSendToOverlayB.title = t('sendToOverlayBTitle');
 
     // 目前模式標章文字（隨語言更新）
     if (typeof updateModeIndicator === 'function') updateModeIndicator();

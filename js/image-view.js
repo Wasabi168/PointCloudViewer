@@ -752,7 +752,7 @@ function createImageView(ids, options) {
     function updateEditButtons() {
         if (!editing) return;
         const has = !!st.dataset;
-        [el.cropRect, el.cropCircle, el.denoise, el.medianFilter, el.nanPatch, el.segLevel, el.segSkew, el.globalLevel, el.btnCalc, el.sendToViewer, el.sendToAnalysis].forEach(b => { if (b) b.disabled = !has; });
+        [el.cropRect, el.cropCircle, el.denoise, el.medianFilter, el.nanPatch, el.segLevel, el.segSkew, el.globalLevel, el.btnCalc, el.sendMenu].forEach(b => { if (b) b.disabled = !has; });
         // 網格化僅適用散布點雲；已是高度圖（grid）時一律停用（含視覺反灰）
         const scatterGridBtn = el.scatterGrid || document.getElementById('edScatterGrid');
         const scatterGridTip = el.scatterGridTip || document.getElementById('edScatterGridTip');
@@ -4495,6 +4495,14 @@ function createImageView(ids, options) {
         }
     }
 
+    function sendToOverlay(side) {
+        const clone = prepareDatasetForSend();
+        if (!clone) return;
+        if (typeof transferDatasetToOverlayAnalysis === 'function') {
+            transferDatasetToOverlayAnalysis(side, { ds: clone });
+        }
+    }
+
     function loadDataset(ds, opts) {
         opts = opts || {};
         if (!ds) return false;
@@ -5062,8 +5070,17 @@ function createImageView(ids, options) {
         if (el.histAuto) el.histAuto.addEventListener('click', () => autoDenoiseBounds());
         if (el.histApply) el.histApply.addEventListener('click', () => toggleDenoise(false));
         if (el.histCancel) el.histCancel.addEventListener('click', () => cancelDenoise());
-        if (el.sendToViewer) el.sendToViewer.addEventListener('click', sendToViewer);
-        if (el.sendToAnalysis) el.sendToAnalysis.addEventListener('click', sendToAnalysis);
+        if (typeof bindSendDropdown === 'function' && el.sendWrap && el.sendMenu) {
+            bindSendDropdown(el.sendWrap, el.sendMenu, [
+                { el: el.sendToViewer, action: sendToViewer },
+                { el: el.sendToAnalysis, action: sendToAnalysis },
+                { el: el.sendToOverlayA, action: () => sendToOverlay('a') },
+                { el: el.sendToOverlayB, action: () => sendToOverlay('b') },
+            ]);
+        } else {
+            if (el.sendToViewer) el.sendToViewer.addEventListener('click', sendToViewer);
+            if (el.sendToAnalysis) el.sendToAnalysis.addEventListener('click', sendToAnalysis);
+        }
         if (el.undo) el.undo.addEventListener('click', doUndo);
         if (el.redo) el.redo.addEventListener('click', doRedo);
         // 鍵盤快捷鍵：Ctrl/Cmd+Z 上一步、Ctrl/Cmd+Y 或 Ctrl/Cmd+Shift+Z 下一步
@@ -5232,7 +5249,9 @@ const editorView = createImageView({
     histValLo: 'edHistValLo', histValHi: 'edHistValHi',
     histStats: 'edHistStats', histAxisMin: 'edHistAxisMin', histAxisMax: 'edHistAxisMax',
     histAuto: 'edDenoiseAuto', histApply: 'edDenoiseApply', histCancel: 'edDenoiseCancel',
+    sendMenu: 'edSendMenu', sendWrap: 'edSendWrap', sendMenuPanel: 'edSendMenuPanel',
     sendToViewer: 'edSendToViewer', sendToAnalysis: 'edSendToAnalysis',
+    sendToOverlayA: 'edSendToOverlayA', sendToOverlayB: 'edSendToOverlayB',
     undo: 'edUndo', redo: 'edRedo',
     btnCalc: 'edBtnCalc',
 }, { editing: true });

@@ -7,6 +7,9 @@
  *  點雲分析：載入高度圖、ROI／剖面線、粗糙度計算與結果顯示
  * ========================================================================= */
 const AnalysisView = (() => {
+    const HIT_R = 10;
+    const MIN_LINE = 1;
+
     const el = {
         page: document.getElementById('pageAnalysis'),
         viewer: document.getElementById('anViewer'),
@@ -546,6 +549,36 @@ const AnalysisView = (() => {
     }
 
     /* ---- 剖面線座標 ---- */
+    function clampLine(line, width, height) {
+        const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+        return {
+            x0: clamp(line.x0, 0, width - 1),
+            y0: clamp(line.y0, 0, height - 1),
+            x1: clamp(line.x1, 0, width - 1),
+            y1: clamp(line.y1, 0, height - 1),
+        };
+    }
+
+    /** 剖面線 hit-test（視埠座標）→ 'ep0' | 'ep1' | 'move' | null */
+    function lineHitTest(vx, vy) {
+        const L = st.lineImage;
+        if (!L) return null;
+        const a = imageToViewport(L.x0, L.y0);
+        const b = imageToViewport(L.x1, L.y1);
+        const r = HIT_R;
+        if (Math.hypot(vx - a.x, vy - a.y) <= r) return 'ep0';
+        if (Math.hypot(vx - b.x, vy - b.y) <= r) return 'ep1';
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len2 = dx * dx + dy * dy;
+        if (len2 > 0) {
+            let tt = ((vx - a.x) * dx + (vy - a.y) * dy) / len2;
+            if (tt < 0) tt = 0; else if (tt > 1) tt = 1;
+            const dist = Math.hypot(vx - (a.x + tt * dx), vy - (a.y + tt * dy));
+            if (dist <= r) return 'move';
+        }
+        return null;
+    }
+
     function syncLineFromImage() {
         if (!el.lineSeg || !el.lineH0 || !el.lineH1) return;
         if (!st.lineImage || st.tool !== 'profile') {
@@ -554,6 +587,14 @@ const AnalysisView = (() => {
                 el.lineSeg.setAttribute('y1', '0');
                 el.lineSeg.setAttribute('x2', '0');
                 el.lineSeg.setAttribute('y2', '0');
+            }
+            if (el.lineH0) {
+                el.lineH0.setAttribute('cx', '0');
+                el.lineH0.setAttribute('cy', '0');
+            }
+            if (el.lineH1) {
+                el.lineH1.setAttribute('cx', '0');
+                el.lineH1.setAttribute('cy', '0');
             }
             return;
         }
@@ -569,26 +610,31 @@ const AnalysisView = (() => {
         el.lineH1.setAttribute('cy', b.y);
     }
 
-    function commitLineFromViewport(p0, p1) {
+    function resetLineCursor() {
+        if (el.lineOverlay) el.lineOverlay.style.cursor = '';
+        if (el.viewer) el.viewer.style.cursor = '';
+    }
+
+    function commitLineFromImage(p0, p1, opts) {
+        opts = opts || {};
         if (!st.dataset) return;
         const { width, height } = st.dataset;
-        const i0 = viewportToImage(p0.x, p0.y);
-        const i1 = viewportToImage(p1.x, p1.y);
-        const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-        const line = {
-            x0: clamp(i0.x, 0, width - 1),
-            y0: clamp(i0.y, 0, height - 1),
-            x1: clamp(i1.x, 0, width - 1),
-            y1: clamp(i1.y, 0, height - 1),
-        };
-        if (Math.hypot(line.x1 - line.x0, line.y1 - line.y0) < 1) {
-            st.lineImage = null;
+        let line = clampLine({
+            x0: p0.x, y0: p0.y,
+            x1: p1.x, y1: p1.y,
+        }, width, height);
+        if (Math.hypot(line.x1 - line.x0, line.y1 - line.y0) < MIN_LINE) {
+            // 太短：若有前一條線則還原，否則清除
+            if (opts.revertLine) st.lineImage = { ...opts.revertLine };
+            else st.lineImage = null;
         } else {
             st.lineImage = line;
         }
+        // 不退出剖面模式（與點雲檢視一致：持續以左鍵畫線／編輯）
         syncLineFromImage();
         clearPfResult();
         updateButtons();
+        resetLineCursor();
     }
 
     function setDefaultMidLine(orient) {
@@ -601,7 +647,8 @@ const AnalysisView = (() => {
             const x = (width - 1) / 2;
             st.lineImage = { x0: x, y0: 0, x1: x, y1: height - 1 };
         }
-        setLineMode(false);
+        // 預設中線後維持剖面模式，方便繼續調整
+        if (!st.lineMode) setLineMode(true);
         syncLineFromImage();
         clearPfResult();
         updateButtons();
@@ -2105,11 +2152,9 @@ const AnalysisView = (() => {
             };
         };
 
-        const hitHandle = (e) => {
-            const t = e.target;
-            if (t === el.lineH0) return 0;
-            if (t === el.lineH1) return 1;
-            return null;
+        const mouseToImg = (e) => {
+            const p = pt(e);
+            return viewportToImage(p.x, p.y);
         };
 
         const drawTemp = (p0, p1) => {
@@ -2128,66 +2173,152 @@ const AnalysisView = (() => {
             }
         };
 
+        const startPanFromOverlay = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            overlay.setPointerCapture(e.pointerId);
+            st.panning = true;
+            st.panStart = { x: e.clientX, y: e.clientY, tx: st.view.tx, ty: st.view.ty };
+            if (el.canvas) el.canvas.classList.add('grabbing');
+        };
+
         overlay.addEventListener('pointerdown', (e) => {
             if (st.tool !== 'profile' || !st.dataset) return;
-            if (!st.lineMode && !st.lineImage) return;
-            if (e.button === 1) return;
-            const p = pt(e);
-            const h = hitHandle(e);
-            if (h != null && st.lineImage) {
-                e.preventDefault();
-                e.stopPropagation();
-                overlay.setPointerCapture(e.pointerId);
-                const a = imageToViewport(st.lineImage.x0, st.lineImage.y0);
-                const b = imageToViewport(st.lineImage.x1, st.lineImage.y1);
-                st.lineAction = {
-                    type: 'resize',
-                    handle: h,
-                    other: h === 0 ? b : a,
-                };
-            } else if (st.lineMode) {
-                e.preventDefault();
-                e.stopPropagation();
-                overlay.setPointerCapture(e.pointerId);
-                st.lineAction = { type: 'draw', start: p };
-                drawTemp(p, p);
+
+            // 中鍵：平移（與點雲檢視剖面模式一致）
+            if (e.button === 1) {
+                startPanFromOverlay(e);
+                return;
             }
+            if (e.button !== 0) return;
+            if (!st.lineMode) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            overlay.setPointerCapture(e.pointerId);
+            const p = pt(e);
+            const img = mouseToImg(e);
+
+            // 已有剖線：優先編輯端點或整線
+            if (st.lineImage) {
+                const hit = lineHitTest(p.x, p.y);
+                if (hit) {
+                    st.lineAction = {
+                        type: hit === 'move' ? 'move-line' : 'move-handle',
+                        handle: hit === 'ep0' ? 0 : hit === 'ep1' ? 1 : null,
+                        startImg: img,
+                        orig: { ...st.lineImage },
+                    };
+                    overlay.style.cursor = hit === 'move' ? 'grabbing' : 'crosshair';
+                    return;
+                }
+            }
+
+            // 空白處：重新繪製剖面線
+            st.lineAction = {
+                type: 'draw',
+                p0: p,
+                startImg: img,
+                revertLine: st.lineImage ? { ...st.lineImage } : null,
+            };
+            drawTemp(p, p);
+            overlay.style.cursor = 'crosshair';
         });
 
         overlay.addEventListener('pointermove', (e) => {
+            // 剖面模式游標提示（未拖曳時）
+            if (st.lineMode && !st.lineAction && !st.panning) {
+                const p = pt(e);
+                const hit = st.lineImage ? lineHitTest(p.x, p.y) : null;
+                if (hit === 'ep0' || hit === 'ep1') overlay.style.cursor = 'pointer';
+                else if (hit === 'move') overlay.style.cursor = 'move';
+                else overlay.style.cursor = 'crosshair';
+            }
+
+            if (st.panning && st.panStart) {
+                st.view.tx = st.panStart.tx + (e.clientX - st.panStart.x);
+                st.view.ty = st.panStart.ty + (e.clientY - st.panStart.y);
+                applyTransform();
+                return;
+            }
+
             if (!st.lineAction) return;
             const p = pt(e);
+            if (!st.dataset) return;
+            const { width, height } = st.dataset;
+            const img = viewportToImage(p.x, p.y);
+
             if (st.lineAction.type === 'draw') {
-                drawTemp(st.lineAction.start, p);
-            } else if (st.lineAction.type === 'resize') {
-                const other = st.lineAction.other;
-                if (st.lineAction.handle === 0) drawTemp(p, other);
-                else drawTemp(other, p);
+                drawTemp(st.lineAction.p0, p);
+            } else if (st.lineAction.type === 'move-handle') {
+                const o = st.lineAction.orig;
+                const dx = img.x - st.lineAction.startImg.x;
+                const dy = img.y - st.lineAction.startImg.y;
+                let L;
+                if (st.lineAction.handle === 0) {
+                    L = { x0: o.x0 + dx, y0: o.y0 + dy, x1: o.x1, y1: o.y1 };
+                } else {
+                    L = { x0: o.x0, y0: o.y0, x1: o.x1 + dx, y1: o.y1 + dy };
+                }
+                st.lineImage = clampLine(L, width, height);
+                syncLineFromImage();
+            } else if (st.lineAction.type === 'move-line') {
+                const dx = img.x - st.lineAction.startImg.x;
+                const dy = img.y - st.lineAction.startImg.y;
+                const o = st.lineAction.orig;
+                st.lineImage = clampLine({
+                    x0: o.x0 + dx, y0: o.y0 + dy,
+                    x1: o.x1 + dx, y1: o.y1 + dy,
+                }, width, height);
+                syncLineFromImage();
+            }
+        });
+
+        overlay.addEventListener('pointerleave', () => {
+            if (!st.lineAction && !st.panning && st.lineMode) {
+                overlay.style.cursor = 'crosshair';
             }
         });
 
         const end = (e) => {
+            if (st.panning && st.panStart) {
+                st.panning = false;
+                st.panStart = null;
+                if (el.canvas) el.canvas.classList.remove('grabbing');
+                try { overlay.releasePointerCapture(e.pointerId); } catch (_) {}
+                return;
+            }
             if (!st.lineAction) return;
             const act = st.lineAction;
             st.lineAction = null;
             try { overlay.releasePointerCapture(e.pointerId); } catch (_) {}
-            const p = pt(e);
+
             if (act.type === 'draw') {
-                const dx = p.x - act.start.x;
-                const dy = p.y - act.start.y;
-                if (Math.hypot(dx, dy) < 4) {
-                    syncLineFromImage();
+                const p = pt(e);
+                commitLineFromImage(
+                    viewportToImage(act.p0.x, act.p0.y),
+                    viewportToImage(p.x, p.y),
+                    { revertLine: act.revertLine }
+                );
+            } else {
+                const L = st.lineImage;
+                if (!L || Math.hypot(L.x1 - L.x0, L.y1 - L.y0) < MIN_LINE) {
+                    if (act.orig) st.lineImage = { ...act.orig };
                 } else {
-                    commitLineFromViewport(act.start, p);
+                    clearPfResult();
                 }
-            } else if (act.type === 'resize') {
-                if (act.handle === 0) commitLineFromViewport(p, act.other);
-                else commitLineFromViewport(act.other, p);
+                syncLineFromImage();
+                updateButtons();
+                resetLineCursor();
+                if (st.lineMode) overlay.style.cursor = 'crosshair';
             }
-            updateLineButtons();
         };
         overlay.addEventListener('pointerup', end);
         overlay.addEventListener('pointercancel', end);
+
+        overlay.addEventListener('auxclick', (e) => {
+            if (e.button === 1) e.preventDefault();
+        });
     }
 
     /* ---- 視埠互動 ---- */
@@ -2212,12 +2343,20 @@ const AnalysisView = (() => {
         }, { passive: false });
 
         el.canvas.addEventListener('mousedown', (e) => {
-            if (!st.dataset || st.roiMode || st.lineMode) return;
-            if (e.button !== 0 && e.button !== 1) return;
+            if (!st.dataset || st.roiMode) return;
+            // 剖面模式：左鍵留給畫線／編輯，僅中鍵平移
+            if (st.lineMode) {
+                if (e.button !== 1) return;
+            } else if (e.button !== 0 && e.button !== 1) {
+                return;
+            }
             st.panning = true;
             st.panStart = { x: e.clientX, y: e.clientY, tx: st.view.tx, ty: st.view.ty };
             el.canvas.classList.add('grabbing');
             e.preventDefault();
+        });
+        el.viewer.addEventListener('auxclick', (e) => {
+            if (e.button === 1) e.preventDefault();
         });
         window.addEventListener('mousemove', (e) => {
             if (!st.panning || !st.panStart) return;
@@ -2430,10 +2569,12 @@ const AnalysisView = (() => {
         if (el.btnLineClear) {
             el.btnLineClear.addEventListener('click', () => {
                 st.lineImage = null;
-                setLineMode(false);
+                st.lineAction = null;
+                // 保持剖面模式（與點雲檢視清除剖面後仍停留在剖面游標一致）
                 syncLineFromImage();
                 clearPfResult();
                 updateButtons();
+                resetLineCursor();
             });
         }
         if (el.btnPfCompute) el.btnPfCompute.addEventListener('click', computeProfileRoughness);
@@ -2558,11 +2699,25 @@ const AnalysisView = (() => {
         clearData,
         hasData,
         getDataset,
+        setTool,
         refit,
         syncLang,
         compute,
     };
 })();
+
+/** 解析傳送用的資料集（已有 ds 或從 file 讀取） */
+async function resolveTransferDataset(opts = {}) {
+    const { ds, file, entry } = opts;
+    if (ds) return ds;
+    if (!file) return null;
+    if (typeof parseFileToDataset === 'function') {
+        const dataset = await parseFileToDataset(file);
+        if (entry) entry.previewDs = dataset;
+        return dataset;
+    }
+    return null;
+}
 
 /** 從檢視／編輯傳送資料到分析頁 */
 async function transferDatasetToAnalysis(opts = {}) {
@@ -2588,6 +2743,37 @@ async function transferDatasetToAnalysis(opts = {}) {
         const ok = await AnalysisView.loadDataset(dataset);
         if (ok) showToast(t('sentToAnalysis'), 'info');
         return ok;
+    } catch (err) {
+        console.error(err);
+        showToast(t('statusReadFailed', err.message), 'error');
+        return false;
+    }
+}
+
+/** 從檢視／編輯傳送資料到疊圖分析圖 A 或 B */
+async function transferDatasetToOverlayAnalysis(side, opts = {}) {
+    const s = (side === 'b' || side === 'B') ? 'b' : 'a';
+    const { ds, file } = opts;
+    if (!ds && !file) {
+        showToast(t('sendNoData'), 'info');
+        return false;
+    }
+    if (typeof OverlayAnalysis === 'undefined' || typeof OverlayAnalysis.loadDataset !== 'function') {
+        return false;
+    }
+    if (typeof switchPage === 'function') switchPage('analysis');
+    await new Promise((r) => requestAnimationFrame(r));
+    if (typeof AnalysisView !== 'undefined' && typeof AnalysisView.setTool === 'function') {
+        AnalysisView.setTool('overlay');
+    }
+    await new Promise((r) => requestAnimationFrame(r));
+    try {
+        const dataset = await resolveTransferDataset(opts);
+        if (!dataset) {
+            showToast(t('sendNoData'), 'info');
+            return false;
+        }
+        return await OverlayAnalysis.loadDataset(s, dataset);
     } catch (err) {
         console.error(err);
         showToast(t('statusReadFailed', err.message), 'error');
