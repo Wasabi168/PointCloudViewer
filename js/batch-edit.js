@@ -85,7 +85,7 @@
         batchInfo.textContent = bf.name || t('bfmNamePlaceholder');
         batchBadge.style.display = 'block';
         batchBadge.className = 'batch-file-badge ok';
-        batchBadge.textContent = t('bfmMetaInfo', batchKindLabel(bf.kind), bf.width, bf.height, bf.steps.length);
+        batchBadge.textContent = describeBatchFileMeta(bf, { withNote: false });
     }
 
     function buildStepPreviewCards(ds, bf) {
@@ -533,11 +533,19 @@
                 let ds = await parseFileToDataset(entry.file);
                 if (!datasetMatchesBatchFile(ds, bf)) throw new Error(t('batchEditMismatch', entry.file.name));
 
+                const stepsCheck = validateBatchFileSteps(bf);
+                if (!stepsCheck.ok) throw new Error(batchStepRejectMessage(stepsCheck.reason));
+
                 entry.statusText = t('batchItemConverting');
                 updateFileListStatuses();
 
                 const pipe = batchApplyPipeline(ds, bf.steps);
-                if (!pipe.ok) throw new Error(describeBatchStep(pipe.step) + ': ' + (pipe.reason || ''));
+                if (!pipe.ok) {
+                    const reasonMsg = (pipe.reason === 'pcdOnlyScatterGrid' || pipe.reason === 'pcdNoMoreSteps' || pipe.reason === 'kindMismatch')
+                        ? batchStepRejectMessage(pipe.reason)
+                        : (pipe.reason || '');
+                    throw new Error(describeBatchStep(pipe.step) + ': ' + reasonMsg);
+                }
 
                 entry.previewCards = buildStepPreviewCards(ds, bf);
                 entry.resultDs = cloneDatasetDeep(pipe.dataset);

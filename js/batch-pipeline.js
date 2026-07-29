@@ -21,7 +21,69 @@ function getDatasetSignature(ds) {
 
 function signaturesMatch(sigA, sigB) {
     if (!sigA || !sigB) return false;
-    return sigA.kind === sigB.kind && sigA.width === sigB.width && sigA.height === sigB.height;
+    if (sigA.kind !== sigB.kind) return false;
+    // 散布點雲批次僅比對種類（僅支援網格化，不綁虛擬畫布尺寸）
+    if (sigA.kind === 'pcd') return true;
+    return sigA.width === sigB.width && sigA.height === sigB.height;
+}
+
+function isPcdBatchKind(kind) {
+    return kind === 'pcd';
+}
+
+/** 各種類允許的步驟：散布僅網格化；高度圖不可網格化 */
+function isBatchStepAllowedForKind(kind, stepType) {
+    if (!stepType) return false;
+    if (isPcdBatchKind(kind)) return stepType === 'scatterGrid';
+    return stepType !== 'scatterGrid';
+}
+
+/**
+ * 檢查是否可將 step 追加到批次檔。
+ * 散布：只能加入網格化，且至多一步（網格化後不可再新增）。
+ */
+function canAppendBatchStep(batchFile, step) {
+    if (!batchFile || !step || !step.type) return { ok: false, reason: 'invalid' };
+    if (!isBatchStepAllowedForKind(batchFile.kind, step.type)) {
+        return { ok: false, reason: isPcdBatchKind(batchFile.kind) ? 'pcdOnlyScatterGrid' : 'kindMismatch' };
+    }
+    if (isPcdBatchKind(batchFile.kind) && batchFile.steps && batchFile.steps.length > 0) {
+        return { ok: false, reason: 'pcdNoMoreSteps' };
+    }
+    return { ok: true };
+}
+
+function validateBatchFileSteps(batchFile) {
+    if (!batchFile || !Array.isArray(batchFile.steps)) return { ok: false, reason: 'invalid' };
+    if (isPcdBatchKind(batchFile.kind)) {
+        if (batchFile.steps.length > 1) return { ok: false, reason: 'pcdNoMoreSteps' };
+        for (const s of batchFile.steps) {
+            if (!s || s.type !== 'scatterGrid') return { ok: false, reason: 'pcdOnlyScatterGrid' };
+        }
+        return { ok: true };
+    }
+    for (const s of batchFile.steps) {
+        if (s && s.type === 'scatterGrid') return { ok: false, reason: 'kindMismatch' };
+    }
+    return { ok: true };
+}
+
+function describeBatchFileMeta(bf, options) {
+    if (!bf) return '';
+    const withNote = !options || options.withNote !== false;
+    if (isPcdBatchKind(bf.kind)) {
+        let s = t('bfmMetaInfoPcd', batchKindLabel(bf.kind), bf.steps.length);
+        if (withNote) s += '<div class="bfm-meta-note">' + t('bfmPcdKindNote') + '</div>';
+        return s;
+    }
+    return t('bfmMetaInfo', batchKindLabel(bf.kind), bf.width, bf.height, bf.steps.length);
+}
+
+function batchStepRejectMessage(reason) {
+    if (reason === 'pcdOnlyScatterGrid') return t('bfmPcdOnlyScatterGrid');
+    if (reason === 'pcdNoMoreSteps') return t('bfmPcdNoMoreSteps');
+    if (reason === 'kindMismatch') return t('bfmKindMismatch');
+    return t('bfmKindMismatch');
 }
 
 function cloneDatasetDeep(ds) {
@@ -465,7 +527,19 @@ function batchApplyStep(ds, step) {
 
 function batchApplyPipeline(ds, steps) {
     const out = cloneDatasetDeep(ds);
-    for (const step of steps) {
+    const list = Array.isArray(steps) ? steps : [];
+    // 散布輸入：批次僅允許單一網格化步驟
+    if (isPcdScatterDataset(ds)) {
+        if (list.length > 1) {
+            return { ok: false, dataset: out, step: list[1], reason: 'pcdNoMoreSteps' };
+        }
+        for (const step of list) {
+            if (!step || step.type !== 'scatterGrid') {
+                return { ok: false, dataset: out, step, reason: 'pcdOnlyScatterGrid' };
+            }
+        }
+    }
+    for (const step of list) {
         const res = batchApplyStep(out, step);
         if (!res.ok) return { ok: false, dataset: out, step, reason: res.reason };
     }
@@ -506,27 +580,51 @@ function batchKindLabel(kind) {
 }
 
 function createEmptyBatchFile(sig, name) {
+    const isPcd = isPcdBatchKind(sig.kind);
     return {
         format: BATCH_FILE_FORMAT,
         version: BATCH_FILE_VERSION,
         kind: sig.kind,
-        width: sig.width,
-        height: sig.height,
+        // 散布不綁尺寸；仍寫入參考值以相容舊格式讀取
+        width: isPcd ? (sig.width || 0) : sig.width,
+        height: isPcd ? (sig.height || 0) : sig.height,
         name: name || t('bfmNamePlaceholder'),
         steps: [],
     };
 }
 
+/**
+ * 建立批次檔用的簽名。
+ * 網格化會把編輯器資料改成高度圖；若「剛才的編輯」是網格化，
+ * 仍應建立散布專用批次（pcd），以便加入該步驟。
+ */
+function resolveBatchCreateSignature(sig, lastEditStep) {
+    if (!sig) return null;
+    if (lastEditStep && lastEditStep.type === 'scatterGrid') {
+        return { kind: 'pcd', width: 0, height: 0 };
+    }
+    return sig;
+}
+
 function parseBatchFile(json) {
     if (!json || json.format !== BATCH_FILE_FORMAT) throw new Error('invalid');
-    if (!json.kind || !json.width || !json.height || !Array.isArray(json.steps)) throw new Error('invalid');
-    return json;
+    if (!json.kind || !Array.isArray(json.steps)) throw new Error('invalid');
+    if (!isPcdBatchKind(json.kind) && (!json.width || !json.height)) throw new Error('invalid');
+    const file = {
+        ...json,
+        width: json.width || 0,
+        height: json.height || 0,
+    };
+    const v = validateBatchFileSteps(file);
+    if (!v.ok) throw new Error(v.reason || 'invalid');
+    return file;
 }
 
 function datasetMatchesBatchFile(ds, batchFile) {
     const sig = getDatasetSignature(ds);
-    return sig && batchFile && sig.kind === batchFile.kind &&
-        sig.width === batchFile.width && sig.height === batchFile.height;
+    if (!sig || !batchFile || sig.kind !== batchFile.kind) return false;
+    if (isPcdBatchKind(batchFile.kind)) return true;
+    return sig.width === batchFile.width && sig.height === batchFile.height;
 }
 
 function renderGridThumbToCanvas(dataset, canvas, maxW, cmap) {

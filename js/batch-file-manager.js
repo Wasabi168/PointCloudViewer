@@ -67,20 +67,32 @@ const BatchFileManager = (() => {
         if (typeof onChangeCallback === 'function') onChangeCallback(currentFile);
     }
 
+    function setLastEditHintText(text, hasStep) {
+        const s = text || '';
+        lastEditHint.textContent = s;
+        lastEditHint.title = s;
+        lastEditHint.classList.toggle('has-step', !!hasStep);
+    }
+
     function updateLastEditHint() {
         const step = editorView.getLastEditStep();
         if (!step) {
-            lastEditHint.textContent = t('bfmNoLastEditHint');
-            lastEditHint.classList.remove('has-step');
+            setLastEditHintText(t('bfmNoLastEditHint'), false);
             if (currentFile) btnAddStep.disabled = true;
             return;
         }
-        lastEditHint.textContent = t('bfmLastEditLabel', describeBatchStep(step));
-        lastEditHint.classList.add('has-step');
-        if (currentFile) {
-            btnAddStep.disabled = (step.type === 'calc' && currentFile.kind === 'pcd')
-                || (step.type === 'scatterGrid' && currentFile.kind !== 'pcd');
+        if (!currentFile) {
+            setLastEditHintText(t('bfmLastEditLabel', describeBatchStep(step)), true);
+            return;
         }
+        const check = canAppendBatchStep(currentFile, step);
+        if (!check.ok && isPcdBatchKind(currentFile.kind)) {
+            setLastEditHintText(batchStepRejectMessage(check.reason), true);
+            btnAddStep.disabled = true;
+            return;
+        }
+        setLastEditHintText(t('bfmLastEditLabel', describeBatchStep(step)), true);
+        btnAddStep.disabled = !check.ok;
     }
 
     function renderMeta() {
@@ -93,11 +105,7 @@ const BatchFileManager = (() => {
             updateLastEditHint();
             return;
         }
-        metaEl.innerHTML = t('bfmMetaInfo',
-            batchKindLabel(currentFile.kind),
-            currentFile.width,
-            currentFile.height,
-            currentFile.steps.length);
+        metaEl.innerHTML = describeBatchFileMeta(currentFile);
         nameInput.value = currentFile.name || '';
         btnSave.disabled = false;
         btnClear.disabled = false;
@@ -268,16 +276,22 @@ const BatchFileManager = (() => {
         notifyChange();
     }
 
+    function resolveEditorBatchSignature() {
+        let sig = editorView.getDatasetSignature();
+        if (!sig && typeof signatureProvider === 'function') sig = signatureProvider();
+        const lastStep = editorView.getLastEditStep ? editorView.getLastEditStep() : null;
+        return resolveBatchCreateSignature(sig, lastStep);
+    }
+
     function newFromEditor() {
-        const sig = editorView.getDatasetSignature();
+        const sig = resolveEditorBatchSignature();
         if (!sig) { showToast(t('bfmNewNeedData'), 'info'); return; }
         setCurrent(createEmptyBatchFile(sig));
     }
 
     function tryAutoCreateBatchFile() {
         if (currentFile) return true;
-        let sig = editorView.getDatasetSignature();
-        if (!sig && typeof signatureProvider === 'function') sig = signatureProvider();
+        const sig = resolveEditorBatchSignature();
         if (!sig) return false;
         setCurrent(createEmptyBatchFile(sig));
         return true;
@@ -321,12 +335,9 @@ const BatchFileManager = (() => {
         if (!currentFile) return;
         const step = editorView.getLastEditStep();
         if (!step) { showToast(t('bfmNoLastEdit'), 'info'); return; }
-        if (step.type === 'calc' && currentFile.kind === 'pcd') {
-            showToast(t('bfmKindMismatch'), 'error');
-            return;
-        }
-        if (step.type === 'scatterGrid' && currentFile.kind !== 'pcd') {
-            showToast(t('bfmKindMismatch'), 'error');
+        const check = canAppendBatchStep(currentFile, step);
+        if (!check.ok) {
+            showToast(batchStepRejectMessage(check.reason), 'error');
             return;
         }
         currentFile.steps.push(JSON.parse(JSON.stringify(step)));
@@ -383,7 +394,12 @@ const BatchFileManager = (() => {
             loadFromJson(JSON.parse(text));
         } catch (err) {
             console.error(err);
-            showToast(t('batchUnsupported', file.name), 'error');
+            const reason = err && err.message;
+            if (reason === 'pcdOnlyScatterGrid' || reason === 'pcdNoMoreSteps' || reason === 'kindMismatch') {
+                showToast(batchStepRejectMessage(reason), 'error');
+            } else {
+                showToast(t('batchUnsupported', file.name), 'error');
+            }
         }
     }
 
@@ -493,7 +509,13 @@ const BatchFileManager = (() => {
         onChange: (fn) => { onChangeCallback = fn; },
         setSignatureProvider: (fn) => { signatureProvider = fn; },
         setPageContext,
-        refreshLastEditHint: updateLastEditHint,
+        refreshLastEditHint: () => {
+            if (currentFile) {
+                metaEl.innerHTML = describeBatchFileMeta(currentFile);
+                renderSteps();
+            }
+            updateLastEditHint();
+        },
         loadFromJson,
         loadFromFile,
     };

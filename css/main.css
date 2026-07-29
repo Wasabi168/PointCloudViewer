@@ -2729,6 +2729,11 @@
         flex-shrink: 0;
     }
     .bfm-meta strong { color: var(--text); }
+    .bfm-meta-note {
+        margin-top: 4px;
+        color: var(--text);
+        font-weight: 500;
+    }
     .bfm-steps {
         flex: 1;
         overflow-y: auto;
