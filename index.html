@@ -396,6 +396,9 @@
                 <div class="ed-toolbar-block" id="edProcessBlock">
                     <span class="ed-toolbar-label" data-i18n="toolGroupProcess">處理</span>
                     <button type="button" id="edDenoise" data-i18n="denoise" data-i18n-title="denoiseTitle">刪除雜點</button>
+                    <span id="edScatterGridTip" class="ed-tool-tip-host">
+                        <button type="button" id="edScatterGrid" data-i18n="scatterGrid" data-i18n-title="scatterGridTitle">網格化</button>
+                    </span>
                     <button type="button" id="edMedianFilter" data-i18n="medianFilter" data-i18n-title="medianFilterTitle">中值濾波</button>
                     <button type="button" id="edNanPatch" data-i18n="nanPatch" data-i18n-title="nanPatchTitle">NaN 修補</button>
                 </div>
@@ -707,6 +710,78 @@
                             <div class="seg-level-tune-busy-card">
                                 <div class="seg-level-spinner" aria-hidden="true"></div>
                                 <span class="seg-level-tune-busy-text" id="edMedianFilterBusyText" data-i18n="medianFilterUpdating">正在更新預覽…</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="seg-level-panel" id="edScatterGridPanel" aria-hidden="true">
+                <div class="seg-level-head">
+                    <span class="seg-level-mode-badge" data-i18n="scatterGridModeName">網格化模式</span>
+                    <div class="seg-level-config" id="edScatterGridConfig" aria-hidden="true">
+                        <label class="seg-level-config-item" for="edScatterGridMode">
+                            <span data-i18n="scatterGridModeLabel">解析度</span>
+                            <select id="edScatterGridMode">
+                                <option value="auto" data-i18n="scatterGridModeAuto">自動</option>
+                                <option value="spacing" data-i18n="scatterGridModeSpacing">格距</option>
+                                <option value="size" data-i18n="scatterGridModeSize">寬高</option>
+                            </select>
+                        </label>
+                        <label class="seg-level-config-item" id="edScatterGridSpacingWrap" for="edScatterGridDx" hidden>
+                            <span data-i18n="scatterGridDxLabel">格距</span>
+                            <input type="number" id="edScatterGridDx" min="0" step="any" inputmode="decimal" />
+                        </label>
+                        <label class="seg-level-config-item" id="edScatterGridSizeWrap" hidden>
+                            <span data-i18n="scatterGridSizeLabel">寬×高</span>
+                            <input type="number" id="edScatterGridWidth" min="2" step="1" inputmode="numeric" />
+                            <span aria-hidden="true">×</span>
+                            <input type="number" id="edScatterGridHeight" min="2" step="1" inputmode="numeric" />
+                        </label>
+                        <label class="seg-level-config-item" for="edScatterGridAgg">
+                            <span data-i18n="scatterGridAggLabel">聚合</span>
+                            <select id="edScatterGridAgg">
+                                <option value="mean" data-i18n="scatterGridAggMean" selected>平均</option>
+                                <option value="median" data-i18n="scatterGridAggMedian">中位</option>
+                                <option value="max" data-i18n="scatterGridAggMax">最大</option>
+                            </select>
+                        </label>
+                        <span class="seg-level-config-meta" id="edScatterGridMeta"></span>
+                    </div>
+                    <div class="seg-level-actions">
+                        <button type="button" id="edScatterGridApply" data-i18n="scatterGridApply" data-i18n-title="scatterGridApplyTitle">套用</button>
+                        <button type="button" id="edScatterGridCancel" class="btn-secondary" data-i18n="scatterGridCancel" data-i18n-title="scatterGridCancelTitle">取消</button>
+                    </div>
+                </div>
+                <div class="seg-level-compare seg-skew-compare" id="edScatterGridCompare">
+                    <div class="seg-level-pane">
+                        <span class="seg-level-pane-label" data-i18n="scatterGridBefore">散布原文</span>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap">
+                                <canvas id="edScatterGridBefore"></canvas>
+                            </div>
+                            <div class="seg-level-cbar" aria-hidden="false">
+                                <span class="seg-level-cbar-val" id="edScatterGridBeforeCbHi"></span>
+                                <canvas id="edScatterGridBeforeCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                <span class="seg-level-cbar-val" id="edScatterGridBeforeCbLo"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="seg-level-pane seg-level-pane-after">
+                        <span class="seg-level-pane-label" data-i18n="scatterGridAfter">高度圖</span>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap">
+                                <canvas id="edScatterGridAfter"></canvas>
+                            </div>
+                            <div class="seg-level-cbar" aria-hidden="false">
+                                <span class="seg-level-cbar-val" id="edScatterGridAfterCbHi"></span>
+                                <canvas id="edScatterGridAfterCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                <span class="seg-level-cbar-val" id="edScatterGridAfterCbLo"></span>
+                            </div>
+                        </div>
+                        <div class="seg-level-tune-busy" id="edScatterGridBusy" aria-hidden="true">
+                            <div class="seg-level-tune-busy-card">
+                                <div class="seg-level-spinner" aria-hidden="true"></div>
+                                <span class="seg-level-tune-busy-text" id="edScatterGridBusyText" data-i18n="scatterGridUpdating">正在更新預覽…</span>
                             </div>
                         </div>
                     </div>
@@ -2132,6 +2207,7 @@
 <script src="js/segment-skew.js"></script>
 <script src="js/median-filter.js"></script>
 <script src="js/nan-patch.js"></script>
+<script src="js/scatter-grid.js"></script>
 <script src="js/batch-pipeline.js"></script>
 <script src="js/colormap.js"></script>
 <script src="js/render.js"></script>

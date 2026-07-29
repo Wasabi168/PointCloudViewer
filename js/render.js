@@ -213,8 +213,12 @@ function fitImageToViewer() {
     const w = currentDataset.width;
     const h = currentDataset.height;
     const padding = 24;
-    const s = Math.min((vw - padding * 2) / w, (vh - padding * 2) / h, 8);
-    view.scale = s > 0 ? s : 1;
+    // 盡量填滿視埠；小尺寸網格不再硬性上限 8，以免雙擊還原後縮在中央
+    let s = Math.min((vw - padding * 2) / w, (vh - padding * 2) / h);
+    if (!(s > 0)) s = 1;
+    if (typeof view.maxScale === 'number' && s > view.maxScale) s = view.maxScale;
+    if (typeof view.minScale === 'number' && s < view.minScale) s = view.minScale;
+    view.scale = s;
     view.tx = (vw - w * view.scale) / 2;
     view.ty = (vh - h * view.scale) / 2;
     applyTransform();

@@ -261,10 +261,14 @@
         border-radius: 6px;
         cursor: pointer;
         font-size: 14px;
-        transition: background 0.15s ease;
+        transition: background 0.15s ease, opacity 0.15s ease;
     }
 
-    button:hover, label.file-btn:hover { background: var(--accent-hover); }
+    button:hover:not(:disabled), label.file-btn:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled, label.file-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
 
     select {
         background: #3a3a4a;
@@ -1724,13 +1728,19 @@
     #edViewer.nan-patch-active #edZoomHint,
     #edViewer.nan-patch-active #edZoomIndicator,
     #edViewer.nan-patch-active #edCropOverlay,
-    #edViewer.nan-patch-active #edDropHint {
+    #edViewer.nan-patch-active #edDropHint,
+    #edViewer.scatter-grid-active #edCanvas,
+    #edViewer.scatter-grid-active #edZoomHint,
+    #edViewer.scatter-grid-active #edZoomIndicator,
+    #edViewer.scatter-grid-active #edCropOverlay,
+    #edViewer.scatter-grid-active #edDropHint {
         display: none !important;
     }
     #edViewer.seg-level-active .seg-level-panel#edSegLevelPanel,
     #edViewer.seg-skew-active .seg-level-panel#edSegSkewPanel,
     #edViewer.median-filter-active .seg-level-panel#edMedianFilterPanel,
-    #edViewer.nan-patch-active .seg-level-panel#edNanPatchPanel {
+    #edViewer.nan-patch-active .seg-level-panel#edNanPatchPanel,
+    #edViewer.scatter-grid-active .seg-level-panel#edScatterGridPanel {
         display: flex;
     }
     .seg-level-panel {
@@ -1809,7 +1819,12 @@
     #edSegLevelDir,
     #edSegLevelCount,
     #edSegSkewDir,
-    #edSegSkewCount {
+    #edSegSkewCount,
+    #edScatterGridMode,
+    #edScatterGridAgg,
+    #edScatterGridDx,
+    #edScatterGridWidth,
+    #edScatterGridHeight {
         padding: 4px 6px;
         font-size: 12px;
         font-family: Consolas, monospace;
@@ -1817,6 +1832,19 @@
         border: 1px solid var(--border);
         border-radius: 4px;
         color: var(--text);
+    }
+    #edScatterGridDx {
+        width: 7.5em;
+    }
+    #edScatterGridWidth,
+    #edScatterGridHeight {
+        width: 4.5em;
+    }
+    .seg-level-config-meta {
+        font-size: 12px;
+        font-family: Consolas, monospace;
+        color: var(--muted);
+        white-space: nowrap;
     }
     #edSegLevelDir {
         min-width: 7.5em;
@@ -1831,14 +1859,24 @@
     #edSegLevelDir:focus,
     #edSegLevelCount:focus,
     #edSegSkewDir:focus,
-    #edSegSkewCount:focus {
+    #edSegSkewCount:focus,
+    #edScatterGridMode:focus,
+    #edScatterGridAgg:focus,
+    #edScatterGridDx:focus,
+    #edScatterGridWidth:focus,
+    #edScatterGridHeight:focus {
         border-color: var(--accent);
         outline: none;
     }
     #edSegLevelDir:disabled,
     #edSegLevelCount:disabled,
     #edSegSkewDir:disabled,
-    #edSegSkewCount:disabled {
+    #edSegSkewCount:disabled,
+    #edScatterGridMode:disabled,
+    #edScatterGridAgg:disabled,
+    #edScatterGridDx:disabled,
+    #edScatterGridWidth:disabled,
+    #edScatterGridHeight:disabled {
         opacity: 0.55;
         cursor: not-allowed;
     }
@@ -2189,10 +2227,21 @@
     #edSegLevel.tool-active,
     #edSegSkew.tool-active,
     #edMedianFilter.tool-active,
-    #edNanPatch.tool-active {
+    #edNanPatch.tool-active,
+    #edScatterGrid.tool-active {
         background: rgba(79, 140, 255, 0.2);
         border-color: var(--accent);
         color: var(--accent-hover);
+    }
+
+    .ed-toolbar-block button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        pointer-events: none; /* 讓外層 tip host 能顯示 title */
+    }
+    .ed-tool-tip-host {
+        display: inline-flex;
+        vertical-align: middle;
     }
 
     /* ===== ???? ===== */

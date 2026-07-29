@@ -78,7 +78,8 @@ const BatchFileManager = (() => {
         lastEditHint.textContent = t('bfmLastEditLabel', describeBatchStep(step));
         lastEditHint.classList.add('has-step');
         if (currentFile) {
-            btnAddStep.disabled = step.type === 'calc' && currentFile.kind === 'pcd';
+            btnAddStep.disabled = (step.type === 'calc' && currentFile.kind === 'pcd')
+                || (step.type === 'scatterGrid' && currentFile.kind !== 'pcd');
         }
     }
 
@@ -321,6 +322,10 @@ const BatchFileManager = (() => {
         const step = editorView.getLastEditStep();
         if (!step) { showToast(t('bfmNoLastEdit'), 'info'); return; }
         if (step.type === 'calc' && currentFile.kind === 'pcd') {
+            showToast(t('bfmKindMismatch'), 'error');
+            return;
+        }
+        if (step.type === 'scatterGrid' && currentFile.kind !== 'pcd') {
             showToast(t('bfmKindMismatch'), 'error');
             return;
         }

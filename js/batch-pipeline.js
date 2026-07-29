@@ -394,6 +394,58 @@ function batchApplySegmentSkew(ds, step) {
     return { ok: true };
 }
 
+function batchApplyScatterGrid(ds, step) {
+    if (!isPcdScatterDataset(ds)) return { ok: false, reason: 'notScatter' };
+    if (typeof applyScatterGrid !== 'function') return { ok: false, reason: 'invalid' };
+    const mode = step.mode === 'spacing' || step.mode === 'size' ? step.mode : 'auto';
+    const opts = {
+        mode,
+        aggregate: step.aggregate || 'mean',
+    };
+    if (mode === 'spacing') {
+        const dx = Number(step.dx);
+        if (!(dx > 0) || !Number.isFinite(dx)) return { ok: false, reason: 'invalid' };
+        opts.dx = dx;
+        opts.dy = Number(step.dy) > 0 ? Number(step.dy) : dx;
+    } else if (mode === 'size') {
+        const width = Math.round(Number(step.width));
+        const height = Math.round(Number(step.height));
+        if (!(width >= 2) || !(height >= 2)) return { ok: false, reason: 'invalid' };
+        opts.width = width;
+        opts.height = height;
+    }
+    const result = applyScatterGrid(ds.x, ds.y, ds.z, ds.bounds, opts);
+    ds.type = 'grid';
+    ds.data = result.data;
+    ds.width = result.width;
+    ds.height = result.height;
+    ds.pointCount = result.filledCount;
+    delete ds.x;
+    delete ds.y;
+    delete ds.z;
+    delete ds.bounds;
+    const hdr = ds.header ? { ...ds.header } : {};
+    hdr.xlength = String(result.xlength);
+    hdr.ylength = String(result.ylength);
+    hdr['x-length'] = String(result.xlength);
+    hdr['y-length'] = String(result.ylength);
+    hdr.xpixels = String(result.width);
+    hdr.ypixels = String(result.height);
+    hdr.WIDTH = String(result.width);
+    hdr.HEIGHT = String(result.height);
+    if (!(hdr.xunit || hdr['x-unit'])) hdr.xunit = 'mm';
+    if (!(hdr.yunit || hdr['y-unit'])) hdr.yunit = 'mm';
+    if (!(hdr.zunit || hdr['z-unit'])) hdr.zunit = 'um';
+    if (typeof t === 'function') {
+        hdr[t('infoPcdView')] = t('infoPcdGridded');
+        hdr[t('infoPcdPoints')] = String(result.filledCount);
+        hdr[t('infoPcdGridPrec')] = String(result.dx);
+    }
+    ds.header = hdr;
+    batchRefreshRange(ds);
+    return { ok: true };
+}
+
 function batchApplyStep(ds, step) {
     if (!step || !step.type) return { ok: false, reason: 'invalid' };
     switch (step.type) {
@@ -403,6 +455,7 @@ function batchApplyStep(ds, step) {
         case 'denoise': return batchApplyDenoiseFromStep(ds, step);
         case 'medianFilter': return batchApplyMedianFilter(ds, step.kernelSize);
         case 'nanPatch': return batchApplyNanPatch(ds, step.kernelSize, step.roi || null);
+        case 'scatterGrid': return batchApplyScatterGrid(ds, step);
         case 'calc': return batchApplyCalc(ds, step.op, step.operand);
         case 'cropRect':
         case 'cropCircle': return batchApplyCrop(ds, step);
@@ -436,6 +489,11 @@ function describeBatchStep(step) {
         case 'nanPatch':
             if (step.roi) return t('bfmStepNanPatchRoi', step.kernelSize);
             return t('bfmStepNanPatch', step.kernelSize);
+        case 'scatterGrid': {
+            const agg = step.aggregate === 'median' ? t('scatterGridAggMedian')
+                : (step.aggregate === 'max' ? t('scatterGridAggMax') : t('scatterGridAggMean'));
+            return t('bfmStepScatterGrid', step.width, step.height, agg);
+        }
         case 'calc': return t('bfmStepCalc', step.op, step.operand);
         case 'cropRect': return t('bfmStepCropRect');
         case 'cropCircle': return t('bfmStepCropCircle');

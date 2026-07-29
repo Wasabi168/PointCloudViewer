@@ -58,6 +58,13 @@ function createImageView(ids, options) {
             medianFilterResult: null,
             medianFilterViews: null,
             medianFilterPan: null,
+            scatterGrid: false,
+            scatterGridBusy: false,
+            scatterGridRunId: 0,
+            scatterGridBase: null,
+            scatterGridResult: null,
+            scatterGridViews: null,
+            scatterGridPan: null,
             nanPatch: false,
             nanPatchBusy: false,
             nanPatchRunId: 0,
@@ -217,8 +224,12 @@ function createImageView(ids, options) {
         if (isScatter(st.dataset)) { fitScatter(st.dataset); renderScatter(st.dataset, el.colormap.value); applyTransform(); return; }
         const { w: vw, h: vh } = viewerSize();
         const w = st.dataset.width, h = st.dataset.height, padding = 24;
-        const s = Math.min((vw - padding * 2) / w, (vh - padding * 2) / h, 8);
-        st.view.scale = s > 0 ? s : 1;
+        // 盡量填滿視埠；小尺寸網格（如網格化後 21×21）不再硬性上限 8，以免還原後縮在中央
+        let s = Math.min((vw - padding * 2) / w, (vh - padding * 2) / h);
+        if (!(s > 0)) s = 1;
+        if (s > st.view.maxScale) s = st.view.maxScale;
+        if (s < st.view.minScale) s = st.view.minScale;
+        st.view.scale = s;
         st.view.tx = (vw - w * st.view.scale) / 2;
         st.view.ty = (vh - h * st.view.scale) / 2;
         applyTransform();
@@ -621,6 +632,7 @@ function createImageView(ids, options) {
             if (st.edit.segLevel) renderSegLevelCompare();
             else if (st.edit.segSkew) renderSegSkewCompare();
             else if (st.edit.medianFilter) renderMedianFilterCompare();
+            else if (st.edit.scatterGrid) renderScatterGridCompare();
             else if (st.edit.nanPatch) renderNanPatchCompare();
             else render(st.dataset, el.colormap.value, false);
         }
@@ -741,6 +753,23 @@ function createImageView(ids, options) {
         if (!editing) return;
         const has = !!st.dataset;
         [el.cropRect, el.cropCircle, el.denoise, el.medianFilter, el.nanPatch, el.segLevel, el.segSkew, el.globalLevel, el.btnCalc, el.sendToViewer, el.sendToAnalysis].forEach(b => { if (b) b.disabled = !has; });
+        // 網格化僅適用散布點雲；已是高度圖（grid）時一律停用（含視覺反灰）
+        const scatterGridBtn = el.scatterGrid || document.getElementById('edScatterGrid');
+        const scatterGridTip = el.scatterGridTip || document.getElementById('edScatterGridTip');
+        if (scatterGridBtn) {
+            const canGridify = has && isScatter(st.dataset);
+            scatterGridBtn.disabled = !canGridify;
+            scatterGridBtn.setAttribute('aria-disabled', canGridify ? 'false' : 'true');
+            let tip = t('scatterGridTitle');
+            if (has && !isScatter(st.dataset)) tip = t('scatterGridAlreadyGrid');
+            else if (!has) tip = t('editNoData');
+            scatterGridBtn.title = tip;
+            scatterGridBtn.setAttribute('aria-label', tip);
+            // disabled 按鈕本身常不顯示原生 title，改設在外層 tip host
+            if (scatterGridTip) scatterGridTip.title = tip;
+            if (!el.scatterGrid) el.scatterGrid = scatterGridBtn;
+            if (!el.scatterGridTip && scatterGridTip) el.scatterGridTip = scatterGridTip;
+        }
         if (el.btnClear) el.btnClear.disabled = !has;
         if (el.cropApply) el.cropApply.disabled = !(has && st.edit.cropMode && st.edit.cropSel);
         if (el.cropCancel) el.cropCancel.disabled = !(has && st.edit.cropMode);
@@ -764,6 +793,14 @@ function createImageView(ids, options) {
         if (el.medianFilterCancel) el.medianFilterCancel.disabled = !(has && st.edit.medianFilter);
         const medianFilterConfigLocked = !(has && st.edit.medianFilter && !st.edit.medianFilterBusy && st.edit.medianFilterResult);
         if (el.medianFilterKernel) el.medianFilterKernel.disabled = medianFilterConfigLocked;
+        if (el.scatterGridApply) el.scatterGridApply.disabled = !(has && st.edit.scatterGrid && !st.edit.scatterGridBusy && st.edit.scatterGridResult);
+        if (el.scatterGridCancel) el.scatterGridCancel.disabled = !(has && st.edit.scatterGrid);
+        const scatterGridConfigLocked = !(has && st.edit.scatterGrid && !st.edit.scatterGridBusy);
+        if (el.scatterGridMode) el.scatterGridMode.disabled = scatterGridConfigLocked;
+        if (el.scatterGridAgg) el.scatterGridAgg.disabled = scatterGridConfigLocked;
+        if (el.scatterGridDx) el.scatterGridDx.disabled = scatterGridConfigLocked;
+        if (el.scatterGridWidth) el.scatterGridWidth.disabled = scatterGridConfigLocked;
+        if (el.scatterGridHeight) el.scatterGridHeight.disabled = scatterGridConfigLocked;
         if (el.nanPatchApply) el.nanPatchApply.disabled = !(has && st.edit.nanPatch && !st.edit.nanPatchBusy && st.edit.nanPatchResult);
         if (el.nanPatchCancel) el.nanPatchCancel.disabled = !(has && st.edit.nanPatch);
         const nanPatchConfigLocked = !(has && st.edit.nanPatch && !st.edit.nanPatchBusy && st.edit.nanPatchResult);
@@ -837,13 +874,17 @@ function createImageView(ids, options) {
         if (snap.x) {
             ds.x = snap.x.slice(0); ds.y = snap.y.slice(0); ds.z = snap.z.slice(0);
             ds.bounds = snap.bounds ? { ...snap.bounds } : snap.bounds;
+            delete ds.data;
         } else {
             ds.data = snap.data.slice(0);
+            delete ds.x; delete ds.y; delete ds.z; delete ds.bounds;
         }
         st.colorClip.lo = snap.colorClip.lo; st.colorClip.hi = snap.colorClip.hi;
         render(ds, el.colormap.value, true);
         const infoExtra = isScatter(ds) ? { pointCount: ds.pointCount } : null;
         renderInfo(ds.header, ds.width, ds.height, infoExtra);
+        syncPointSizeControls();
+        if (editing) updateEditButtons();
     }
     function resetHistory() {
         if (!editing) return;
@@ -870,6 +911,7 @@ function createImageView(ids, options) {
         if (st.edit.segLevel) cancelSegLevel();
         if (st.edit.segSkew) cancelSegSkew();
         if (st.edit.medianFilter) cancelMedianFilter();
+        if (st.edit.scatterGrid) cancelScatterGrid();
         if (st.edit.nanPatch) cancelNanPatch();
     }
     function doUndo() {
@@ -3191,6 +3233,555 @@ function createImageView(ids, options) {
         showToast(msg, 'info');
     }
 
+    /* ---- 散布點雲網格化 ---- */
+    function scatterGridAggLabel(agg) {
+        if (agg === 'median') return t('scatterGridAggMedian');
+        if (agg === 'max') return t('scatterGridAggMax');
+        return t('scatterGridAggMean');
+    }
+
+    function scatterGridStatusText(result) {
+        if (!result) return '';
+        const fillPct = result.width * result.height > 0
+            ? ((result.filledCount / (result.width * result.height)) * 100).toFixed(1)
+            : '0';
+        return t('scatterGridMeta', result.width, result.height, fillPct);
+    }
+
+    function snapshotScatterGridBase() {
+        const ds = st.dataset;
+        st.edit.scatterGridBase = {
+            x: ds.x.slice(0),
+            y: ds.y.slice(0),
+            z: ds.z.slice(0),
+            bounds: ds.bounds ? { ...ds.bounds } : null,
+            vmin: ds.vmin,
+            vmax: ds.vmax,
+            pointCount: ds.pointCount,
+        };
+    }
+
+    function scatterGridEnsureViews() {
+        if (!st.edit.scatterGridViews) {
+            st.edit.scatterGridViews = {
+                beforeImg: segLevelDefaultView(),
+                afterImg: segLevelDefaultView(),
+            };
+        }
+        return st.edit.scatterGridViews;
+    }
+
+    function scatterGridResetViews() {
+        st.edit.scatterGridViews = null;
+        st.edit.scatterGridPan = null;
+    }
+
+    function scatterGridSyncViewTransform(zoomKey, canvas, resetView) {
+        if (!zoomKey || !canvas) return;
+        const wrap = canvas.parentElement;
+        if (!wrap) return;
+        const views = scatterGridEnsureViews();
+        const view = views[zoomKey];
+        const { cw, ch } = segLevelContentSize(canvas);
+        const sizeChanged = view.contentW !== cw || view.contentH !== ch;
+        if (resetView || sizeChanged) segLevelFitView(view, wrap, cw, ch);
+        segLevelApplyViewTransform(canvas, view, wrap);
+    }
+
+    function scatterGridZoomAt(zoomKey, wrap, canvas, screenX, screenY, zoomFactor) {
+        const views = scatterGridEnsureViews();
+        const view = views[zoomKey];
+        let newScale = view.scale * zoomFactor;
+        if (newScale < view.minScale) newScale = view.minScale;
+        if (newScale > view.maxScale) newScale = view.maxScale;
+        const k = newScale / view.scale;
+        view.tx = screenX - (screenX - view.tx) * k;
+        view.ty = screenY - (screenY - view.ty) * k;
+        view.scale = newScale;
+        segLevelApplyViewTransform(canvas, view, wrap);
+    }
+
+    function setupScatterGridZoom() {
+        const targets = [
+            { wrap: el.scatterGridBefore?.parentElement, canvas: el.scatterGridBefore, key: 'beforeImg' },
+            { wrap: el.scatterGridAfter?.parentElement, canvas: el.scatterGridAfter, key: 'afterImg' },
+        ];
+        for (const tgt of targets) {
+            if (!tgt.wrap || !tgt.canvas || tgt.wrap.dataset.scatterGridZoomBound) continue;
+            tgt.wrap.dataset.scatterGridZoomBound = '1';
+            tgt.wrap.classList.add('seg-level-zoomable');
+            if (!tgt.wrap.querySelector('.seg-level-zoom-ind')) {
+                const ind = document.createElement('div');
+                ind.className = 'seg-level-zoom-ind';
+                ind.setAttribute('aria-hidden', 'true');
+                tgt.wrap.appendChild(ind);
+            }
+            tgt.wrap.addEventListener('wheel', (e) => {
+                if (!st.edit.scatterGrid || st.edit.scatterGridBusy) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const rect = tgt.wrap.getBoundingClientRect();
+                scatterGridZoomAt(tgt.key, tgt.wrap, tgt.canvas, e.clientX - rect.left, e.clientY - rect.top,
+                    e.deltaY < 0 ? 1.15 : 1 / 1.15);
+            }, { passive: false });
+            tgt.wrap.addEventListener('mousedown', (e) => {
+                if (!st.edit.scatterGrid || st.edit.scatterGridBusy || e.button !== 0) return;
+                const views = scatterGridEnsureViews();
+                const view = views[tgt.key];
+                if (!view) return;
+                e.preventDefault();
+                st.edit.scatterGridPan = {
+                    key: tgt.key, wrap: tgt.wrap, canvas: tgt.canvas,
+                    startX: e.clientX, startY: e.clientY,
+                    tx: view.tx, ty: view.ty,
+                };
+                tgt.wrap.classList.add('grabbing');
+            });
+            tgt.wrap.addEventListener('dblclick', (e) => {
+                if (!st.edit.scatterGrid || st.edit.scatterGridBusy) return;
+                e.preventDefault();
+                const views = scatterGridEnsureViews();
+                const view = views[tgt.key];
+                const { cw, ch } = segLevelContentSize(tgt.canvas);
+                segLevelFitView(view, tgt.wrap, cw, ch);
+                segLevelApplyViewTransform(tgt.canvas, view, tgt.wrap);
+            });
+        }
+        if (!st.edit.scatterGridPanBound) {
+            st.edit.scatterGridPanBound = true;
+            window.addEventListener('mousemove', (e) => {
+                const pan = st.edit.scatterGridPan;
+                if (!pan) return;
+                const views = scatterGridEnsureViews();
+                const view = views[pan.key];
+                view.tx = pan.tx + (e.clientX - pan.startX);
+                view.ty = pan.ty + (e.clientY - pan.startY);
+                segLevelApplyViewTransform(pan.canvas, view, pan.wrap);
+            });
+            window.addEventListener('mouseup', () => {
+                const pan = st.edit.scatterGridPan;
+                if (!pan) return;
+                pan.wrap.classList.remove('grabbing');
+                st.edit.scatterGridPan = null;
+            });
+        }
+    }
+
+    function renderScatterGridRasterCanvas(canvas, data, width, height, cmin, crange, cmap, zoomKey, resetView) {
+        if (!canvas) return;
+        const cw = Math.max(1, width);
+        const ch = Math.max(1, height);
+        canvas.width = cw;
+        canvas.height = ch;
+        canvas.style.width = cw + 'px';
+        canvas.style.height = ch + 'px';
+        const ctx = canvas.getContext('2d');
+        const img = ctx.createImageData(cw, ch);
+        const px = img.data;
+        const lut = buildColormapLut(cmap);
+        for (let y = 0; y < ch; y++) {
+            const rowBase = y * width;
+            for (let x = 0; x < cw; x++) {
+                const v = data[rowBase + x];
+                const po = (y * cw + x) * 4;
+                if (!Number.isFinite(v)) {
+                    px[po] = px[po + 1] = px[po + 2] = 0;
+                    px[po + 3] = 255;
+                    continue;
+                }
+                let tt = (v - cmin) / crange;
+                if (tt < 0) tt = 0; else if (tt > 1) tt = 1;
+                const lo = ((tt * 255) | 0) * 3;
+                px[po] = lut[lo]; px[po + 1] = lut[lo + 1]; px[po + 2] = lut[lo + 2]; px[po + 3] = 255;
+            }
+        }
+        ctx.putImageData(img, 0, 0);
+        scatterGridSyncViewTransform(zoomKey, canvas, resetView);
+    }
+
+    function renderScatterGridBeforeCanvas(canvas, base, cmin, crange, cmap, zoomKey, resetView) {
+        if (!canvas || !base) return;
+        const b = base.bounds;
+        const spanX = (b.xmax - b.xmin) || 1;
+        const spanY = (b.ymax - b.ymin) || 1;
+        const maxSide = 1024;
+        let cw, ch;
+        if (spanX >= spanY) {
+            cw = maxSide;
+            ch = Math.max(64, Math.round(maxSide * spanY / spanX));
+        } else {
+            ch = maxSide;
+            cw = Math.max(64, Math.round(maxSide * spanX / spanY));
+        }
+        canvas.width = cw;
+        canvas.height = ch;
+        canvas.style.width = cw + 'px';
+        canvas.style.height = ch + 'px';
+        const ctx = canvas.getContext('2d');
+        const img = ctx.createImageData(cw, ch);
+        const px = img.data;
+        for (let i = 0; i < px.length; i += 4) {
+            px[i] = px[i + 1] = px[i + 2] = 0;
+            px[i + 3] = 255;
+        }
+        const lut = buildColormapLut(cmap);
+        const { x, y, z } = base;
+        const n = z.length;
+        const R = Math.max(0.75, Math.min(3, Math.min(cw, ch) / 400));
+        for (let i = 0; i < n; i++) {
+            const sx = ((x[i] - b.xmin) / spanX) * (cw - 1);
+            const sy = ((b.ymax - y[i]) / spanY) * (ch - 1);
+            let tt = (z[i] - cmin) / crange;
+            if (tt < 0) tt = 0; else if (tt > 1) tt = 1;
+            const lo = ((tt * 255) | 0) * 3;
+            const cr = lut[lo], cg = lut[lo + 1], cb = lut[lo + 2];
+            if (typeof stampDisk === 'function') stampDisk(px, cw, ch, sx, sy, R, cr, cg, cb);
+            else if (typeof stampPixel === 'function') stampPixel(px, cw, ch, Math.round(sx), Math.round(sy), cr, cg, cb);
+            else {
+                const ix = Math.round(sx), iy = Math.round(sy);
+                if (ix < 0 || iy < 0 || ix >= cw || iy >= ch) continue;
+                const po = (iy * cw + ix) * 4;
+                px[po] = cr; px[po + 1] = cg; px[po + 2] = cb; px[po + 3] = 255;
+            }
+        }
+        ctx.putImageData(img, 0, 0);
+        scatterGridSyncViewTransform(zoomKey, canvas, resetView);
+    }
+
+    function readScatterGridOptionsFromUI() {
+        const modeRaw = el.scatterGridMode?.value || 'auto';
+        const mode = (modeRaw === 'spacing' || modeRaw === 'size') ? modeRaw : 'auto';
+        const aggregate = typeof normalizeScatterGridAggregate === 'function'
+            ? normalizeScatterGridAggregate(el.scatterGridAgg?.value)
+            : (el.scatterGridAgg?.value || 'mean');
+        const opts = { mode, aggregate };
+        if (mode === 'spacing') {
+            const dx = parseFloat(el.scatterGridDx?.value);
+            if (!(dx > 0) || !Number.isFinite(dx)) return { ok: false, reason: 'spacing' };
+            opts.dx = dx;
+            opts.dy = dx;
+        } else if (mode === 'size') {
+            const width = parseInt(el.scatterGridWidth?.value, 10);
+            const height = parseInt(el.scatterGridHeight?.value, 10);
+            if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) {
+                return { ok: false, reason: 'size' };
+            }
+            opts.width = width;
+            opts.height = height;
+        }
+        return { ok: true, options: opts };
+    }
+
+    function syncScatterGridModeFields() {
+        const mode = el.scatterGridMode?.value || 'auto';
+        if (el.scatterGridSpacingWrap) el.scatterGridSpacingWrap.hidden = mode !== 'spacing';
+        if (el.scatterGridSizeWrap) el.scatterGridSizeWrap.hidden = mode !== 'size';
+    }
+
+    function seedScatterGridInputsFromBase() {
+        const base = st.edit.scatterGridBase;
+        if (!base) return;
+        let spacing = 1;
+        if (typeof estimateScatterPointSpacing === 'function') {
+            spacing = estimateScatterPointSpacing(base.x, base.y, base.z.length);
+        }
+        if (!(spacing > 0) || !Number.isFinite(spacing)) spacing = 1;
+        if (el.scatterGridDx && !el.scatterGridDx.value) {
+            const nice = spacing >= 1 ? spacing.toFixed(3) : spacing.toPrecision(4);
+            el.scatterGridDx.value = nice;
+        }
+        // 寬高預填留給首次預覽結果同步，避免「自動」實際為索引網格（如 584）
+        // 卻顯示均勻分箱估計（如 967）造成誤解
+    }
+
+    function syncScatterGridSizeInputsFromResult(result) {
+        if (!result) return;
+        if (el.scatterGridWidth) el.scatterGridWidth.value = String(result.width);
+        if (el.scatterGridHeight) el.scatterGridHeight.value = String(result.height);
+        if (result.dx > 0 && el.scatterGridDx && (el.scatterGridMode?.value === 'auto' || !el.scatterGridDx.value)) {
+            const nice = result.dx >= 1 ? result.dx.toFixed(3) : result.dx.toPrecision(4);
+            // 僅在自動模式時用結果回寫格距提示，不覆蓋使用者在格距模式的輸入
+            if (el.scatterGridMode?.value === 'auto') el.scatterGridDx.value = nice;
+        }
+    }
+
+    function setScatterGridConfigUI(visible) {
+        if (el.scatterGridConfig) el.scatterGridConfig.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+
+    function setScatterGridBusyUI(busy, progress) {
+        st.edit.scatterGridBusy = !!busy;
+        if (el.scatterGridCompare) el.scatterGridCompare.classList.toggle('is-tune-busy', !!busy);
+        if (el.scatterGridBusy) {
+            el.scatterGridBusy.classList.toggle('show', !!busy);
+            el.scatterGridBusy.setAttribute('aria-hidden', busy ? 'false' : 'true');
+        }
+        if (el.scatterGridBusyText && busy) {
+            const pct = Math.round((progress || 0) * 100);
+            el.scatterGridBusyText.textContent = pct > 0 && pct < 100
+                ? t('scatterGridProgress', pct)
+                : t('scatterGridUpdating');
+        }
+        updateEditButtons();
+    }
+
+    function updateScatterGridMeta(result) {
+        if (!el.scatterGridMeta) return;
+        el.scatterGridMeta.textContent = result ? scatterGridStatusText(result) : '';
+    }
+
+    function renderScatterGridCompare(opts) {
+        const resetView = !!(opts && opts.resetView);
+        const base = st.edit.scatterGridBase;
+        const result = st.edit.scatterGridResult;
+        if (!base || !result) return;
+        const cmap = el.colormap.value;
+        const beforeDr = segLevelDisplayRange(base.vmin, base.vmax, st.colorClip);
+        const afterStats = computeRange(result.data);
+        const afterDr = segLevelDisplayRange(afterStats.vmin, afterStats.vmax, st.colorClip);
+        renderScatterGridBeforeCanvas(
+            el.scatterGridBefore, base, beforeDr.cmin, beforeDr.crange, cmap, 'beforeImg', resetView,
+        );
+        renderScatterGridRasterCanvas(
+            el.scatterGridAfter, result.data, result.width, result.height,
+            afterDr.cmin, afterDr.crange, cmap, 'afterImg', resetView,
+        );
+        renderSegLevelPaneColorbar(
+            el.scatterGridBeforeCb, el.scatterGridBeforeCbLo, el.scatterGridBeforeCbHi,
+            base.vmin, base.vmax, cmap, st.colorClip,
+        );
+        renderSegLevelPaneColorbar(
+            el.scatterGridAfterCb, el.scatterGridAfterCbLo, el.scatterGridAfterCbHi,
+            afterStats.vmin, afterStats.vmax, cmap, st.colorClip,
+        );
+        updateScatterGridMeta(result);
+        syncScatterGridSizeInputsFromResult(result);
+    }
+
+    function renderScatterGridBeforeOnly() {
+        const base = st.edit.scatterGridBase;
+        if (!base) return;
+        const cmap = el.colormap.value;
+        const dr = segLevelDisplayRange(base.vmin, base.vmax, st.colorClip);
+        renderScatterGridBeforeCanvas(
+            el.scatterGridBefore, base, dr.cmin, dr.crange, cmap, 'beforeImg', true,
+        );
+        renderSegLevelPaneColorbar(
+            el.scatterGridBeforeCb, el.scatterGridBeforeCbLo, el.scatterGridBeforeCbHi,
+            base.vmin, base.vmax, cmap, st.colorClip,
+        );
+        if (el.scatterGridAfter) {
+            const c = el.scatterGridAfter;
+            const ctx = c.getContext('2d');
+            if (ctx) ctx.clearRect(0, 0, c.width, c.height);
+        }
+        updateScatterGridMeta(null);
+    }
+
+    async function recomputeScatterGridPreview(options) {
+        options = options || {};
+        const base = st.edit.scatterGridBase;
+        if (!st.edit.scatterGrid || !base) return;
+
+        const parsed = readScatterGridOptionsFromUI();
+        if (!parsed.ok) {
+            if (parsed.reason === 'spacing') showToast(t('scatterGridInvalidSpacing'), 'info');
+            else if (parsed.reason === 'size') showToast(t('scatterGridInvalidSize'), 'info');
+            return;
+        }
+        const opts = parsed.options;
+        const prev = st.edit.scatterGridResult;
+        if (prev && !options.force
+            && prev.mode === opts.mode
+            && prev.aggregate === opts.aggregate
+            && prev._optDx === (opts.dx || 0)
+            && prev._optWidth === (opts.width || 0)
+            && prev._optHeight === (opts.height || 0)) {
+            renderScatterGridCompare({ resetView: !!options.resetView });
+            return;
+        }
+
+        const runId = ++st.edit.scatterGridRunId;
+        setScatterGridBusyUI(true, 0);
+        await segLevelYield();
+        if (runId !== st.edit.scatterGridRunId) {
+            setScatterGridBusyUI(false);
+            return;
+        }
+
+        try {
+            let result = null;
+            if (typeof applyScatterGridAsync === 'function') {
+                result = await applyScatterGridAsync(
+                    base.x, base.y, base.z, base.bounds, opts,
+                    () => runId !== st.edit.scatterGridRunId,
+                    (p) => {
+                        if (runId === st.edit.scatterGridRunId) setScatterGridBusyUI(true, p);
+                    },
+                );
+            } else if (typeof applyScatterGrid === 'function') {
+                result = applyScatterGrid(base.x, base.y, base.z, base.bounds, opts);
+            } else {
+                return;
+            }
+            if (!result || runId !== st.edit.scatterGridRunId) return;
+
+            const maxCells = typeof SCATTER_GRID_MAX_CELLS === 'number' ? SCATTER_GRID_MAX_CELLS : (8 * 1024 * 1024);
+            if (result.width * result.height > maxCells) {
+                showToast(t('scatterGridTooLarge', result.width, result.height), 'error');
+                return;
+            }
+
+            result._optDx = opts.dx || 0;
+            result._optWidth = opts.width || 0;
+            result._optHeight = opts.height || 0;
+            st.edit.scatterGridResult = result;
+            renderScatterGridCompare({ resetView: !!options.resetView });
+            el.status.textContent = scatterGridStatusText(result);
+        } finally {
+            if (runId === st.edit.scatterGridRunId) setScatterGridBusyUI(false);
+        }
+    }
+
+    function enterScatterGridUI(active) {
+        if (el.viewer) el.viewer.classList.toggle('scatter-grid-active', active);
+        if (el.scatterGridPanel) el.scatterGridPanel.setAttribute('aria-hidden', active ? 'false' : 'true');
+        if (el.scatterGrid) el.scatterGrid.classList.toggle('tool-active', active);
+        if (active && !st.edit.scatterGridBusy && st.edit.scatterGridResult) {
+            requestAnimationFrame(() => renderScatterGridCompare({ resetView: true }));
+        }
+    }
+
+    function exitScatterGridMode() {
+        st.edit.scatterGrid = false;
+        st.edit.scatterGridBusy = false;
+        st.edit.scatterGridRunId++;
+        st.edit.scatterGridBase = null;
+        st.edit.scatterGridResult = null;
+        scatterGridResetViews();
+        setScatterGridBusyUI(false);
+        setScatterGridConfigUI(false);
+        enterScatterGridUI(false);
+        updateEditButtons();
+    }
+
+    function cancelScatterGrid() {
+        if (!st.edit.scatterGrid) return;
+        st.edit.scatterGridRunId++;
+        exitScatterGridMode();
+    }
+
+    async function startScatterGridMode() {
+        if (!editing || !st.dataset) { showToast(t('editNoData'), 'info'); return; }
+        if (!isScatter(st.dataset)) {
+            showToast(t('scatterGridNeedScatter'), 'info');
+            updateEditButtons();
+            return;
+        }
+        if (st.edit.scatterGrid) {
+            if (st.edit.scatterGridBusy) {
+                st.edit.scatterGridRunId++;
+                exitScatterGridMode();
+            } else {
+                cancelScatterGrid();
+            }
+            return;
+        }
+
+        endTransientModes();
+
+        snapshotScatterGridBase();
+        scatterGridResetViews();
+        st.edit.scatterGrid = true;
+        st.edit.scatterGridResult = null;
+        if (el.scatterGridMode) el.scatterGridMode.value = 'auto';
+        if (el.scatterGridAgg) el.scatterGridAgg.value = 'mean';
+        if (el.scatterGridDx) el.scatterGridDx.value = '';
+        if (el.scatterGridWidth) el.scatterGridWidth.value = '';
+        if (el.scatterGridHeight) el.scatterGridHeight.value = '';
+        seedScatterGridInputsFromBase();
+        syncScatterGridModeFields();
+
+        enterScatterGridUI(true);
+        setScatterGridConfigUI(true);
+        renderScatterGridBeforeOnly();
+        updateEditButtons();
+        el.status.textContent = t('scatterGridProcessing');
+
+        await recomputeScatterGridPreview({ resetView: true, force: true });
+    }
+
+    function onScatterGridConfigChange() {
+        syncScatterGridModeFields();
+        if (!st.edit.scatterGrid || st.edit.scatterGridBusy) return;
+        recomputeScatterGridPreview({ resetView: false, force: true });
+    }
+
+    function applyScatterGridToDataset(ds, result) {
+        ds.type = 'grid';
+        ds.data = result.data.slice();
+        ds.width = result.width;
+        ds.height = result.height;
+        ds.pointCount = result.filledCount;
+        ds.vmin = undefined;
+        ds.vmax = undefined;
+        delete ds.x;
+        delete ds.y;
+        delete ds.z;
+        delete ds.bounds;
+        const hdr = ds.header ? { ...ds.header } : {};
+        hdr.xlength = String(result.xlength);
+        hdr.ylength = String(result.ylength);
+        hdr['x-length'] = String(result.xlength);
+        hdr['y-length'] = String(result.ylength);
+        hdr.xpixels = String(result.width);
+        hdr.ypixels = String(result.height);
+        hdr.WIDTH = String(result.width);
+        hdr.HEIGHT = String(result.height);
+        // 與一般高度圖一致：提供可雙擊編輯的單位欄（既有值保留）
+        const hasX = hdr.xunit || hdr['x-unit'];
+        const hasY = hdr.yunit || hdr['y-unit'];
+        const hasZ = hdr.zunit || hdr['z-unit'];
+        if (!hasX) hdr.xunit = 'mm';
+        if (!hasY) hdr.yunit = 'mm';
+        if (!hasZ) hdr.zunit = 'um';
+        hdr[t('infoPcdView')] = t('infoPcdGridded');
+        hdr[t('infoPcdPoints')] = String(result.filledCount);
+        if (typeof t === 'function') {
+            hdr[t('infoPcdGridPrec')] = String(result.dx);
+        }
+        ds.header = hdr;
+    }
+
+    function applyScatterGridEdit() {
+        if (!st.edit.scatterGrid || st.edit.scatterGridBusy || !st.edit.scatterGridResult || !st.dataset) return;
+        const result = st.edit.scatterGridResult;
+        applyScatterGridToDataset(st.dataset, result);
+        const step = {
+            type: 'scatterGrid',
+            mode: result.mode,
+            aggregate: result.aggregate,
+            width: result.width,
+            height: result.height,
+            dx: result.dx,
+            dy: result.dy,
+        };
+        if (result.mode === 'spacing') { step.dx = result._optDx || result.dx; step.dy = step.dx; }
+        if (result.mode === 'size') {
+            step.width = result._optWidth || result.width;
+            step.height = result._optHeight || result.height;
+        }
+        exitScatterGridMode();
+        refreshAfterEdit(true);
+        pushHistory();
+        setLastEditStep(step);
+        syncPointSizeControls();
+        updateEditButtons();
+        const msg = t('scatterGridDone', result.width, result.height, scatterGridAggLabel(result.aggregate));
+        el.status.textContent = msg;
+        showToast(msg, 'info');
+    }
+
     /* ---- 區域框選（裁切 / NaN 修補 ROI 共用）---- */
     function normSel(s) {
         return {
@@ -3880,6 +4471,7 @@ function createImageView(ids, options) {
         if (st.edit.segLevel) cancelSegLevel();
         if (st.edit.segSkew) cancelSegSkew();
         if (st.edit.medianFilter) cancelMedianFilter();
+        if (st.edit.scatterGrid) cancelScatterGrid();
         if (st.edit.nanPatch) cancelNanPatch();
         return cloneDatasetForTransfer(st.dataset);
     }
@@ -3984,6 +4576,7 @@ function createImageView(ids, options) {
         if (st.edit.segLevel) cancelSegLevel();
         if (st.edit.segSkew) cancelSegSkew();
         if (st.edit.medianFilter) cancelMedianFilter();
+        if (st.edit.scatterGrid) cancelScatterGrid();
         if (st.edit.nanPatch) cancelNanPatch();
         // 點擊已啟用的模式 → 關閉
         if (st.edit.cropMode === mode) { exitCrop(); return; }
@@ -4280,6 +4873,7 @@ function createImageView(ids, options) {
             if (st.edit.cropMode) exitCrop();
             if (st.edit.segLevel) cancelSegLevel();
             if (st.edit.medianFilter) cancelMedianFilter();
+            if (st.edit.scatterGrid) cancelScatterGrid();
             if (st.edit.nanPatch) cancelNanPatch();
             st.edit.denoise = true;
             st.edit.histLo = 0; st.edit.histHi = 1;
@@ -4385,6 +4979,7 @@ function createImageView(ids, options) {
         if (st.edit.segLevel) exitSegLevelMode();
         if (st.edit.segSkew) exitSegSkewMode();
         if (st.edit.medianFilter) exitMedianFilterMode();
+        if (st.edit.scatterGrid) exitScatterGridMode();
         if (st.edit.nanPatch) exitNanPatchMode();
         resetHistory();          // 以新載入的資料作為歷史起點
         updateEditButtons();
@@ -4429,6 +5024,30 @@ function createImageView(ids, options) {
         if (el.medianFilterCancel) el.medianFilterCancel.addEventListener('click', cancelMedianFilter);
         if (el.medianFilterKernel) el.medianFilterKernel.addEventListener('change', onMedianFilterKernelChange);
         setupMedianFilterZoom();
+        if (el.scatterGrid) el.scatterGrid.addEventListener('click', startScatterGridMode);
+        if (el.scatterGridApply) el.scatterGridApply.addEventListener('click', applyScatterGridEdit);
+        if (el.scatterGridCancel) el.scatterGridCancel.addEventListener('click', cancelScatterGrid);
+        if (el.scatterGridMode) el.scatterGridMode.addEventListener('change', onScatterGridConfigChange);
+        if (el.scatterGridAgg) el.scatterGridAgg.addEventListener('change', onScatterGridConfigChange);
+        if (el.scatterGridDx) {
+            el.scatterGridDx.addEventListener('change', onScatterGridConfigChange);
+            el.scatterGridDx.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); onScatterGridConfigChange(); }
+            });
+        }
+        if (el.scatterGridWidth) {
+            el.scatterGridWidth.addEventListener('change', onScatterGridConfigChange);
+            el.scatterGridWidth.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); onScatterGridConfigChange(); }
+            });
+        }
+        if (el.scatterGridHeight) {
+            el.scatterGridHeight.addEventListener('change', onScatterGridConfigChange);
+            el.scatterGridHeight.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); onScatterGridConfigChange(); }
+            });
+        }
+        setupScatterGridZoom();
         if (el.nanPatch) el.nanPatch.addEventListener('click', startNanPatchMode);
         if (el.nanPatchApply) el.nanPatchApply.addEventListener('click', applyNanPatchEdit);
         if (el.nanPatchCancel) el.nanPatchCancel.addEventListener('click', cancelNanPatch);
@@ -4464,6 +5083,7 @@ function createImageView(ids, options) {
             if (st.edit.segLevel) renderSegLevelCompare({ resetView: true });
             if (st.edit.segSkew) renderSegSkewCompare({ resetView: true });
             if (st.edit.medianFilter) renderMedianFilterCompare({ resetView: true });
+            if (st.edit.scatterGrid) renderScatterGridCompare({ resetView: true });
             if (st.edit.nanPatch) renderNanPatchCompare({ resetView: true });
         });
         updateEditButtons();
@@ -4492,6 +5112,7 @@ function createImageView(ids, options) {
                 if (st.edit.segLevel) renderSegLevelCompare({ resetView: true });
                 if (st.edit.segSkew) renderSegSkewCompare({ resetView: true });
                 if (st.edit.medianFilter) renderMedianFilterCompare({ resetView: true });
+                if (st.edit.scatterGrid) renderScatterGridCompare({ resetView: true });
                 if (st.edit.nanPatch) renderNanPatchCompare({ resetView: true });
             }
         },
@@ -4529,7 +5150,9 @@ const editorView = createImageView({
     pointSizeAdjust: 'edPointSizeAdjust', pointSizeSlider: 'edPointSizeSlider', pointSizeVal: 'edPointSizeVal',
     cropRect: 'edCropRect', cropCircle: 'edCropCircle', cropApply: 'edCropApply',
     cropCancel: 'edCropCancel', cropOverlay: 'edCropOverlay', cropShape: 'edCropShape',
-    cropHint: 'edCropHint', denoise: 'edDenoise', medianFilter: 'edMedianFilter', nanPatch: 'edNanPatch',
+    cropHint: 'edCropHint', denoise: 'edDenoise', scatterGrid: 'edScatterGrid',
+    scatterGridTip: 'edScatterGridTip',
+    medianFilter: 'edMedianFilter', nanPatch: 'edNanPatch',
     segLevel: 'edSegLevel',
     segLevelPanel: 'edSegLevelPanel', segLevelConfig: 'edSegLevelConfig',
     segLevelDir: 'edSegLevelDir', segLevelCount: 'edSegLevelCount',
@@ -4574,6 +5197,20 @@ const editorView = createImageView({
     medianFilterAfterCb: 'edMedianFilterAfterCb', medianFilterAfterCbLo: 'edMedianFilterAfterCbLo',
     medianFilterAfterCbHi: 'edMedianFilterAfterCbHi',
     medianFilterApply: 'edMedianFilterApply', medianFilterCancel: 'edMedianFilterCancel',
+    scatterGridPanel: 'edScatterGridPanel', scatterGridConfig: 'edScatterGridConfig',
+    scatterGridMode: 'edScatterGridMode', scatterGridAgg: 'edScatterGridAgg',
+    scatterGridDx: 'edScatterGridDx', scatterGridWidth: 'edScatterGridWidth',
+    scatterGridHeight: 'edScatterGridHeight',
+    scatterGridSpacingWrap: 'edScatterGridSpacingWrap', scatterGridSizeWrap: 'edScatterGridSizeWrap',
+    scatterGridMeta: 'edScatterGridMeta',
+    scatterGridCompare: 'edScatterGridCompare', scatterGridBusy: 'edScatterGridBusy',
+    scatterGridBusyText: 'edScatterGridBusyText',
+    scatterGridBefore: 'edScatterGridBefore', scatterGridAfter: 'edScatterGridAfter',
+    scatterGridBeforeCb: 'edScatterGridBeforeCb', scatterGridBeforeCbLo: 'edScatterGridBeforeCbLo',
+    scatterGridBeforeCbHi: 'edScatterGridBeforeCbHi',
+    scatterGridAfterCb: 'edScatterGridAfterCb', scatterGridAfterCbLo: 'edScatterGridAfterCbLo',
+    scatterGridAfterCbHi: 'edScatterGridAfterCbHi',
+    scatterGridApply: 'edScatterGridApply', scatterGridCancel: 'edScatterGridCancel',
     nanPatchPanel: 'edNanPatchPanel', nanPatchConfig: 'edNanPatchConfig',
     nanPatchKernel: 'edNanPatchKernel',
     nanPatchBeforeWrap: 'edNanPatchBeforeWrap',
