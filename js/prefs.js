@@ -17,6 +17,7 @@ const PREFS_DEFAULTS = {
     viewMode: '2d',
     showMinMax: false,
     profileChartStyle: 'line',
+    profileDistUnit: '',
     anNavCollapsed: false,
 };
 
@@ -86,7 +87,7 @@ function applyLanguage(lang) {
         const key = el.getAttribute('data-i18n-aria');
         if (key) el.setAttribute('aria-label', t(key));
     });
-    document.querySelectorAll('#viewerCursorToolbar button[data-i18n-title]').forEach(el => {
+    document.querySelectorAll('#cursorToggle button[data-i18n-title], #viewerCursorToolbar button[data-i18n-title]').forEach(el => {
         el.setAttribute('aria-label', el.title);
     });
     document.querySelectorAll('#profilePanel button[data-i18n-title], #measurePanel button[data-i18n-title]').forEach(el => {
@@ -101,18 +102,6 @@ function applyLanguage(lang) {
     document.querySelectorAll('#langToggle button').forEach(b => {
         b.classList.toggle('active', b.getAttribute('data-lang') === lang);
     });
-
-    // 鼠標模式切換按鈕的 title
-    const cursorPanBtn = document.querySelector('#cursorToggle button[data-cursor="pan"]');
-    const cursorInspectBtn = document.querySelector('#cursorToggle button[data-cursor="inspect"]');
-    const cursorProfileBtn = document.querySelector('#cursorToggle button[data-cursor="profile"]');
-    const cursorMeasureBtn = document.querySelector('#cursorToggle button[data-cursor="measure"]');
-    const cursorAreaBtn = document.querySelector('#cursorToggle button[data-cursor="area"]');
-    if (cursorPanBtn) cursorPanBtn.title = t('cursorPanTitle');
-    if (cursorInspectBtn) cursorInspectBtn.title = t('cursorInspectTitle');
-    if (cursorProfileBtn) cursorProfileBtn.title = t('cursorProfileTitle');
-    if (cursorMeasureBtn) cursorMeasureBtn.title = t('cursorMeasureTitle');
-    if (cursorAreaBtn) cursorAreaBtn.title = t('cursorAreaTitle');
     const btnSendMenu = document.getElementById('btnSendMenu');
     if (btnSendMenu) btnSendMenu.title = t('sendMenuTitle');
     const edSendMenu = document.getElementById('edSendMenu');

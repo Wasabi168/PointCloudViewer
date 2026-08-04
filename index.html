@@ -91,12 +91,52 @@
 
         <!-- 群組：工具 -->
         <div class="ctrl-group" id="viewerToolsGroup" data-toolbar-priority="45">
-            <div class="cursor-toggle" id="cursorToggle">
-                <button type="button" data-cursor="pan" class="active" data-i18n="cursorPan" title="拖曳模式">拖曳</button>
-                <button type="button" data-cursor="inspect" data-i18n="cursorInspect" title="數值顯示模式">數值</button>
-                <button type="button" data-cursor="profile" data-i18n="cursorProfile" title="剖面模式">剖面</button>
-                <button type="button" data-cursor="measure" data-i18n="cursorMeasure" title="兩點距離測量">距離</button>
-                <button type="button" data-cursor="area" data-i18n="cursorArea" title="區域統計">區域</button>
+            <div class="cursor-toggle" id="cursorToggle" role="toolbar" data-i18n-aria="cursorToolbarLabel" aria-label="檢視工具">
+                <button type="button" data-cursor="pan" class="active" data-i18n-title="cursorPanTitle" data-i18n-aria="cursorPanTitle" title="拖曳模式：可平移圖片" aria-label="拖曳模式：可平移圖片">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M7 11V7.5a2 2 0 1 1 4 0V11"/>
+                        <path d="M11 11V6.5a2 2 0 1 1 4 0V11"/>
+                        <path d="M15 11V8a2 2 0 1 1 4 0v5a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-2"/>
+                    </svg>
+                </button>
+                <button type="button" data-cursor="inspect" data-i18n-title="cursorInspectTitle" data-i18n-aria="cursorInspectTitle" title="數值模式：顯示鼠標位置的像素數值" aria-label="數值模式：顯示鼠標位置的像素數值">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="2.5"/>
+                        <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
+                    </svg>
+                </button>
+                <button type="button" data-cursor="profile" data-i18n-title="cursorProfileTitle" data-i18n-aria="cursorProfileTitle" title="剖面模式：拉一條剖面線，可拖曳端點或線段調整位置" aria-label="剖面模式：拉一條剖面線，可拖曳端點或線段調整位置">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 18h18"/>
+                        <path d="M4 16 8 11 12 14 16 7 20 10"/>
+                        <path d="M12 4v14" stroke-dasharray="2.5 2.5"/>
+                    </svg>
+                </button>
+                <button type="button" data-cursor="measure" data-i18n-title="cursorMeasureTitle" data-i18n-aria="cursorMeasureTitle" title="距離測量：拖曳兩點量測距離，可拖曳端點調整" aria-label="距離測量：拖曳兩點量測距離，可拖曳端點調整">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <circle cx="6" cy="18" r="2" fill="currentColor" stroke="none"/>
+                        <circle cx="18" cy="6" r="2" fill="currentColor" stroke="none"/>
+                        <path d="M8 16 16 8"/>
+                        <path d="M10 14l2-2M13 11l2-2"/>
+                    </svg>
+                </button>
+                <button type="button" data-cursor="area" data-i18n-title="cursorAreaTitle" data-i18n-aria="cursorAreaTitle" title="區域統計：拖曳矩形框選區域，顯示數值統計" aria-label="區域統計：拖曳矩形框選區域，顯示數值統計">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <rect x="5" y="6" width="14" height="13" rx="1" stroke-dasharray="4 3"/>
+                        <path d="M5 6h14M5 19h14M5 6v13M19 6v13" opacity="0.45"/>
+                    </svg>
+                </button>
+                <span class="cursor-toggle-sep" aria-hidden="true"></span>
+                <button type="button" id="cursorClearMarks" class="viewer-clear-marks-btn" data-i18n-title="cursorClearMarksTitle" data-i18n-aria="cursorClearMarksTitle" title="清除圖上所有量測標記" aria-label="清除圖上所有量測標記">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M17 3.5 10.8 13.2"/>
+                        <path d="M7.6 11.8 14.4 16.1"/>
+                        <path d="M8.4 12.3 4.2 19"/>
+                        <path d="M9.8 13.2 6.4 20.2"/>
+                        <path d="M11.2 14.1 8.8 20.8"/>
+                        <path d="M12.6 15 11.4 21"/>
+                    </svg>
+                </button>
             </div>
             <button type="button" id="btnMinMax" data-i18n="btnMinMax" data-i18n-title="btnMinMaxTitle" aria-pressed="false">Max/Min</button>
         </div>
@@ -201,6 +241,17 @@
                     <path d="M5 6h14M5 19h14M5 6v13M19 6v13" opacity="0.45"/>
                 </svg>
             </button>
+            <span class="viewer-cursor-toolbar-sep" aria-hidden="true"></span>
+            <button type="button" id="viewerClearMarks" class="viewer-clear-marks-btn" data-i18n-title="cursorClearMarksTitle" data-i18n-aria="cursorClearMarksTitle" title="清除圖上所有量測標記" aria-label="清除圖上所有量測標記">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M17 3.5 10.8 13.2"/>
+                    <path d="M7.6 11.8 14.4 16.1"/>
+                    <path d="M8.4 12.3 4.2 19"/>
+                    <path d="M9.8 13.2 6.4 20.2"/>
+                    <path d="M11.2 14.1 8.8 20.8"/>
+                    <path d="M12.6 15 11.4 21"/>
+                </svg>
+            </button>
         </div>
 
         <div class="profile-panel" id="profilePanel">
@@ -231,11 +282,21 @@
                         </button>
                     </div>
                 </div>
-                <button type="button" class="profile-icon-btn profile-measure-btn" id="profileMeasureBtn" style="display:none;" data-i18n-title="profileMeasureTitle" title="剖面測量：在圖上點選兩點量測距離與階高">
+                <button type="button" class="profile-icon-btn profile-measure-btn" id="profileMeasureBtn" style="display:none;" data-i18n-title="profileMeasureTitle" title="剖面測量：按一下後點選兩點量測一組（最多 5 組）">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <circle cx="6" cy="17" r="2" fill="currentColor" stroke="none"/>
                         <circle cx="18" cy="7" r="2" fill="currentColor" stroke="none"/>
                         <path d="M8.5 15.5 L15.5 8.5"/>
+                    </svg>
+                </button>
+                <button type="button" class="profile-icon-btn profile-measure-clear-btn" id="profileMeasureClearBtn" style="display:none;" data-i18n-title="profileMeasureClearTitle" title="清除剖面測量" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M17 3.5 10.8 13.2"/>
+                        <path d="M7.6 11.8 14.4 16.1"/>
+                        <path d="M8.4 12.3 4.2 19"/>
+                        <path d="M9.8 13.2 6.4 20.2"/>
+                        <path d="M11.2 14.1 8.8 20.8"/>
+                        <path d="M12.6 15 11.4 21"/>
                     </svg>
                 </button>
                 <button type="button" class="profile-clear profile-icon-btn" id="profileClear" data-i18n-title="profileClearTitle" title="清除剖面">
@@ -1092,8 +1153,7 @@
                                 <circle id="ovLineH0A" class="an-line-handle" cx="0" cy="0" r="6"/>
                                 <circle id="ovLineH1A" class="an-line-handle" cx="0" cy="0" r="6"/>
                                 <circle id="ovLineHoverA" class="ov-line-hover" cx="0" cy="0" r="5" visibility="hidden"/>
-                                <circle id="ovLineM0A" class="ov-line-measure" data-m="0" cx="0" cy="0" r="5" visibility="hidden"/>
-                                <circle id="ovLineM1A" class="ov-line-measure" data-m="1" cx="0" cy="0" r="5" visibility="hidden"/>
+                                <g id="ovLineMeasuresA"></g>
                             </svg>
                             <div class="crop-hint" id="ovLineHintA" data-i18n="anLineHint">剖面模式：按住左鍵拖曳一條線；可拖曳端點或線段調整 · 中鍵拖曳平移</div>
                         </div>
@@ -1128,11 +1188,21 @@
                                     </button>
                                 </div>
                             </div>
-                            <button type="button" class="profile-icon-btn profile-measure-btn" id="ovMeasureBtnA" data-i18n-title="profileMeasureTitle" title="剖面測量：在圖上點選兩點量測距離與階高">
+                            <button type="button" class="profile-icon-btn profile-measure-btn" id="ovMeasureBtnA" data-i18n-title="profileMeasureTitle" title="剖面測量：按一下後點選兩點量測一組（最多 5 組）">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                     <circle cx="6" cy="17" r="2" fill="currentColor" stroke="none"/>
                                     <circle cx="18" cy="7" r="2" fill="currentColor" stroke="none"/>
                                     <path d="M8.5 15.5 L15.5 8.5"/>
+                                </svg>
+                            </button>
+                            <button type="button" class="profile-icon-btn profile-measure-clear-btn" id="ovMeasureClearA" data-i18n-title="profileMeasureClearTitle" title="清除剖面測量" disabled>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M17 3.5 10.8 13.2"/>
+                                    <path d="M7.6 11.8 14.4 16.1"/>
+                                    <path d="M8.4 12.3 4.2 19"/>
+                                    <path d="M9.8 13.2 6.4 20.2"/>
+                                    <path d="M11.2 14.1 8.8 20.8"/>
+                                    <path d="M12.6 15 11.4 21"/>
                                 </svg>
                             </button>
                             <button type="button" class="profile-clear profile-icon-btn" id="ovProfileClearA" data-i18n-title="profileClearTitle" title="清除剖面" disabled>
@@ -1179,8 +1249,7 @@
                                 <circle id="ovLineH0B" class="an-line-handle" cx="0" cy="0" r="6"/>
                                 <circle id="ovLineH1B" class="an-line-handle" cx="0" cy="0" r="6"/>
                                 <circle id="ovLineHoverB" class="ov-line-hover" cx="0" cy="0" r="5" visibility="hidden"/>
-                                <circle id="ovLineM0B" class="ov-line-measure" data-m="0" cx="0" cy="0" r="5" visibility="hidden"/>
-                                <circle id="ovLineM1B" class="ov-line-measure" data-m="1" cx="0" cy="0" r="5" visibility="hidden"/>
+                                <g id="ovLineMeasuresB"></g>
                             </svg>
                             <div class="crop-hint" id="ovLineHintB" data-i18n="anLineHint">剖面模式：按住左鍵拖曳一條線；可拖曳端點或線段調整 · 中鍵拖曳平移</div>
                         </div>
@@ -1215,11 +1284,21 @@
                                     </button>
                                 </div>
                             </div>
-                            <button type="button" class="profile-icon-btn profile-measure-btn" id="ovMeasureBtnB" data-i18n-title="profileMeasureTitle" title="剖面測量：在圖上點選兩點量測距離與階高">
+                            <button type="button" class="profile-icon-btn profile-measure-btn" id="ovMeasureBtnB" data-i18n-title="profileMeasureTitle" title="剖面測量：按一下後點選兩點量測一組（最多 5 組）">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                     <circle cx="6" cy="17" r="2" fill="currentColor" stroke="none"/>
                                     <circle cx="18" cy="7" r="2" fill="currentColor" stroke="none"/>
                                     <path d="M8.5 15.5 L15.5 8.5"/>
+                                </svg>
+                            </button>
+                            <button type="button" class="profile-icon-btn profile-measure-clear-btn" id="ovMeasureClearB" data-i18n-title="profileMeasureClearTitle" title="清除剖面測量" disabled>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M17 3.5 10.8 13.2"/>
+                                    <path d="M7.6 11.8 14.4 16.1"/>
+                                    <path d="M8.4 12.3 4.2 19"/>
+                                    <path d="M9.8 13.2 6.4 20.2"/>
+                                    <path d="M11.2 14.1 8.8 20.8"/>
+                                    <path d="M12.6 15 11.4 21"/>
                                 </svg>
                             </button>
                             <button type="button" class="profile-clear profile-icon-btn" id="ovProfileClearB" data-i18n-title="profileClearTitle" title="清除剖面" disabled>

@@ -12,11 +12,26 @@ const OverlayAnalysis = (() => {
     const VIEW_MIN = 0.02;
     const VIEW_MAX = 100;
     const OV_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'pcd', 'txt', 'bmp', 'png', 'jpg', 'jpeg'];
-    const MEASURE_COLORS = ['#ff6b6b', '#51cf66'];
-    const MEASURE_DIST_COLOR = '#ffd24a';
-    const MEASURE_STEP_COLOR = '#ff7b72';
-    const MEASURE_FILL = 'rgba(255,210,74,0.12)';
+    const MEASURE_SET_STYLES = [
+        { colors: ['#ff6b6b', '#51cf66'], dist: '#ffd24a', step: '#ff7b72', fill: 'rgba(255,210,74,0.12)' },
+        { colors: ['#74c0fc', '#b197fc'], dist: '#66d9e8', step: '#da77f2', fill: 'rgba(102,217,232,0.12)' },
+        { colors: ['#ffa94d', '#69db7c'], dist: '#ffc078', step: '#ff8787', fill: 'rgba(255,169,77,0.12)' },
+        { colors: ['#ff8787', '#63e6be'], dist: '#ffe066', step: '#f783ac', fill: 'rgba(255,224,102,0.12)' },
+        { colors: ['#a9e34b', '#4dabf7'], dist: '#c0eb75', step: '#748ffc', fill: 'rgba(169,227,75,0.12)' },
+    ];
+    const MEASURE_COLORS = MEASURE_SET_STYLES[0].colors;
+    const MEASURE_DIST_COLOR = MEASURE_SET_STYLES[0].dist;
+    const MEASURE_STEP_COLOR = MEASURE_SET_STYLES[0].step;
+    const MEASURE_FILL = MEASURE_SET_STYLES[0].fill;
+    const MEASURE_MAX_SETS = 5;
+    const MEASURE_HANDLE_R = 10;
     const CHART_PICK_R = 22;
+
+    function measureSetStyle(setIndex) {
+        return MEASURE_SET_STYLES[((setIndex % MEASURE_SET_STYLES.length) + MEASURE_SET_STYLES.length) % MEASURE_SET_STYLES.length];
+    }
+
+    let measureSuppressClick = false;
 
     function $(id) { return document.getElementById(id); }
 
@@ -53,8 +68,7 @@ const OverlayAnalysis = (() => {
             lineH0: $('ovLineH0A'),
             lineH1: $('ovLineH1A'),
             lineHover: $('ovLineHoverA'),
-            lineM0: $('ovLineM0A'),
-            lineM1: $('ovLineM1A'),
+            lineMeasures: $('ovLineMeasuresA'),
             lineHint: $('ovLineHintA'),
             profilePanel: $('ovProfilePanelA'),
             profileMeta: $('ovProfileMetaA'),
@@ -64,6 +78,7 @@ const OverlayAnalysis = (() => {
             profilePlot: $('ovProfilePlotA'),
             chartStyle: $('ovChartStyleA'),
             measureBtn: $('ovMeasureBtnA'),
+            measureClearBtn: $('ovMeasureClearA'),
         },
         b: {
             key: 'b',
@@ -79,8 +94,7 @@ const OverlayAnalysis = (() => {
             lineH0: $('ovLineH0B'),
             lineH1: $('ovLineH1B'),
             lineHover: $('ovLineHoverB'),
-            lineM0: $('ovLineM0B'),
-            lineM1: $('ovLineM1B'),
+            lineMeasures: $('ovLineMeasuresB'),
             lineHint: $('ovLineHintB'),
             profilePanel: $('ovProfilePanelB'),
             profileMeta: $('ovProfileMetaB'),
@@ -90,6 +104,7 @@ const OverlayAnalysis = (() => {
             profilePlot: $('ovProfilePlotB'),
             chartStyle: $('ovChartStyleB'),
             measureBtn: $('ovMeasureBtnB'),
+            measureClearBtn: $('ovMeasureClearB'),
         },
     };
 
@@ -112,9 +127,13 @@ const OverlayAnalysis = (() => {
         hoverSide: null,
         hoverIndex: null,
         measureMode: false,
+        measureSets: [],
         measurePts: [],
+        measureDrag: null, // { side, setKey, ptIndex, moved, pointerId }
         // 剖面圖可視距離窗（雙圖同步）；d1=null 表示顯示全長
         chartView: { d0: 0, d1: null },
+        // 剖面圖 Y 軸顯示範圍（雙圖同步）；null＝依可見 X 窗自動值域
+        yView: null, // { vmin, vmax } | null
         chartPan: null,
         panning: false,
         panStart: null,
@@ -373,8 +392,36 @@ const OverlayAnalysis = (() => {
         if (s.lineH0) { s.lineH0.setAttribute('cx', '0'); s.lineH0.setAttribute('cy', '0'); }
         if (s.lineH1) { s.lineH1.setAttribute('cx', '0'); s.lineH1.setAttribute('cy', '0'); }
         if (s.lineHover) s.lineHover.setAttribute('visibility', 'hidden');
-        if (s.lineM0) s.lineM0.setAttribute('visibility', 'hidden');
-        if (s.lineM1) s.lineM1.setAttribute('visibility', 'hidden');
+        if (s.lineMeasures) {
+            while (s.lineMeasures.firstChild) s.lineMeasures.removeChild(s.lineMeasures.firstChild);
+        }
+    }
+
+    function measureIndexTaken(idx) {
+        if (st.measurePts.includes(idx)) return true;
+        for (const set of st.measureSets) {
+            if (set.pts.includes(idx)) return true;
+        }
+        return false;
+    }
+
+    function measureAllEndpoints() {
+        const out = [];
+        for (let s = 0; s < st.measureSets.length; s++) {
+            const style = measureSetStyle(s);
+            const pts = st.measureSets[s].pts;
+            for (let k = 0; k < pts.length; k++) {
+                out.push({ i: pts[k], color: style.colors[k % style.colors.length] });
+            }
+        }
+        const draftStyle = measureSetStyle(st.measureSets.length);
+        for (let k = 0; k < st.measurePts.length; k++) {
+            out.push({
+                i: st.measurePts[k],
+                color: draftStyle.colors[k % draftStyle.colors.length],
+            });
+        }
+        return out;
     }
 
     function drawLineOnSide(s, line) {
@@ -393,13 +440,14 @@ const OverlayAnalysis = (() => {
     function syncHoverOnImages() {
         const L = st.lineImage;
         const i = st.hoverIndex;
+        const ends = measureAllEndpoints();
         for (const key of ['a', 'b']) {
             const s = sides[key];
             const data = key === 'a' ? st.profileA : st.profileB;
             const marker = s.lineHover;
             if (marker) {
                 const showHover = L && i != null && data && i >= 0 && i < data.N && dsOf(key)
-                    && !(st.measureMode && st.measurePts.includes(i));
+                    && !(st.measureMode && measureIndexTaken(i));
                 if (!showHover) {
                     marker.setAttribute('visibility', 'hidden');
                 } else {
@@ -413,11 +461,23 @@ const OverlayAnalysis = (() => {
                     marker.setAttribute('visibility', 'visible');
                 }
             }
-            // 測量點
-            for (let k = 0; k < 2; k++) {
-                const mEl = k === 0 ? s.lineM0 : s.lineM1;
-                if (!mEl) continue;
-                const mi = st.measurePts[k];
+            // 測量點（多組 + 草稿）
+            const g = s.lineMeasures;
+            if (!g) continue;
+            while (g.children.length > ends.length) {
+                g.removeChild(g.lastChild);
+            }
+            while (g.children.length < ends.length) {
+                const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                c.setAttribute('r', '5');
+                c.setAttribute('class', 'ov-line-measure');
+                c.setAttribute('visibility', 'hidden');
+                g.appendChild(c);
+            }
+            for (let k = 0; k < g.children.length; k++) {
+                const mEl = g.children[k];
+                const ep = ends[k];
+                const mi = ep ? ep.i : null;
                 if (!L || mi == null || !data || mi < 0 || mi >= data.N || !dsOf(key)) {
                     mEl.setAttribute('visibility', 'hidden');
                     continue;
@@ -429,6 +489,7 @@ const OverlayAnalysis = (() => {
                 );
                 mEl.setAttribute('cx', vp.x);
                 mEl.setAttribute('cy', vp.y);
+                mEl.setAttribute('fill', ep.color);
                 mEl.setAttribute('visibility', 'visible');
             }
         }
@@ -460,6 +521,7 @@ const OverlayAnalysis = (() => {
         clearMeasurePts();
         hideProfileTips();
         resetChartView();
+        resetYView();
         if (!st.lineImage) {
             renderProfileCharts();
             return;
@@ -472,6 +534,16 @@ const OverlayAnalysis = (() => {
     function resetChartView() {
         st.chartView = { d0: 0, d1: null };
         st.chartPan = null;
+    }
+
+    function resetYView() {
+        st.yView = null;
+    }
+
+    function isYAxisHit(mx, my, geom) {
+        if (!geom) return false;
+        return mx >= 0 && mx < geom.padL
+            && my >= geom.padT && my <= geom.padT + geom.plotH;
     }
 
     /** 剖面圖目前可視距離窗（與資料全長對齊） */
@@ -515,6 +587,44 @@ const OverlayAnalysis = (() => {
         return { vmin: vmin - pad, vmax: vmax + pad };
     }
 
+    const Y_ZOOM_IN_MIN = 0.02;
+    const Y_ZOOM_OUT_MAX = 100;
+
+    /** 套用手動 Y 縮放後的顯示範圍（允許超出資料 min/max） */
+    function chartYWindow(data, win) {
+        const auto = yRangeForWindow(data, win);
+        const fullMin = auto.vmin;
+        const fullMax = auto.vmax;
+        const fullSpan = Math.max((fullMax - fullMin) || 1, 1e-12);
+        const yv = st.yView;
+        if (!yv || !Number.isFinite(yv.vmin) || !Number.isFinite(yv.vmax) || !(yv.vmax > yv.vmin)) {
+            return { vmin: fullMin, vmax: fullMax, fullMin, fullMax, fullSpan, zoomed: false };
+        }
+        return {
+            vmin: yv.vmin,
+            vmax: yv.vmax,
+            fullMin,
+            fullMax,
+            fullSpan,
+            zoomed: true,
+        };
+    }
+
+    function zoomYAt(data, geom, my, factor) {
+        const win = chartDistWindow(data);
+        const yr = chartYWindow(data, win);
+        const t = Math.min(1, Math.max(0, (my - geom.padT) / Math.max(1, geom.plotH)));
+        const focusVal = yr.vmax - t * (yr.vmax - yr.vmin);
+        let span = (yr.vmax - yr.vmin) * factor;
+        const minSpan = Math.max(yr.fullSpan * Y_ZOOM_IN_MIN, 1e-12);
+        const maxSpan = yr.fullSpan * Y_ZOOM_OUT_MAX;
+        if (span < minSpan) span = minSpan;
+        if (span > maxSpan) span = maxSpan;
+        const vmax = focusVal + t * span;
+        const vmin = vmax - span;
+        st.yView = { vmin, vmax };
+    }
+
     function distToPlotX(dist, geom, win) {
         return geom.padL + ((dist - win.d0) / win.span) * geom.plotW;
     }
@@ -535,7 +645,7 @@ const OverlayAnalysis = (() => {
         if (s.profileClear) s.profileClear.disabled = false;
 
         const win = chartDistWindow(data);
-        const yr = yRangeForWindow(data, win);
+        const yr = chartYWindow(data, win);
         const vmin = yr.vmin;
         const vmax = yr.vmax;
         if (s.profileMeta) {
@@ -546,7 +656,8 @@ const OverlayAnalysis = (() => {
             if (isChartZoomed(data)) {
                 meta += ` · ${fmtVal(win.d0)}–${fmtVal(win.d1)} px`;
             }
-            s.profileMeta.textContent = meta;
+            s.profileMeta.replaceChildren();
+            s.profileMeta.appendChild(document.createTextNode(meta));
         }
 
         const canvas = s.profileCanvas;
@@ -651,12 +762,21 @@ const OverlayAnalysis = (() => {
         // 測量標註在 clip 外繪製，避免文字被裁切
         drawMeasureOnChart(ctx, side, data, geom);
 
-        // meta 附加測量結果
-        const mr = measureResult(data);
-        if (mr && s.profileMeta) {
-            s.profileMeta.textContent +=
-                ` · ${t('measureDist')} ${fmtVal(mr.dist)} ${t('measureUnitPx')}` +
-                ` · ${t('profileMeasureStep')} ${fmtVal(mr.step)}${headerZUnit(dsOf(side)) ? ' ' + headerZUnit(dsOf(side)) : ''}`;
+        // meta 附加測量結果（多組）
+        const results = measureCompletedResults(data);
+        const showNum = results.length > 1;
+        if (results.length && s.profileMeta) {
+            const zUnit = headerZUnit(dsOf(side));
+            for (const mr of results) {
+                s.profileMeta.appendChild(document.createTextNode(' · '));
+                if (showNum) {
+                    s.profileMeta.appendChild(document.createTextNode(`#${mr.setNum} `));
+                }
+                appendMeasureDistMeta(s.profileMeta, dsOf(side), mr.dist);
+                s.profileMeta.appendChild(document.createTextNode(
+                    ` · ${t('profileMeasureStep')} ${fmtVal(mr.step)}${zUnit ? ' ' + zUnit : ''}`
+                ));
+            }
         }
     }
 
@@ -671,16 +791,29 @@ const OverlayAnalysis = (() => {
         };
     }
 
-    function measureResult(data) {
-        const pts = st.measurePts;
-        if (!data || pts.length < 2) return null;
+    function measureResultFromPts(pts, data) {
+        if (!data || !pts || pts.length < 2) return null;
         const i0 = pts[0], i1 = pts[1];
         if (!Number.isFinite(data.vals[i0]) || !Number.isFinite(data.vals[i1])) return null;
         return {
             i0, i1,
             dist: Math.abs(data.dist[i1] - data.dist[i0]),
-            step: data.vals[i1] - data.vals[i0],
+            step: Math.abs(data.vals[i1] - data.vals[i0]),
         };
+    }
+
+    function measureResult(data) {
+        return measureResultFromPts(st.measurePts, data);
+    }
+
+    function measureCompletedResults(data) {
+        const out = [];
+        if (!data) return out;
+        for (let s = 0; s < st.measureSets.length; s++) {
+            const mr = measureResultFromPts(st.measureSets[s].pts, data);
+            if (mr) out.push({ ...mr, setIndex: s, setNum: s + 1 });
+        }
+        return out;
     }
 
     /** 在繪圖區內挑選距離／階高標籤位置，避免重疊與出界 */
@@ -781,83 +914,99 @@ const OverlayAnalysis = (() => {
     }
 
     function drawMeasureOnChart(ctx, side, data, geom) {
-        const pts = st.measurePts;
-        if (!data || !geom || pts.length === 0) return;
-        const coords = [];
-        for (let k = 0; k < pts.length; k++) {
-            const p = chartPointPx(data, geom, pts[k]);
-            if (!p) continue;
-            coords.push({ ...p, color: MEASURE_COLORS[k] });
-        }
+        if (!data || !geom) return;
+        const showSetNum = st.measureSets.length > 1;
+        const zUnit = headerZUnit(dsOf(side));
 
-        if (coords.length === 2) {
-            const p0 = coords[0], p1 = coords[1];
-            const corner = { px: p1.px, py: p0.py };
-            const mr = measureResult(data);
-            const zUnit = headerZUnit(dsOf(side));
-
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(p0.px, p0.py);
-            ctx.lineTo(corner.px, corner.py);
-            ctx.lineTo(p1.px, p1.py);
-            ctx.closePath();
-            ctx.fillStyle = MEASURE_FILL;
-            ctx.fill();
-
-            ctx.setLineDash([5, 4]);
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(p0.px, p0.py); ctx.lineTo(corner.px, corner.py);
-            ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.stroke();
-            ctx.strokeStyle = MEASURE_DIST_COLOR; ctx.lineWidth = 2; ctx.stroke();
-
-            ctx.setLineDash([]);
-            ctx.beginPath();
-            ctx.moveTo(corner.px, corner.py); ctx.lineTo(p1.px, p1.py);
-            ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.stroke();
-            ctx.strokeStyle = MEASURE_STEP_COLOR; ctx.lineWidth = 2; ctx.stroke();
-
-            const tick = 6;
-            const sgnX = p1.px >= p0.px ? 1 : -1;
-            const sgnY = p1.py >= p0.py ? 1 : -1;
-            ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-            ctx.lineWidth = 1.25;
-            ctx.beginPath();
-            ctx.moveTo(corner.px, corner.py); ctx.lineTo(corner.px - sgnX * tick, corner.py);
-            ctx.moveTo(corner.px, corner.py); ctx.lineTo(corner.px, corner.py - sgnY * tick);
-            ctx.stroke();
-            ctx.restore();
-
-            if (mr) {
-                const distText = `${t('measureDist')} ${fmtVal(mr.dist)} ${t('measureUnitPx')}`;
-                const stepText = zUnit
-                    ? `${t('profileMeasureStep')} ${fmtVal(mr.step)} ${zUnit}`
-                    : `${t('profileMeasureStep')} ${fmtVal(mr.step)}`;
-                ctx.font = '10px Consolas, monospace';
-                const pad = 4, boxH = 14;
-                const distBoxW = ctx.measureText(distText).width + pad * 2;
-                const stepBoxW = ctx.measureText(stepText).width + pad * 2;
-                const layout = pickMeasureLabelPos(
-                    geom, p0, p1, corner, distBoxW, boxH, stepBoxW, boxH
-                );
-                drawMeasureLabelAt(ctx, distText, layout.dist.x, layout.dist.y, MEASURE_DIST_COLOR);
-                drawMeasureLabelAt(ctx, stepText, layout.step.x, layout.step.y, MEASURE_STEP_COLOR);
+        const drawPair = (pts, style, setNum) => {
+            if (!pts || pts.length === 0) return;
+            const coords = [];
+            for (let k = 0; k < pts.length; k++) {
+                const p = chartPointPx(data, geom, pts[k]);
+                if (!p) continue;
+                coords.push({ ...p, color: style.colors[k % style.colors.length] });
             }
-        }
 
-        for (const c of coords) {
-            ctx.beginPath();
-            ctx.arc(c.px, c.py, 5, 0, Math.PI * 2);
-            ctx.fillStyle = c.color;
-            ctx.fill();
-            ctx.lineWidth = 1.5;
-            ctx.strokeStyle = '#fff';
-            ctx.stroke();
+            if (coords.length === 2) {
+                const p0 = coords[0], p1 = coords[1];
+                const corner = { px: p1.px, py: p0.py };
+                const mr = measureResultFromPts(pts, data);
+                const prefix = showSetNum && setNum != null ? `#${setNum} ` : '';
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(p0.px, p0.py);
+                ctx.lineTo(corner.px, corner.py);
+                ctx.lineTo(p1.px, p1.py);
+                ctx.closePath();
+                ctx.fillStyle = style.fill;
+                ctx.fill();
+
+                ctx.setLineDash([5, 4]);
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(p0.px, p0.py); ctx.lineTo(corner.px, corner.py);
+                ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.stroke();
+                ctx.strokeStyle = style.dist; ctx.lineWidth = 2; ctx.stroke();
+
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.moveTo(corner.px, corner.py); ctx.lineTo(p1.px, p1.py);
+                ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.stroke();
+                ctx.strokeStyle = style.step; ctx.lineWidth = 2; ctx.stroke();
+
+                const tick = 6;
+                const sgnX = p1.px >= p0.px ? 1 : -1;
+                const sgnY = p1.py >= p0.py ? 1 : -1;
+                ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+                ctx.lineWidth = 1.25;
+                ctx.beginPath();
+                ctx.moveTo(corner.px, corner.py); ctx.lineTo(corner.px - sgnX * tick, corner.py);
+                ctx.moveTo(corner.px, corner.py); ctx.lineTo(corner.px, corner.py - sgnY * tick);
+                ctx.stroke();
+                ctx.restore();
+
+                if (mr) {
+                    const distText = `${prefix}${t('measureDist')} ${formatMeasureDistValue(dsOf(side), mr.dist)}`;
+                    const stepText = zUnit
+                        ? `${prefix}${t('profileMeasureStep')} ${fmtVal(mr.step)} ${zUnit}`
+                        : `${prefix}${t('profileMeasureStep')} ${fmtVal(mr.step)}`;
+                    ctx.font = '10px Consolas, monospace';
+                    const pad = 4, boxH = 14;
+                    const distBoxW = ctx.measureText(distText).width + pad * 2;
+                    const stepBoxW = ctx.measureText(stepText).width + pad * 2;
+                    const layout = pickMeasureLabelPos(
+                        geom, p0, p1, corner, distBoxW, boxH, stepBoxW, boxH
+                    );
+                    drawMeasureLabelAt(ctx, distText, layout.dist.x, layout.dist.y, style.dist);
+                    drawMeasureLabelAt(ctx, stepText, layout.step.x, layout.step.y, style.step);
+                }
+            }
+
+            for (const c of coords) {
+                ctx.beginPath();
+                ctx.arc(c.px, c.py, 5, 0, Math.PI * 2);
+                ctx.fillStyle = c.color;
+                ctx.fill();
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = '#fff';
+                ctx.stroke();
+            }
+        };
+
+        for (let s = 0; s < st.measureSets.length; s++) {
+            drawPair(st.measureSets[s].pts, measureSetStyle(s), s + 1);
+        }
+        if (st.measurePts.length > 0) {
+            drawPair(
+                st.measurePts,
+                measureSetStyle(st.measureSets.length),
+                st.measureSets.length + 1
+            );
         }
 
         if (st.measureMode && st.hoverIndex != null
-            && !pts.includes(st.hoverIndex)) {
+            && !measureIndexTaken(st.hoverIndex)) {
             const p = chartPointPx(data, geom, st.hoverIndex);
             if (p) {
                 ctx.beginPath();
@@ -882,20 +1031,62 @@ const OverlayAnalysis = (() => {
     }
 
     function syncMeasureUI() {
+        const has = st.measureSets.length > 0 || st.measurePts.length > 0;
+        const atMax = st.measureSets.length >= MEASURE_MAX_SETS;
         for (const key of ['a', 'b']) {
             const s = sides[key];
-            if (s.measureBtn) s.measureBtn.classList.toggle('active', st.measureMode);
+            if (s.measureBtn) {
+                s.measureBtn.classList.toggle('active', st.measureMode);
+                s.measureBtn.disabled = !st.measureMode && atMax;
+            }
+            if (s.measureClearBtn) {
+                s.measureClearBtn.disabled = !has;
+                s.measureClearBtn.classList.toggle('has-measures', has);
+            }
             if (s.profilePlot) s.profilePlot.classList.toggle('measure-mode', st.measureMode);
         }
     }
 
-    function clearMeasurePts() {
+    function clearMeasureDraft() {
         st.measurePts = [];
         st.hoverIndex = null;
+        st.measureDrag = null;
+    }
+
+    function clearMeasurePts() {
+        st.measureSets = [];
+        st.measurePts = [];
+        st.measureMode = false;
+        st.hoverIndex = null;
+        st.measureDrag = null;
+        syncMeasureUI();
     }
 
     function setMeasureMode(on) {
-        st.measureMode = !!on;
+        if (on) {
+            if (st.measureSets.length >= MEASURE_MAX_SETS) {
+                if (typeof showToast === 'function') {
+                    showToast(t('profileMeasureMaxSets', MEASURE_MAX_SETS), 'info');
+                }
+                return false;
+            }
+            st.measureMode = true;
+            clearMeasureDraft();
+        } else {
+            st.measureMode = false;
+            clearMeasureDraft();
+        }
+        hideProfileTips();
+        syncMeasureUI();
+        renderProfileCharts();
+        return true;
+    }
+
+    function toggleMeasureMode() {
+        setMeasureMode(!st.measureMode);
+    }
+
+    function clearMeasuresOnly() {
         clearMeasurePts();
         hideProfileTips();
         syncMeasureUI();
@@ -915,6 +1106,66 @@ const OverlayAnalysis = (() => {
             if (d2 < bestD2) { bestD2 = d2; best = i; }
         }
         return bestD2 <= r2 ? best : null;
+    }
+
+    /** 剖面圖上最近有效資料點（不限拾取半徑，供拖曳用） */
+    function chartNearestIndex(side, mx, my) {
+        const data = side === 'a' ? st.profileA : st.profileB;
+        const geom = side === 'a' ? st.geomA : st.geomB;
+        if (!data || !geom || data.N === 0) return null;
+        let best = -1, bestD2 = Infinity;
+        for (let i = 0; i < data.N; i++) {
+            const p = chartPointPx(data, geom, i);
+            if (!p) continue;
+            const d2 = (mx - p.px) * (mx - p.px) + (my - p.py) * (my - p.py);
+            if (d2 < bestD2) { bestD2 = d2; best = i; }
+        }
+        return best >= 0 ? best : null;
+    }
+
+    function measureHitHandle(side, mx, my) {
+        const data = side === 'a' ? st.profileA : st.profileB;
+        const geom = side === 'a' ? st.geomA : st.geomB;
+        if (!data || !geom) return null;
+        const r2 = MEASURE_HANDLE_R * MEASURE_HANDLE_R;
+        let best = null, bestD2 = Infinity;
+
+        const consider = (setKey, pts) => {
+            if (!pts) return;
+            for (let k = 0; k < pts.length; k++) {
+                const p = chartPointPx(data, geom, pts[k]);
+                if (!p) continue;
+                const d2 = (mx - p.px) * (mx - p.px) + (my - p.py) * (my - p.py);
+                if (d2 <= r2 && d2 < bestD2) {
+                    bestD2 = d2;
+                    best = { setKey, ptIndex: k, px: p.px, py: p.py };
+                }
+            }
+        };
+
+        for (let s = 0; s < st.measureSets.length; s++) {
+            consider(s, st.measureSets[s].pts);
+        }
+        consider('draft', st.measurePts);
+        return best;
+    }
+
+    function measureGetPts(setKey) {
+        if (setKey === 'draft') return st.measurePts;
+        const set = st.measureSets[setKey];
+        return set ? set.pts : null;
+    }
+
+    function measureSetEndpoint(setKey, ptIndex, idx) {
+        const pts = measureGetPts(setKey);
+        if (!pts || ptIndex < 0 || ptIndex >= pts.length) return false;
+        if (pts[ptIndex] === idx) return false;
+        pts[ptIndex] = idx;
+        return true;
+    }
+
+    function measureHasAny() {
+        return st.measureSets.length > 0 || st.measurePts.length > 0;
     }
 
     function renderProfileCharts() {
@@ -973,18 +1224,128 @@ const OverlayAnalysis = (() => {
         return String(raw).replace(/[\[\]]/g, '').trim();
     }
 
+    function headerXyUnit(ds) {
+        if (!ds || !ds.header) return '';
+        const h = ds.header;
+        const raw = h.xunit ?? h['x-unit'] ?? h.yunit ?? h['y-unit'] ?? '';
+        return String(raw).replace(/[\[\]]/g, '').trim();
+    }
+
+    /** 沿剖線每像素對應的實體距離（與主檢視剖面測量一致） */
+    function profilePhysPerPx(ds, line) {
+        if (!ds || !line) return null;
+        const { width, height } = ds;
+        const hdr = ds.header || {};
+        let dx, dy;
+        if (typeof RoughnessAnalysis !== 'undefined' && RoughnessAnalysis.pixelSpacing) {
+            const sp = RoughnessAnalysis.pixelSpacing(ds);
+            dx = sp.dx; dy = sp.dy;
+        } else {
+            let xl = parseFloat(hdr.xlength ?? hdr['x-length'] ?? 0);
+            let yl = parseFloat(hdr.ylength ?? hdr['y-length'] ?? 0);
+            if (!Number.isFinite(xl) || xl <= 0) xl = width;
+            if (!Number.isFinite(yl) || yl <= 0) yl = height;
+            dx = xl / Math.max(1, width - 1);
+            dy = yl / Math.max(1, height - 1);
+        }
+        const ldx = line.x1 - line.x0, ldy = line.y1 - line.y0;
+        const lenPx = Math.hypot(ldx, ldy);
+        if (!(lenPx > 0) || !Number.isFinite(dx) || !Number.isFinite(dy)) return null;
+        const perPx = Math.hypot((ldx / lenPx) * dx, (ldy / lenPx) * dy);
+        const unit = headerXyUnit(ds);
+        if (!(perPx > 0) || !unit) return null;
+        return { perPx, unit };
+    }
+
+    function measureDistDisplayInfo(ds, distPx) {
+        const phys = profilePhysPerPx(ds, st.lineImage);
+        if (!phys) {
+            return {
+                valueText: fmtVal(distPx),
+                unit: t('measureUnitPx'),
+                unitClickable: false,
+                pxText: null,
+            };
+        }
+        const native = (typeof normalizeLengthUnit === 'function')
+            ? normalizeLengthUnit(phys.unit)
+            : String(phys.unit || '').trim().toLowerCase();
+        const canConvert = typeof lengthUnitToMeters === 'function'
+            && lengthUnitToMeters(native) != null;
+        let display = native;
+        if (canConvert && typeof resolveProfileDistDisplayUnit === 'function') {
+            display = resolveProfileDistDisplayUnit(native) || native;
+        }
+        let val = distPx * phys.perPx;
+        if (canConvert && display && display !== native && typeof convertLengthValue === 'function') {
+            const c = convertLengthValue(val, native, display);
+            if (c != null) val = c;
+        }
+        return {
+            valueText: fmtVal(val),
+            unit: display || native,
+            unitClickable: canConvert,
+            pxText: `${fmtVal(distPx)} ${t('measureUnitPx')}`,
+        };
+    }
+
+    /** 剖面測量距離：實體單位，括號附 px */
+    function formatMeasureDistValue(ds, distPx) {
+        const info = measureDistDisplayInfo(ds, distPx);
+        let s = `${info.valueText} ${info.unit}`;
+        if (info.pxText) s += ` (${info.pxText})`;
+        return s;
+    }
+
+    function appendMeasureDistMeta(parent, ds, distPx) {
+        parent.appendChild(document.createTextNode(`${t('measureDist')} `));
+        const info = measureDistDisplayInfo(ds, distPx);
+        parent.appendChild(document.createTextNode(`${info.valueText} `));
+        if (info.unitClickable) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'profile-unit-toggle';
+            btn.textContent = info.unit;
+            btn.title = t('profileDistUnitCycleTitle');
+            btn.setAttribute('aria-label', t('profileDistUnitCycleTitle'));
+            parent.appendChild(btn);
+        } else {
+            parent.appendChild(document.createTextNode(info.unit));
+        }
+        if (info.pxText) {
+            parent.appendChild(document.createTextNode(` (${info.pxText})`));
+        }
+    }
+
+    function cycleOverlayDistUnit(side) {
+        const ds = dsOf(side);
+        const phys = profilePhysPerPx(ds, st.lineImage);
+        if (!phys || typeof cycleLengthUnit !== 'function' || typeof setProfileDistDisplayUnit !== 'function') {
+            return;
+        }
+        const native = typeof normalizeLengthUnit === 'function'
+            ? normalizeLengthUnit(phys.unit)
+            : String(phys.unit || '').trim().toLowerCase();
+        const cur = (typeof resolveProfileDistDisplayUnit === 'function'
+            ? resolveProfileDistDisplayUnit(native)
+            : native) || native || 'mm';
+        setProfileDistDisplayUnit(cycleLengthUnit(cur));
+        renderProfileCharts();
+    }
+
     function tipHtmlFor(side, idx) {
         const data = side === 'a' ? st.profileA : st.profileB;
         if (!data || idx == null || idx < 0 || idx >= data.N) return '';
         if (st.measureMode) {
             const n = st.measurePts.length;
+            const setNum = st.measureSets.length + 1;
             if (n < 2) {
-                return `<div>${n === 0 ? t('profileMeasurePick1') : t('profileMeasurePick2')}</div>`;
+                return `<div>${n === 0 ? t('profileMeasurePick1Set', setNum) : t('profileMeasurePick2Set', setNum)}</div>`;
             }
             const mr = measureResult(data);
             if (!mr) return '';
             const zUnit = headerZUnit(dsOf(side));
-            return `<div><span class="k">${t('measureDist')}:</span>${fmtVal(mr.dist)} ${t('measureUnitPx')}</div>` +
+            return `<div><span class="k">${t('measureDist')}:</span>${formatMeasureDistValue(dsOf(side), mr.dist)}</div>` +
                 `<div><span class="k">${t('profileMeasureStep')}:</span>${fmtVal(mr.step)}${zUnit ? ' ' + zUnit : ''}</div>`;
         }
         const v = data.vals[idx];
@@ -1682,18 +2043,28 @@ const OverlayAnalysis = (() => {
             e.stopPropagation();
             const rect = canvas.getBoundingClientRect();
             const mx = e.clientX - rect.left;
-            const win = chartDistWindow(data);
-            const focus = plotXToDist(mx, geom, win);
+            const my = e.clientY - rect.top;
             const factor = e.deltaY < 0 ? 1 / 1.18 : 1.18;
-            zoomChartAt(data, geom, focus, factor);
+            if (isYAxisHit(mx, my, geom)) {
+                zoomYAt(data, geom, my, factor);
+            } else {
+                const win = chartDistWindow(data);
+                const focus = plotXToDist(mx, geom, win);
+                zoomChartAt(data, geom, focus, factor);
+            }
             renderProfileCharts();
         }, { passive: false });
 
         canvas.addEventListener('dblclick', (e) => {
             const data = side === 'a' ? st.profileA : st.profileB;
+            const geom = side === 'a' ? st.geomA : st.geomB;
             if (!data) return;
             e.preventDefault();
-            resetChartView();
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            if (geom && isYAxisHit(mx, my, geom)) resetYView();
+            else resetChartView();
             renderProfileCharts();
         });
 
@@ -1701,6 +2072,31 @@ const OverlayAnalysis = (() => {
             const data = side === 'a' ? st.profileA : st.profileB;
             const geom = side === 'a' ? st.geomA : st.geomB;
             if (!data || !geom) return;
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            // 左鍵優先拖曳測量圓點
+            if (e.button === 0 && measureHasAny() && !isYAxisHit(mx, my, geom)) {
+                const hit = measureHitHandle(side, mx, my);
+                if (hit) {
+                    e.preventDefault();
+                    st.measureDrag = {
+                        side,
+                        setKey: hit.setKey,
+                        ptIndex: hit.ptIndex,
+                        moved: false,
+                        pointerId: e.pointerId,
+                    };
+                    st.hoverIndex = null;
+                    st.hoverSide = null;
+                    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+                    canvas.style.cursor = 'grabbing';
+                    hideProfileTips();
+                    return;
+                }
+            }
+
             // 中鍵，或非測量模式下的左鍵：平移（僅在已縮放時）
             const wantPan = (e.button === 1) || (e.button === 0 && !st.measureMode);
             if (!wantPan || !isChartZoomed(data)) return;
@@ -1718,6 +2114,24 @@ const OverlayAnalysis = (() => {
         });
 
         canvas.addEventListener('pointermove', (e) => {
+            if (st.measureDrag && st.measureDrag.side === side
+                && st.measureDrag.pointerId === e.pointerId) {
+                const data = side === 'a' ? st.profileA : st.profileB;
+                const geom = side === 'a' ? st.geomA : st.geomB;
+                if (!data || !geom || data.N === 0) return;
+                const rect = canvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+                const idx = chartNearestIndex(side, mx, my);
+                if (idx == null) return;
+                if (measureSetEndpoint(st.measureDrag.setKey, st.measureDrag.ptIndex, idx)) {
+                    st.measureDrag.moved = true;
+                    renderProfileCharts();
+                }
+                canvas.style.cursor = 'grabbing';
+                return;
+            }
+
             if (st.chartPan && st.chartPan.side === side) {
                 const data = side === 'a' ? st.profileA : st.profileB;
                 if (!data) return;
@@ -1741,6 +2155,30 @@ const OverlayAnalysis = (() => {
             const rect = canvas.getBoundingClientRect();
             const mx = e.clientX - rect.left;
             const my = e.clientY - rect.top;
+
+            if (isYAxisHit(mx, my, geom)) {
+                canvas.style.cursor = 'ns-resize';
+                if (st.hoverIndex != null || st.hoverSide != null) {
+                    st.hoverIndex = null;
+                    st.hoverSide = null;
+                    hideProfileTips();
+                    renderProfileCharts();
+                }
+                return;
+            }
+
+            if (measureHitHandle(side, mx, my)) {
+                canvas.style.cursor = 'grab';
+                if (st.hoverIndex != null || st.hoverSide != null) {
+                    st.hoverIndex = null;
+                    st.hoverSide = null;
+                    hideProfileTips();
+                    renderProfileCharts();
+                }
+                return;
+            }
+
+            canvas.style.cursor = '';
 
             let idx;
             if (st.measureMode) {
@@ -1790,6 +2228,15 @@ const OverlayAnalysis = (() => {
         });
 
         const endPan = (e) => {
+            if (st.measureDrag && st.measureDrag.side === side
+                && st.measureDrag.pointerId === e.pointerId) {
+                if (st.measureDrag.moved) measureSuppressClick = true;
+                st.measureDrag = null;
+                try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+                syncMeasureUI();
+                renderProfileCharts();
+                return;
+            }
             if (!st.chartPan || st.chartPan.side !== side) return;
             st.chartPan = null;
             try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
@@ -1798,6 +2245,10 @@ const OverlayAnalysis = (() => {
         canvas.addEventListener('pointercancel', endPan);
 
         canvas.addEventListener('click', (e) => {
+            if (measureSuppressClick) {
+                measureSuppressClick = false;
+                return;
+            }
             if (!st.measureMode) return;
             if (st.chartPan) return;
             const data = side === 'a' ? st.profileA : st.profileB;
@@ -1806,16 +2257,34 @@ const OverlayAnalysis = (() => {
             const rect = canvas.getBoundingClientRect();
             const mx = e.clientX - rect.left;
             const my = e.clientY - rect.top;
+            if (isYAxisHit(mx, my, geom)) return;
+            if (measureHitHandle(side, mx, my)) return;
             const idx = chartPickIndex(side, mx, my);
             if (idx == null) return;
-            if (st.measurePts.length >= 2) st.measurePts = [idx];
-            else st.measurePts.push(idx);
+            if (st.measureSets.length >= MEASURE_MAX_SETS) {
+                setMeasureMode(false);
+                if (typeof showToast === 'function') {
+                    showToast(t('profileMeasureMaxSets', MEASURE_MAX_SETS), 'info');
+                }
+                return;
+            }
+            st.measurePts.push(idx);
+            if (st.measurePts.length >= 2) {
+                st.measureSets.push({ pts: st.measurePts.slice(0, 2) });
+                st.measurePts = [];
+                // 每次按測量鈕只新增一組：完成後自動結束測量模式
+                st.measureMode = false;
+            }
             st.hoverIndex = null;
+            syncMeasureUI();
             renderProfileCharts();
-            showProfileTip(side, e, tipHtmlFor(side, idx));
+            if (st.measureMode) showProfileTip(side, e, tipHtmlFor(side, idx));
+            else hideProfileTips();
         });
 
         canvas.addEventListener('pointerleave', () => {
+            canvas.style.cursor = '';
+            if (st.measureDrag && st.measureDrag.side === side) return;
             if (st.chartPan && st.chartPan.side === side) return;
             if (st.hoverSide !== side && st.hoverIndex != null) return;
             st.hoverIndex = null;
@@ -1858,7 +2327,25 @@ const OverlayAnalysis = (() => {
             }
             if (s.measureBtn) {
                 s.measureBtn.addEventListener('click', () => {
-                    setMeasureMode(!st.measureMode);
+                    toggleMeasureMode();
+                });
+            }
+            if (s.measureClearBtn) {
+                s.measureClearBtn.addEventListener('click', () => {
+                    if (st.measureSets.length === 0 && st.measurePts.length === 0) return;
+                    clearMeasuresOnly();
+                });
+            }
+            if (s.profileMeta) {
+                s.profileMeta.addEventListener('click', (e) => {
+                    const btn = e.target.closest('.profile-unit-toggle');
+                    if (!btn || !s.profileMeta.contains(btn)) return;
+                    e.preventDefault();
+                    cycleOverlayDistUnit(side);
+                    if (typeof renderProfileChart === 'function'
+                        && typeof profileState !== 'undefined' && profileState.data) {
+                        renderProfileChart();
+                    }
                 });
             }
             setupViewerSide(side);

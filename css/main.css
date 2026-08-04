@@ -631,6 +631,13 @@
         display: block;
         flex-shrink: 0;
     }
+    .viewer-cursor-toolbar-sep {
+        display: block;
+        height: 1px;
+        margin: 2px 4px;
+        background: rgba(255, 255, 255, 0.12);
+        flex-shrink: 0;
+    }
 
     .zoom-hint {
         position: absolute;
@@ -880,6 +887,27 @@
         cursor: pointer;
         transition: background 0.15s ease, color 0.15s ease;
     }
+    #cursorToggle button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+    }
+    #cursorToggle button svg {
+        width: 18px;
+        height: 18px;
+        display: block;
+        flex-shrink: 0;
+    }
+    #cursorToggle .cursor-toggle-sep {
+        width: 1px;
+        align-self: stretch;
+        margin: 5px 0;
+        background: rgba(255, 255, 255, 0.14);
+        flex-shrink: 0;
+    }
     .lang-toggle button:hover,
     .cursor-toggle button:hover { color: var(--text); }
     .lang-toggle button.active,
@@ -990,6 +1018,28 @@
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    .profile-unit-toggle {
+        display: inline;
+        margin: 0;
+        padding: 0 3px;
+        border: none;
+        border-radius: 3px;
+        background: transparent;
+        color: var(--accent);
+        font: inherit;
+        font-family: Consolas, monospace;
+        cursor: pointer;
+        text-decoration: none;
+        vertical-align: baseline;
+    }
+    .profile-unit-toggle:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+    }
+    .profile-unit-toggle:focus-visible {
+        outline: 1px solid var(--accent);
+        outline-offset: 1px;
+    }
     .profile-band {
         display: inline-flex;
         align-items: center;
@@ -1084,6 +1134,14 @@
         background: #4f8cff;
         border-color: #4f8cff;
         color: #fff;
+    }
+    .profile-measure-btn:disabled,
+    .profile-measure-clear-btn:disabled {
+        opacity: 0.4;
+        cursor: default;
+    }
+    .profile-measure-clear-btn.has-measures:not(:disabled):hover {
+        color: #ff8787;
     }
     .profile-tip {
         position: absolute;
@@ -3093,9 +3151,8 @@
         stroke-width: 1.5;
         vector-effect: non-scaling-stroke;
         pointer-events: none;
+        fill: #ff6b6b;
     }
-    .ov-line-measure[data-m="0"] { fill: #ff6b6b; }
-    .ov-line-measure[data-m="1"] { fill: #51cf66; }
     .ov-profile-plot.measure-mode,
     .ov-profile-plot.measure-mode canvas {
         cursor: crosshair;

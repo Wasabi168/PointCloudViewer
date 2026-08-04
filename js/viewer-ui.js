@@ -1040,6 +1040,7 @@ const profileBandWrap = document.getElementById('profileBandWrap');
 const profileBandInput = document.getElementById('profileBand');
 const profileChartStyleWrap = document.getElementById('profileChartStyleWrap');
 const profileMeasureBtn = document.getElementById('profileMeasureBtn');
+const profileMeasureClearBtn = document.getElementById('profileMeasureClearBtn');
 
 let profileChartStyle = getUserPref('profileChartStyle');
 if (profileChartStyle !== 'line' && profileChartStyle !== 'dots') profileChartStyle = 'line';
@@ -1074,6 +1075,42 @@ if (profileChartStyleWrap) {
  *  halfW : 點雲緩衝帶半寬（世界單位）
  *  geom  : 圖表繪製幾何，供 hover 換算
  */
+/** 長度單位循環：cm → mm → um → nm */
+const LENGTH_UNIT_CYCLE = ['cm', 'mm', 'um', 'nm'];
+const LENGTH_UNIT_TO_M = { m: 1, cm: 1e-2, mm: 1e-3, um: 1e-6, nm: 1e-9 };
+
+function normalizeLengthUnit(u) {
+    return String(u || '').trim().toLowerCase().replace(/µ/g, 'u').replace(/[\[\]]/g, '');
+}
+
+function lengthUnitToMeters(u) {
+    const key = normalizeLengthUnit(u);
+    return Object.prototype.hasOwnProperty.call(LENGTH_UNIT_TO_M, key) ? LENGTH_UNIT_TO_M[key] : null;
+}
+
+/** 長度數值換算；無法換算時回傳 null */
+function convertLengthValue(value, fromUnit, toUnit) {
+    if (!Number.isFinite(value)) return null;
+    const a = lengthUnitToMeters(fromUnit);
+    const b = lengthUnitToMeters(toUnit);
+    if (a == null || !(b > 0)) return null;
+    return value * (a / b);
+}
+
+function cycleLengthUnit(current) {
+    const u = normalizeLengthUnit(current);
+    const i = LENGTH_UNIT_CYCLE.indexOf(u);
+    if (i < 0) return 'mm';
+    return LENGTH_UNIT_CYCLE[(i + 1) % LENGTH_UNIT_CYCLE.length];
+}
+
+function setProfileDistDisplayUnit(unit) {
+    const u = normalizeLengthUnit(unit);
+    if (!LENGTH_UNIT_CYCLE.includes(u)) return;
+    profileState.distDisplayUnit = u;
+    setUserPref('profileDistUnit', u);
+}
+
 const profileState = {
     drawing: false,
     editMode: null,   // 'ep0' | 'ep1' | 'move'
@@ -1085,37 +1122,227 @@ const profileState = {
     hoverIndex: null,
     halfW: 0,
     measureMode: false,
-    measurePts: [],   // 圖表上選取的資料索引（最多 2 個）
+    measureSets: [],  // 已完成組：[{ pts: [i0, i1] }, ...]
+    measurePts: [],   // 目前編輯中的一組（0～1 個索引；滿 2 點即提交）
+    measureDrag: null, // { setIndex: number|'draft', ptIndex: 0|1, moved: boolean }
+    distDisplayUnit: (() => {
+        const u = normalizeLengthUnit(getUserPref('profileDistUnit'));
+        return LENGTH_UNIT_CYCLE.includes(u) ? u : '';
+    })(),
+    yView: null, // { vmin, vmax } | null；null＝自動用資料值域
 };
+
+/** 解析剖面距離顯示單位（偏好優先，否則原生單位） */
+function resolveProfileDistDisplayUnit(nativeUnit) {
+    const native = normalizeLengthUnit(nativeUnit);
+    const pref = normalizeLengthUnit(profileState.distDisplayUnit || getUserPref('profileDistUnit') || '');
+    if (pref && lengthUnitToMeters(pref) != null) return pref;
+    return native;
+}
 
 const PROFILE_HIT_RADIUS = 10;
 const PROFILE_CHART_PICK_RADIUS = 22;
-const PROFILE_MEASURE_COLORS = ['#ff6b6b', '#51cf66'];
-const PROFILE_MEASURE_DIST_COLOR = '#ffd24a';
-const PROFILE_MEASURE_STEP_COLOR = '#ff7b72';
-const PROFILE_MEASURE_FILL = 'rgba(255,210,74,0.12)';
+const PROFILE_MEASURE_MAX_SETS = 5;
+const PROFILE_MEASURE_SET_STYLES = [
+    { colors: ['#ff6b6b', '#51cf66'], dist: '#ffd24a', step: '#ff7b72', fill: 'rgba(255,210,74,0.12)' },
+    { colors: ['#74c0fc', '#b197fc'], dist: '#66d9e8', step: '#da77f2', fill: 'rgba(102,217,232,0.12)' },
+    { colors: ['#ffa94d', '#69db7c'], dist: '#ffc078', step: '#ff8787', fill: 'rgba(255,169,77,0.12)' },
+    { colors: ['#ff8787', '#63e6be'], dist: '#ffe066', step: '#f783ac', fill: 'rgba(255,224,102,0.12)' },
+    { colors: ['#a9e34b', '#4dabf7'], dist: '#c0eb75', step: '#748ffc', fill: 'rgba(169,227,75,0.12)' },
+];
+const PROFILE_MEASURE_COLORS = PROFILE_MEASURE_SET_STYLES[0].colors;
+const PROFILE_MEASURE_DIST_COLOR = PROFILE_MEASURE_SET_STYLES[0].dist;
+const PROFILE_MEASURE_STEP_COLOR = PROFILE_MEASURE_SET_STYLES[0].step;
+const PROFILE_MEASURE_FILL = PROFILE_MEASURE_SET_STYLES[0].fill;
+
+function profileMeasureSetStyle(setIndex) {
+    return PROFILE_MEASURE_SET_STYLES[((setIndex % PROFILE_MEASURE_SET_STYLES.length) + PROFILE_MEASURE_SET_STYLES.length) % PROFILE_MEASURE_SET_STYLES.length];
+}
+
+function profileMeasureHasAny() {
+    return profileState.measureSets.length > 0 || profileState.measurePts.length > 0;
+}
 
 function syncProfileMeasureUI() {
     if (profileMeasureBtn) {
         profileMeasureBtn.classList.toggle('active', profileState.measureMode);
+        const atMax = profileState.measureSets.length >= PROFILE_MEASURE_MAX_SETS;
+        profileMeasureBtn.disabled = !profileState.measureMode && atMax;
+    }
+    if (profileMeasureClearBtn) {
+        const has = profileMeasureHasAny();
+        profileMeasureClearBtn.disabled = !has;
+        profileMeasureClearBtn.classList.toggle('has-measures', has);
     }
     const plot = profileCanvas && profileCanvas.parentElement;
     if (plot) plot.classList.toggle('measure-mode', profileState.measureMode);
 }
 
-function clearProfileMeasurePts() {
+/** 僅清除草稿點（保留已完成組） */
+function clearProfileMeasureDraft() {
     profileState.measurePts = [];
     profileState.hoverIndex = null;
+    profileState.measureDrag = null;
+}
+
+function clearProfileMeasurePts() {
+    profileState.measureSets = [];
+    profileState.measurePts = [];
+    profileState.measureMode = false;
+    profileState.hoverIndex = null;
+    profileState.measureDrag = null;
+}
+
+function setProfileMeasureMode(on) {
+    if (on) {
+        if (profileState.measureSets.length >= PROFILE_MEASURE_MAX_SETS) {
+            showToast(t('profileMeasureMaxSets', PROFILE_MEASURE_MAX_SETS), 'info');
+            return false;
+        }
+        profileState.measureMode = true;
+        clearProfileMeasureDraft();
+    } else {
+        profileState.measureMode = false;
+        clearProfileMeasureDraft();
+    }
+    return true;
+}
+
+function toggleProfileMeasureMode() {
+    if (profileState.measureMode) {
+        setProfileMeasureMode(false);
+    } else {
+        setProfileMeasureMode(true);
+    }
+    profileTip.classList.remove('show');
+    syncProfileMeasureUI();
+    renderProfileChart();
+    drawProfileOverlay();
+}
+
+function clearProfileMeasuresOnly() {
+    clearProfileMeasurePts();
+    profileTip.classList.remove('show');
+    syncProfileMeasureUI();
+    renderProfileChart();
+    drawProfileOverlay();
+}
+
+/** 目前測量點是否已佔用此資料索引（含已完成組與草稿） */
+function profileMeasureIndexTaken(idx) {
+    if (profileState.measurePts.includes(idx)) return true;
+    for (const set of profileState.measureSets) {
+        if (set.pts.includes(idx)) return true;
+    }
+    return false;
+}
+
+/** 主視圖／圖表用的全部測量端點（含草稿） */
+function profileMeasureAllEndpoints() {
+    const out = [];
+    for (let s = 0; s < profileState.measureSets.length; s++) {
+        const style = profileMeasureSetStyle(s);
+        const pts = profileState.measureSets[s].pts;
+        for (let k = 0; k < pts.length; k++) {
+            out.push({ i: pts[k], color: style.colors[k % style.colors.length], setIndex: s });
+        }
+    }
+    const draftStyle = profileMeasureSetStyle(profileState.measureSets.length);
+    for (let k = 0; k < profileState.measurePts.length; k++) {
+        out.push({
+            i: profileState.measurePts[k],
+            color: draftStyle.colors[k % draftStyle.colors.length],
+            setIndex: profileState.measureSets.length,
+        });
+    }
+    return out;
+}
+
+const PROFILE_MEASURE_HANDLE_R = 10;
+
+/** 剖面圖上最近有效資料點（不限拾取半徑，供拖曳用） */
+function profileChartNearestIndex(mx, my) {
+    const d = profileState.data, g = profileState.geom;
+    if (!d || !g || d.N === 0) return null;
+    let bestIdx = -1, bestDist2 = Infinity;
+    for (let i = 0; i < d.N; i++) {
+        const p = profileChartPointPx(d, g, i);
+        if (!p) continue;
+        const dx = mx - p.px, dy = my - p.py;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestDist2) { bestDist2 = d2; bestIdx = i; }
+    }
+    return bestIdx >= 0 ? bestIdx : null;
+}
+
+/**
+ * 命中測量圓點：{ setKey: number|'draft', ptIndex, px, py }
+ * setKey 為 measureSets 索引，或草稿 'draft'
+ */
+function profileMeasureHitHandle(mx, my) {
+    const d = profileState.data, g = profileState.geom;
+    if (!d || !g) return null;
+    const r2 = PROFILE_MEASURE_HANDLE_R * PROFILE_MEASURE_HANDLE_R;
+    let best = null, bestD2 = Infinity;
+
+    const consider = (setKey, pts) => {
+        if (!pts) return;
+        for (let k = 0; k < pts.length; k++) {
+            const p = profileChartPointPx(d, g, pts[k]);
+            if (!p) continue;
+            const d2 = (mx - p.px) * (mx - p.px) + (my - p.py) * (my - p.py);
+            if (d2 <= r2 && d2 < bestD2) {
+                bestD2 = d2;
+                best = { setKey, ptIndex: k, px: p.px, py: p.py };
+            }
+        }
+    };
+
+    for (let s = 0; s < profileState.measureSets.length; s++) {
+        consider(s, profileState.measureSets[s].pts);
+    }
+    consider('draft', profileState.measurePts);
+    return best;
+}
+
+function profileMeasureGetPts(setKey) {
+    if (setKey === 'draft') return profileState.measurePts;
+    const set = profileState.measureSets[setKey];
+    return set ? set.pts : null;
+}
+
+function profileMeasureSetEndpoint(setKey, ptIndex, idx) {
+    const pts = profileMeasureGetPts(setKey);
+    if (!pts || ptIndex < 0 || ptIndex >= pts.length) return false;
+    if (pts[ptIndex] === idx) return false;
+    pts[ptIndex] = idx;
+    return true;
+}
+
+let profileMeasureSuppressClick = false;
+
+if (profileMeta) {
+    profileMeta.addEventListener('click', (e) => {
+        const btn = e.target.closest('.profile-unit-toggle');
+        if (!btn || !profileMeta.contains(btn)) return;
+        e.preventDefault();
+        const d = profileState.data;
+        const native = profileMeasureNativeDistUnit(d);
+        const cur = resolveProfileDistDisplayUnit(native) || native || 'mm';
+        setProfileDistDisplayUnit(cycleLengthUnit(cur));
+        renderProfileChart();
+    });
 }
 
 if (profileMeasureBtn) {
     profileMeasureBtn.addEventListener('click', () => {
-        profileState.measureMode = !profileState.measureMode;
-        clearProfileMeasurePts();
-        profileTip.classList.remove('show');
-        syncProfileMeasureUI();
-        renderProfileChart();
-        drawProfileOverlay();
+        toggleProfileMeasureMode();
+    });
+}
+if (profileMeasureClearBtn) {
+    profileMeasureClearBtn.addEventListener('click', () => {
+        if (!profileMeasureHasAny()) return;
+        clearProfileMeasuresOnly();
     });
 }
 syncProfileMeasureUI();
@@ -1398,10 +1625,11 @@ function drawProfileOverlay() {
         ctx.lineWidth = 1.5; ctx.strokeStyle = '#000'; ctx.stroke();
     }
 
-    // 剖面圖測量點（連動主視圖標記）
-    if (d && profileState.measurePts.length > 0) {
-        for (let k = 0; k < profileState.measurePts.length; k++) {
-            const i = profileState.measurePts[k];
+    // 剖面圖測量點（連動主視圖標記；含多組與草稿）
+    if (d) {
+        const ends = profileMeasureAllEndpoints();
+        for (const ep of ends) {
+            const i = ep.i;
             let hx, hy;
             if (d.scatter) {
                 hx = d.wx[i]; hy = d.wy[i];
@@ -1412,14 +1640,14 @@ function drawProfileOverlay() {
             }
             const hp = profilePtToScreen(hx, hy);
             ctx.beginPath(); ctx.arc(hp.x, hp.y, 5, 0, Math.PI * 2);
-            ctx.fillStyle = PROFILE_MEASURE_COLORS[k]; ctx.fill();
+            ctx.fillStyle = ep.color; ctx.fill();
             ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
         }
     }
 
     // 測量模式：預覽下一個選點
     if (profileState.measureMode && profileState.hoverIndex != null && d && d.N > 0
-        && !profileState.measurePts.includes(profileState.hoverIndex)) {
+        && !profileMeasureIndexTaken(profileState.hoverIndex)) {
         const i = profileState.hoverIndex;
         let hx, hy;
         if (d.scatter) {
@@ -1509,15 +1737,66 @@ function sampleProfileScatter(line, halfW) {
     return { dist, vals, wx, wy, vmin, vmax, distPx: len, N, anyValid, scatter: true, halfW };
 }
 
+/** Y 軸可放大到資料值域的最小比例、縮小到資料值域的最大倍數 */
+const PROFILE_Y_ZOOM_IN_MIN = 0.02;
+const PROFILE_Y_ZOOM_OUT_MAX = 100;
+
+/** 剖面圖 Y 軸顯示範圍（可滾輪縮放；允許超出資料 min/max） */
+function profileChartYRange(d) {
+    const fullMin = d.vmin;
+    const fullMax = d.vmax;
+    const fullSpan = Math.max((fullMax - fullMin) || 1, 1e-12);
+    const yv = profileState.yView;
+    if (!yv || !Number.isFinite(yv.vmin) || !Number.isFinite(yv.vmax) || !(yv.vmax > yv.vmin)) {
+        return { vmin: fullMin, vmax: fullMax, fullMin, fullMax, fullSpan, zoomed: false };
+    }
+    return {
+        vmin: yv.vmin,
+        vmax: yv.vmax,
+        fullMin,
+        fullMax,
+        fullSpan,
+        zoomed: true,
+    };
+}
+
+/** 是否在剖面圖左側 Y 軸刻度區 */
+function isProfileYAxisHit(mx, my, g) {
+    if (!g) return false;
+    return mx >= 0 && mx < g.padL
+        && my >= g.padT && my <= g.padT + g.plotH;
+}
+
+/** 以游標 Y 位置為焦點縮放剖面 Y 軸範圍（可超出資料極值） */
+function zoomProfileYAt(d, g, my, factor) {
+    const yr = profileChartYRange(d);
+    const t = Math.min(1, Math.max(0, (my - g.padT) / Math.max(1, g.plotH)));
+    const focusVal = yr.vmax - t * (yr.vmax - yr.vmin);
+    let span = (yr.vmax - yr.vmin) * factor;
+    const minSpan = Math.max(yr.fullSpan * PROFILE_Y_ZOOM_IN_MIN, 1e-12);
+    const maxSpan = yr.fullSpan * PROFILE_Y_ZOOM_OUT_MAX;
+    if (span < minSpan) span = minSpan;
+    if (span > maxSpan) span = maxSpan;
+    const vmax = focusVal + t * span;
+    const vmin = vmax - span;
+    profileState.yView = { vmin, vmax };
+}
+
+function resetProfileYView() {
+    profileState.yView = null;
+}
+
 /** 剖面圖座標：資料索引 → 繪圖區像素座標 */
 function profileChartPointPx(d, g, i) {
     const v = d.vals[i];
     if (!Number.isFinite(v)) return null;
     const distPx = d.distPx || 1;
-    const range = (d.vmax - d.vmin) || 1;
+    const vmin = (g && Number.isFinite(g.vmin)) ? g.vmin : d.vmin;
+    const vmax = (g && Number.isFinite(g.vmax)) ? g.vmax : d.vmax;
+    const range = (vmax - vmin) || 1;
     return {
         px: g.padL + (d.dist[i] / distPx) * g.plotW,
-        py: g.padT + (1 - (v - d.vmin) / range) * g.plotH,
+        py: g.padT + (1 - (v - vmin) / range) * g.plotH,
     };
 }
 
@@ -1537,18 +1816,32 @@ function profileChartPickIndex(mx, my) {
     return bestDist2 <= r2 ? bestIdx : null;
 }
 
-/** 剖面圖兩點測量結果 */
-function profileMeasureResult() {
-    const pts = profileState.measurePts;
-    const d = profileState.data;
-    if (!d || pts.length < 2) return null;
+/** 由兩個資料索引計算剖面測量結果 */
+function profileMeasureResultFromPts(pts, d) {
+    if (!d || !pts || pts.length < 2) return null;
     const i0 = pts[0], i1 = pts[1];
     if (!Number.isFinite(d.vals[i0]) || !Number.isFinite(d.vals[i1])) return null;
     return {
         i0, i1,
         dist: Math.abs(d.dist[i1] - d.dist[i0]),
-        step: d.vals[i1] - d.vals[i0],
+        step: Math.abs(d.vals[i1] - d.vals[i0]),
     };
+}
+
+/** 剖面圖目前草稿測量結果（未滿兩點則 null） */
+function profileMeasureResult() {
+    return profileMeasureResultFromPts(profileState.measurePts, profileState.data);
+}
+
+/** 所有已完成測量組的結果 */
+function profileMeasureCompletedResults(d) {
+    const out = [];
+    if (!d) return out;
+    for (let s = 0; s < profileState.measureSets.length; s++) {
+        const mr = profileMeasureResultFromPts(profileState.measureSets[s].pts, d);
+        if (mr) out.push({ ...mr, setIndex: s, setNum: s + 1 });
+    }
+    return out;
 }
 
 function headerUnit(key) {
@@ -1559,12 +1852,49 @@ function headerUnit(key) {
     return String(raw).replace(/[\[\]]/g, '').trim();
 }
 
-/** 剖面測量：距離單位（影像 px；點雲取 header xunit） */
-function profileMeasureDistUnit(d) {
-    if (d && d.scatter) {
-        return headerUnit('xunit') || t('measureUnitWorld');
+/** 影像剖面：沿剖線每像素對應的實體距離（與 RoughnessAnalysis.extractProfile 一致） */
+function profileImagePhysPerPx() {
+    if (!currentDataset || isPcdScatterDataset(currentDataset)) return null;
+    const line = profileState.line;
+    if (!line) return null;
+    const { width, height } = currentDataset;
+    const hdr = currentDataset.header || {};
+    let dx, dy;
+    if (typeof RoughnessAnalysis !== 'undefined' && RoughnessAnalysis.pixelSpacing) {
+        const sp = RoughnessAnalysis.pixelSpacing(currentDataset);
+        dx = sp.dx; dy = sp.dy;
+    } else {
+        let xl = parseFloat(hdr.xlength ?? hdr['x-length'] ?? 0);
+        let yl = parseFloat(hdr.ylength ?? hdr['y-length'] ?? 0);
+        if (!Number.isFinite(xl) || xl <= 0) xl = width;
+        if (!Number.isFinite(yl) || yl <= 0) yl = height;
+        dx = xl / Math.max(1, width - 1);
+        dy = yl / Math.max(1, height - 1);
     }
-    return t('measureUnitPx');
+    const ldx = line.x1 - line.x0, ldy = line.y1 - line.y0;
+    const lenPx = Math.hypot(ldx, ldy);
+    if (!(lenPx > 0) || !Number.isFinite(dx) || !Number.isFinite(dy)) return null;
+    const perPx = Math.hypot((ldx / lenPx) * dx, (ldy / lenPx) * dy);
+    const unit = headerUnit('xunit') || headerUnit('yunit') || '';
+    if (!(perPx > 0) || !unit) return null;
+    return { perPx, unit };
+}
+
+/** 剖面測量原生距離單位（檔案 header） */
+function profileMeasureNativeDistUnit(d) {
+    if (d && d.scatter) return normalizeLengthUnit(headerUnit('xunit'));
+    const phys = profileImagePhysPerPx();
+    return phys ? normalizeLengthUnit(phys.unit) : '';
+}
+
+/** 剖面測量：距離單位（影像取 header xunit；點雲取 xunit／全域單位） */
+function profileMeasureDistUnit(d) {
+    const native = profileMeasureNativeDistUnit(d);
+    if (native && lengthUnitToMeters(native) != null) {
+        return resolveProfileDistDisplayUnit(native) || native;
+    }
+    if (d && d.scatter) return native || t('measureUnitWorld');
+    return native || t('measureUnitPx');
 }
 
 /** 剖面測量：階高單位（取 header zunit） */
@@ -1572,9 +1902,100 @@ function profileMeasureStepUnit() {
     return headerUnit('zunit') || headerUnit('z-unit') || '';
 }
 
+/**
+ * 剖面測量距離顯示資訊
+ * @returns {{valueText:string, unit:string, unitClickable:boolean, pxText:string|null}}
+ */
+function profileMeasureDistInfo(mr, d) {
+    if (d && d.scatter) {
+        const native = normalizeLengthUnit(headerUnit('xunit'));
+        const canConvert = !!(native && lengthUnitToMeters(native) != null);
+        const display = canConvert ? (resolveProfileDistDisplayUnit(native) || native) : native;
+        let val = mr.dist;
+        if (canConvert && display && display !== native) {
+            const c = convertLengthValue(val, native, display);
+            if (c != null) val = c;
+        }
+        return {
+            valueText: formatValue(val),
+            unit: display || t('measureUnitWorld'),
+            unitClickable: canConvert,
+            pxText: null,
+        };
+    }
+    const distPx = mr.dist;
+    const phys = profileImagePhysPerPx();
+    if (!phys) {
+        return {
+            valueText: formatValue(distPx),
+            unit: t('measureUnitPx'),
+            unitClickable: false,
+            pxText: null,
+        };
+    }
+    const native = normalizeLengthUnit(phys.unit);
+    const canConvert = !!(native && lengthUnitToMeters(native) != null);
+    const display = canConvert ? (resolveProfileDistDisplayUnit(native) || native) : native;
+    let val = distPx * phys.perPx;
+    if (canConvert && display && display !== native) {
+        const c = convertLengthValue(val, native, display);
+        if (c != null) val = c;
+    }
+    return {
+        valueText: formatValue(val),
+        unit: display || native,
+        unitClickable: canConvert,
+        pxText: `${formatValue(distPx)} ${t('measureUnitPx')}`,
+    };
+}
+
+/** 剖面測量距離文字（不含標籤）：實體單位，括號附 px */
+function formatProfileMeasureDistValue(mr, d) {
+    const info = profileMeasureDistInfo(mr, d);
+    let s = `${info.valueText} ${info.unit}`;
+    if (info.pxText) s += ` (${info.pxText})`;
+    return s;
+}
+
 function formatProfileMeasureDist(mr, d) {
-    const unit = profileMeasureDistUnit(d);
-    return `${t('measureDist')} ${formatValue(mr.dist)} ${unit}`;
+    return `${t('measureDist')} ${formatProfileMeasureDistValue(mr, d)}`;
+}
+
+/** 將剖面測量距離寫入 meta（可點單位切換） */
+function appendProfileMeasureDistMeta(parent, mr, d) {
+    parent.appendChild(document.createTextNode(`${t('measureDist')} `));
+    const info = profileMeasureDistInfo(mr, d);
+    parent.appendChild(document.createTextNode(`${info.valueText} `));
+    if (info.unitClickable) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'profile-unit-toggle';
+        btn.textContent = info.unit;
+        btn.title = t('profileDistUnitCycleTitle');
+        btn.setAttribute('aria-label', t('profileDistUnitCycleTitle'));
+        parent.appendChild(btn);
+    } else {
+        parent.appendChild(document.createTextNode(info.unit));
+    }
+    if (info.pxText) {
+        parent.appendChild(document.createTextNode(` (${info.pxText})`));
+    }
+}
+
+function updateProfileMetaDisplay(d) {
+    if (!profileMeta) return;
+    profileMeta.replaceChildren();
+    profileMeta.appendChild(document.createTextNode(formatProfileMetaLine(d)));
+    const results = profileMeasureCompletedResults(d);
+    const showNum = results.length > 1;
+    for (const mr of results) {
+        profileMeta.appendChild(document.createTextNode(' · '));
+        if (showNum) {
+            profileMeta.appendChild(document.createTextNode(`#${mr.setNum} `));
+        }
+        appendProfileMeasureDistMeta(profileMeta, mr, d);
+        profileMeta.appendChild(document.createTextNode(` · ${formatProfileMeasureStep(mr)}`));
+    }
 }
 
 function formatProfileMeasureStep(mr) {
@@ -1604,15 +2025,11 @@ function renderProfileChart() {
     profileBandWrap.style.display = d.scatter ? 'inline-flex' : 'none';
     if (profileChartStyleWrap) profileChartStyleWrap.style.display = 'inline-flex';
     if (profileMeasureBtn) profileMeasureBtn.style.display = 'inline-flex';
+    if (profileMeasureClearBtn) profileMeasureClearBtn.style.display = 'inline-flex';
     syncProfileChartStyleUI();
     syncProfileMeasureUI();
 
-    let meta = formatProfileMetaLine(d);
-    const mr = profileMeasureResult();
-    if (mr) {
-        meta += ` · ${formatProfileMeasureDist(mr, d)} · ${formatProfileMeasureStep(mr)}`;
-    }
-    profileMeta.textContent = meta;
+    updateProfileMetaDisplay(d);
 
     const canvas = profileCanvas;
     const dpr = window.devicePixelRatio || 1;
@@ -1631,7 +2048,9 @@ function renderProfileChart() {
     const plotW = Math.max(1, cw - padL - padR);
     const plotH = Math.max(1, ch - padT - padB);
     const x0 = padL, y0 = padT;
-    profileState.geom = { padL, padT, plotW, plotH, cw, ch };
+    const yr = profileChartYRange(d);
+    const vmin = yr.vmin, vmax = yr.vmax;
+    profileState.geom = { padL, padT, plotW, plotH, cw, ch, vmin, vmax };
 
     ctx.fillStyle = 'rgba(255,255,255,0.03)';
     ctx.fillRect(x0, y0, plotW, plotH);
@@ -1641,13 +2060,14 @@ function renderProfileChart() {
 
     // Y 軸格線 + 數值標籤
     const yticks = 4;
+    const range = (vmax - vmin) || 1;
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     for (let i = 0; i <= yticks; i++) {
         const tt = i / yticks;
         const py = y0 + plotH * tt;
         ctx.strokeStyle = 'rgba(255,255,255,0.12)';
         ctx.beginPath(); ctx.moveTo(x0, py); ctx.lineTo(x0 + plotW, py); ctx.stroke();
-        const val = d.vmax - (d.vmax - d.vmin) * tt;
+        const val = vmax - range * tt;
         ctx.fillStyle = '#9a9ab0';
         ctx.fillText(formatValue(val), x0 - 6, py);
     }
@@ -1666,7 +2086,10 @@ function renderProfileChart() {
         ctx.fillText(lbl, px, y0 + plotH + 5);
     }
 
-    const range = (d.vmax - d.vmin) || 1;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0, y0, plotW, plotH);
+    ctx.clip();
 
     if (profileChartStyle === 'dots') {
         // 散點：各取樣點畫小圓點
@@ -1676,7 +2099,7 @@ function renderProfileChart() {
             const v = d.vals[i];
             if (!Number.isFinite(v)) continue;
             const px = x0 + (d.dist[i] / distPx) * plotW;
-            const py = y0 + (1 - (v - d.vmin) / range) * plotH;
+            const py = y0 + (1 - (v - vmin) / range) * plotH;
             ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI * 2); ctx.fill();
         }
     } else {
@@ -1688,12 +2111,13 @@ function renderProfileChart() {
             const v = d.vals[i];
             if (!Number.isFinite(v)) { started = false; continue; }
             const px = x0 + (d.dist[i] / distPx) * plotW;
-            const py = y0 + (1 - (v - d.vmin) / range) * plotH;
+            const py = y0 + (1 - (v - vmin) / range) * plotH;
             if (!started) { ctx.moveTo(px, py); started = true; }
             else ctx.lineTo(px, py);
         }
         ctx.stroke();
     }
+    ctx.restore();
 
     if (profileState.hoverIndex != null && !profileState.measureMode) drawProfileChartCrosshair();
     drawProfileChartMeasure();
@@ -1744,9 +2168,10 @@ function profileMeasureLabelScore(dist, step, geom) {
 }
 
 /** 選擇距離／階高標籤位置，避免重疊 */
-function profileMeasurePickLabels(ctx, mr, d, g, p0, p1, corner) {
-    const distText = formatProfileMeasureDist(mr, d);
-    const stepText = formatProfileMeasureStep(mr);
+function profileMeasurePickLabels(ctx, mr, d, g, p0, p1, corner, setNum) {
+    const prefix = setNum != null ? `#${setNum} ` : '';
+    const distText = prefix + formatProfileMeasureDist(mr, d);
+    const stepText = prefix + formatProfileMeasureStep(mr);
     const distMidX = (p0.px + corner.px) / 2;
     const stepMidY = (corner.py + p1.py) / 2;
     const sgnX = p1.px >= p0.px ? 1 : -1;
@@ -1866,112 +2291,124 @@ function drawProfileMeasureLabelLeader(ctx, box, color, targetX, targetY) {
 }
 
 function drawProfileChartMeasure() {
-    const pts = profileState.measurePts;
     const d = profileState.data, g = profileState.geom;
-    if (!d || !g || pts.length === 0) return;
+    if (!d || !g) return;
     const ctx = profileCanvas.getContext('2d');
-    const coords = [];
-    for (let k = 0; k < pts.length; k++) {
-        const p = profileChartPointPx(d, g, pts[k]);
-        if (!p) continue;
-        coords.push({ ...p, color: PROFILE_MEASURE_COLORS[k] });
-    }
+    const showSetNum = profileState.measureSets.length > 1;
 
-    if (coords.length === 2) {
-        const p0 = coords[0], p1 = coords[1];
-        const corner = { px: p1.px, py: p0.py };
-        const mr = profileMeasureResult();
-        const distColor = PROFILE_MEASURE_DIST_COLOR;
-        const stepColor = PROFILE_MEASURE_STEP_COLOR;
-
-        ctx.save();
-        // 直角三角形淡色填充，強調量測區域
-        ctx.beginPath();
-        ctx.moveTo(p0.px, p0.py);
-        ctx.lineTo(corner.px, corner.py);
-        ctx.lineTo(p1.px, p1.py);
-        ctx.closePath();
-        ctx.fillStyle = PROFILE_MEASURE_FILL;
-        ctx.fill();
-
-        // 水平線：距離（虛線 + 描邊，與剖面藍線區隔）
-        ctx.setLineDash([5, 4]);
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(p0.px, p0.py);
-        ctx.lineTo(corner.px, corner.py);
-        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.strokeStyle = distColor;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // 垂直線：階高（實線 + 描邊）
-        ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.moveTo(corner.px, corner.py);
-        ctx.lineTo(p1.px, p1.py);
-        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.strokeStyle = stepColor;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // 直角記號
-        const tick = 6;
-        const sgnX = p1.px >= p0.px ? 1 : -1;
-        const sgnY = p1.py >= p0.py ? 1 : -1;
-        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-        ctx.lineWidth = 1.25;
-        ctx.beginPath();
-        ctx.moveTo(corner.px, corner.py);
-        ctx.lineTo(corner.px - sgnX * tick, corner.py);
-        ctx.moveTo(corner.px, corner.py);
-        ctx.lineTo(corner.px, corner.py - sgnY * tick);
-        ctx.stroke();
-
-        // 端點短劃線（標尺刻度）
-        const cap = 4;
-        ctx.strokeStyle = distColor;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(p0.px, p0.py - cap); ctx.lineTo(p0.px, p0.py + cap);
-        ctx.moveTo(corner.px, corner.py - cap); ctx.lineTo(corner.px, corner.py + cap);
-        ctx.stroke();
-        ctx.strokeStyle = stepColor;
-        ctx.beginPath();
-        ctx.moveTo(corner.px - cap, corner.py); ctx.lineTo(corner.px + cap, corner.py);
-        ctx.moveTo(p1.px - cap, p1.py); ctx.lineTo(p1.px + cap, p1.py);
-        ctx.stroke();
-
-        if (mr) {
-            const distMidX = (p0.px + corner.px) / 2;
-            const stepMidY = (corner.py + p1.py) / 2;
-            const layout = profileMeasurePickLabels(ctx, mr, d, g, p0, p1, corner);
-            if (!layout.stacked) {
-                drawProfileMeasureLabelLeader(ctx, layout.dist, distColor, distMidX, p0.py);
-                drawProfileMeasureLabelLeader(ctx, layout.step, stepColor, corner.px, stepMidY);
-            }
-            drawProfileMeasureDimLabel(ctx, layout.dist, distColor);
-            drawProfileMeasureDimLabel(ctx, layout.step, stepColor);
+    const drawPair = (pts, style, setNum) => {
+        if (!pts || pts.length === 0) return;
+        const coords = [];
+        for (let k = 0; k < pts.length; k++) {
+            const p = profileChartPointPx(d, g, pts[k]);
+            if (!p) continue;
+            coords.push({ ...p, color: style.colors[k % style.colors.length] });
         }
-        ctx.setLineDash([]);
-        ctx.restore();
+        if (coords.length === 2) {
+            const p0 = coords[0], p1 = coords[1];
+            const corner = { px: p1.px, py: p0.py };
+            const mr = profileMeasureResultFromPts(pts, d);
+            const distColor = style.dist;
+            const stepColor = style.step;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(p0.px, p0.py);
+            ctx.lineTo(corner.px, corner.py);
+            ctx.lineTo(p1.px, p1.py);
+            ctx.closePath();
+            ctx.fillStyle = style.fill;
+            ctx.fill();
+
+            ctx.setLineDash([5, 4]);
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(p0.px, p0.py);
+            ctx.lineTo(corner.px, corner.py);
+            ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.strokeStyle = distColor;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(corner.px, corner.py);
+            ctx.lineTo(p1.px, p1.py);
+            ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.strokeStyle = stepColor;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            const tick = 6;
+            const sgnX = p1.px >= p0.px ? 1 : -1;
+            const sgnY = p1.py >= p0.py ? 1 : -1;
+            ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+            ctx.lineWidth = 1.25;
+            ctx.beginPath();
+            ctx.moveTo(corner.px, corner.py);
+            ctx.lineTo(corner.px - sgnX * tick, corner.py);
+            ctx.moveTo(corner.px, corner.py);
+            ctx.lineTo(corner.px, corner.py - sgnY * tick);
+            ctx.stroke();
+
+            const cap = 4;
+            ctx.strokeStyle = distColor;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(p0.px, p0.py - cap); ctx.lineTo(p0.px, p0.py + cap);
+            ctx.moveTo(corner.px, corner.py - cap); ctx.lineTo(corner.px, corner.py + cap);
+            ctx.stroke();
+            ctx.strokeStyle = stepColor;
+            ctx.beginPath();
+            ctx.moveTo(corner.px - cap, corner.py); ctx.lineTo(corner.px + cap, corner.py);
+            ctx.moveTo(p1.px - cap, p1.py); ctx.lineTo(p1.px + cap, p1.py);
+            ctx.stroke();
+
+            if (mr) {
+                const distMidX = (p0.px + corner.px) / 2;
+                const stepMidY = (corner.py + p1.py) / 2;
+                const layout = profileMeasurePickLabels(
+                    ctx, mr, d, g, p0, p1, corner, showSetNum ? setNum : null
+                );
+                if (!layout.stacked) {
+                    drawProfileMeasureLabelLeader(ctx, layout.dist, distColor, distMidX, p0.py);
+                    drawProfileMeasureLabelLeader(ctx, layout.step, stepColor, corner.px, stepMidY);
+                }
+                drawProfileMeasureDimLabel(ctx, layout.dist, distColor);
+                drawProfileMeasureDimLabel(ctx, layout.step, stepColor);
+            }
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+
+        for (const c of coords) {
+            ctx.beginPath();
+            ctx.arc(c.px, c.py, 5, 0, Math.PI * 2);
+            ctx.fillStyle = c.color;
+            ctx.fill();
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#fff';
+            ctx.stroke();
+        }
+    };
+
+    for (let s = 0; s < profileState.measureSets.length; s++) {
+        drawPair(profileState.measureSets[s].pts, profileMeasureSetStyle(s), s + 1);
+    }
+    if (profileState.measurePts.length > 0) {
+        drawPair(
+            profileState.measurePts,
+            profileMeasureSetStyle(profileState.measureSets.length),
+            profileState.measureSets.length + 1
+        );
     }
 
-    for (const c of coords) {
-        ctx.beginPath();
-        ctx.arc(c.px, c.py, 5, 0, Math.PI * 2);
-        ctx.fillStyle = c.color;
-        ctx.fill();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = '#fff';
-        ctx.stroke();
-    }
     if (profileState.measureMode && profileState.hoverIndex != null
-        && !pts.includes(profileState.hoverIndex)) {
+        && !profileMeasureIndexTaken(profileState.hoverIndex)) {
         const p = profileChartPointPx(d, g, profileState.hoverIndex);
         if (p) {
             ctx.beginPath();
@@ -1998,8 +2435,10 @@ function drawProfileChartCrosshair() {
     ctx.beginPath(); ctx.moveTo(px, g.padT); ctx.lineTo(px, g.padT + g.plotH); ctx.stroke();
     const v = d.vals[i];
     if (Number.isFinite(v)) {
-        const range = (d.vmax - d.vmin) || 1;
-        const py = g.padT + (1 - (v - d.vmin) / range) * g.plotH;
+        const vmin = Number.isFinite(g.vmin) ? g.vmin : d.vmin;
+        const vmax = Number.isFinite(g.vmax) ? g.vmax : d.vmax;
+        const range = (vmax - vmin) || 1;
+        const py = g.padT + (1 - (v - vmin) / range) * g.plotH;
         ctx.fillStyle = '#ffd24a';
         ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
     }
@@ -2015,12 +2454,14 @@ function clearProfile() {
     profileState.data = null;
     profileState.geom = null;
     profileState.hoverIndex = null;
+    resetProfileYView();
     clearProfileMeasurePts();
     profileTip.classList.remove('show');
     profilePanel.classList.remove('show');
     if (profileBandWrap) profileBandWrap.style.display = 'none';
     if (profileChartStyleWrap) profileChartStyleWrap.style.display = 'none';
     if (profileMeasureBtn) profileMeasureBtn.style.display = 'none';
+    if (profileMeasureClearBtn) profileMeasureClearBtn.style.display = 'none';
     drawProfileOverlay();
 }
 
@@ -2044,46 +2485,170 @@ function updateProfileMeasureTip(e) {
     const d = profileState.data;
     if (!d) return;
     const n = profileState.measurePts.length;
+    const setNum = profileState.measureSets.length + 1;
     if (n < 2) {
-        const hint = n === 0 ? t('profileMeasurePick1') : t('profileMeasurePick2');
+        const hint = n === 0
+            ? t('profileMeasurePick1Set', setNum)
+            : t('profileMeasurePick2Set', setNum);
         showProfileChartTip(e, `<div>${hint}</div>`);
         return;
     }
     const mr = profileMeasureResult();
     if (!mr) return;
     showProfileChartTip(e,
-        `<div><span class="k">${t('measureDist')}:</span>${formatValue(mr.dist)} ${profileMeasureDistUnit(d)}</div>` +
+        `<div><span class="k">${t('measureDist')}:</span>${formatProfileMeasureDistValue(mr, d)}</div>` +
         `<div><span class="k">${t('profileMeasureStep')}:</span>${formatValue(mr.step)}${profileMeasureStepUnit() ? ' ' + profileMeasureStepUnit() : ''}</div>`);
 }
 
+profileCanvas.addEventListener('wheel', (e) => {
+    const d = profileState.data, g = profileState.geom;
+    if (!d || !g || d.N === 0) return;
+    const rect = profileCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    if (!isProfileYAxisHit(mx, my, g)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const factor = e.deltaY < 0 ? 1 / 1.18 : 1.18;
+    zoomProfileYAt(d, g, my, factor);
+    renderProfileChart();
+}, { passive: false });
+
+profileCanvas.addEventListener('dblclick', (e) => {
+    const d = profileState.data, g = profileState.geom;
+    if (!d || !g) return;
+    const rect = profileCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    if (!isProfileYAxisHit(mx, my, g)) return;
+    e.preventDefault();
+    resetProfileYView();
+    renderProfileChart();
+});
+
+profileCanvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const d = profileState.data, g = profileState.geom;
+    if (!d || !g || d.N === 0) return;
+    if (!profileMeasureHasAny()) return;
+    const rect = profileCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    if (isProfileYAxisHit(mx, my, g)) return;
+    const hit = profileMeasureHitHandle(mx, my);
+    if (!hit) return;
+    e.preventDefault();
+    profileState.measureDrag = {
+        setKey: hit.setKey,
+        ptIndex: hit.ptIndex,
+        moved: false,
+        pointerId: e.pointerId,
+    };
+    profileState.hoverIndex = null;
+    try { profileCanvas.setPointerCapture(e.pointerId); } catch (_) {}
+    profileCanvas.style.cursor = 'grabbing';
+    profileTip.classList.remove('show');
+});
+
+profileCanvas.addEventListener('pointermove', (e) => {
+    const drag = profileState.measureDrag;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const d = profileState.data, g = profileState.geom;
+    if (!d || !g || d.N === 0) return;
+    const rect = profileCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const idx = profileChartNearestIndex(mx, my);
+    if (idx == null) return;
+    if (profileMeasureSetEndpoint(drag.setKey, drag.ptIndex, idx)) {
+        drag.moved = true;
+        renderProfileChart();
+        drawProfileOverlay();
+    }
+    profileCanvas.style.cursor = 'grabbing';
+});
+
+function endProfileMeasureDrag(e) {
+    const drag = profileState.measureDrag;
+    if (!drag) return;
+    if (e && drag.pointerId !== e.pointerId) return;
+    if (drag.moved) profileMeasureSuppressClick = true;
+    profileState.measureDrag = null;
+    try {
+        if (e) profileCanvas.releasePointerCapture(e.pointerId);
+    } catch (_) {}
+    syncProfileMeasureUI();
+    renderProfileChart();
+    drawProfileOverlay();
+}
+
+profileCanvas.addEventListener('pointerup', endProfileMeasureDrag);
+profileCanvas.addEventListener('pointercancel', endProfileMeasureDrag);
+
 profileCanvas.addEventListener('click', (e) => {
+    if (profileMeasureSuppressClick) {
+        profileMeasureSuppressClick = false;
+        return;
+    }
     if (!profileState.measureMode) return;
     const d = profileState.data, g = profileState.geom;
     if (!d || !g || d.N === 0) return;
     const rect = profileCanvas.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    if (isProfileYAxisHit(mx, my, g)) return;
+    // 點在既有圓點上不新增（留给拖曳）
+    if (profileMeasureHitHandle(mx, my)) return;
     const idx = profileChartPickIndex(mx, my);
     if (idx == null) return;
+    if (profileState.measureSets.length >= PROFILE_MEASURE_MAX_SETS) {
+        setProfileMeasureMode(false);
+        syncProfileMeasureUI();
+        showToast(t('profileMeasureMaxSets', PROFILE_MEASURE_MAX_SETS), 'info');
+        return;
+    }
+    profileState.measurePts.push(idx);
     if (profileState.measurePts.length >= 2) {
-        profileState.measurePts = [idx];
-    } else {
-        profileState.measurePts.push(idx);
+        profileState.measureSets.push({ pts: profileState.measurePts.slice(0, 2) });
+        profileState.measurePts = [];
+        // 每次按測量鈕只新增一組：完成後自動結束測量模式
+        profileState.measureMode = false;
     }
     profileState.hoverIndex = null;
+    syncProfileMeasureUI();
     renderProfileChart();
     drawProfileOverlay();
-    updateProfileMeasureTip(e);
+    if (profileState.measureMode) updateProfileMeasureTip(e);
+    else profileTip.classList.remove('show');
 });
 
 profileCanvas.addEventListener('mousemove', (e) => {
+    if (profileState.measureDrag) return;
     const d = profileState.data, g = profileState.geom;
     if (!d || !g) return;
     if (d.N === 0) return;
     const rect = profileCanvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    if (isProfileYAxisHit(mx, my, g)) {
+        profileCanvas.style.cursor = 'ns-resize';
+        profileState.hoverIndex = null;
+        profileTip.classList.remove('show');
+        renderProfileChart();
+        drawProfileOverlay();
+        return;
+    }
+
+    if (profileMeasureHitHandle(mx, my)) {
+        profileCanvas.style.cursor = 'grab';
+        profileState.hoverIndex = null;
+        profileTip.classList.remove('show');
+        renderProfileChart();
+        drawProfileOverlay();
+        return;
+    }
+
+    profileCanvas.style.cursor = '';
 
     if (profileState.measureMode) {
-        const my = e.clientY - rect.top;
         const idx = profileChartPickIndex(mx, my);
         profileState.hoverIndex = idx;
         renderProfileChart();
@@ -2108,8 +2673,10 @@ profileCanvas.addEventListener('mousemove', (e) => {
 });
 
 profileCanvas.addEventListener('mouseleave', () => {
+    if (profileState.measureDrag) return;
     profileState.hoverIndex = null;
     profileTip.classList.remove('show');
+    profileCanvas.style.cursor = '';
     renderProfileChart();
     drawProfileOverlay();
 });
@@ -2141,6 +2708,7 @@ function recomputeProfile() {
     if (profileState.hoverIndex != null && profileState.hoverIndex >= profileState.data.N) {
         profileState.hoverIndex = null;
     }
+    resetProfileYView();
     clearProfileMeasurePts();
     renderProfileChart();
     drawProfileOverlay();
@@ -2151,13 +2719,22 @@ function profileMinLineLen() {
     return profileState.space === 'world' ? 3 * scatterView.worldPerPx : 1;
 }
 
+/** 點擊落在 viewer 內的 overlay UI（面板／工具列）時，不視為圖面繪線 */
+function isViewerOverlayUi(el) {
+    return !!(el && el.closest && (
+        el.closest('.profile-panel') ||
+        el.closest('.measure-panel') ||
+        el.closest('.viewer-cursor-toolbar')
+    ));
+}
+
 // 在影像/點雲上拉線，或拖曳既有剖面線
 viewerEl.addEventListener('mousedown', (e) => {
     if (view3dActive) return;
     if (cursorMode !== 'profile') return;
     if (e.button !== 0) return;
     if (!currentDataset) return;
-    if (e.target.closest && (e.target.closest('.profile-panel') || e.target.closest('.measure-panel'))) return;
+    if (isViewerOverlayUi(e.target)) return;
 
     const scatter = isPcdScatterDataset(currentDataset);
     profileState.space = scatter ? 'world' : 'image';
@@ -2486,6 +3063,14 @@ function clearMeasureArea() {
     drawProfileOverlay();
 }
 
+/** 清除圖上所有量測標記（剖面／距離／區域） */
+function clearAllViewerMarks() {
+    clearProfile();
+    clearMeasureDistance();
+    clearMeasureArea();
+    viewerEl.style.cursor = '';
+}
+
 function measureDistHitTest(clientX, clientY) {
     const L = measureState.distLine;
     if (!L) return null;
@@ -2629,7 +3214,7 @@ viewerEl.addEventListener('mousedown', (e) => {
     if (cursorMode !== 'measure') return;
     if (e.button !== 0) return;
     if (!currentDataset) return;
-    if (e.target.closest && (e.target.closest('.profile-panel') || e.target.closest('.measure-panel'))) return;
+    if (isViewerOverlayUi(e.target)) return;
 
     measureState.space = overlaySpaceForDataset();
 
@@ -2662,7 +3247,7 @@ viewerEl.addEventListener('mousedown', (e) => {
     if (cursorMode !== 'area') return;
     if (e.button !== 0) return;
     if (!currentDataset) return;
-    if (e.target.closest && (e.target.closest('.profile-panel') || e.target.closest('.measure-panel'))) return;
+    if (isViewerOverlayUi(e.target)) return;
 
     measureState.space = overlaySpaceForDataset();
 
@@ -2826,7 +3411,7 @@ window.addEventListener('mouseup', () => {
 const modeIndicator = document.getElementById('modeIndicator');
 const modeIndicatorLabel = document.getElementById('modeIndicatorLabel');
 const viewerCursorToolbar = document.getElementById('viewerCursorToolbar');
-const CURSOR_MODE_BTNS = '#cursorToggle button, #viewerCursorToolbar button';
+const CURSOR_MODE_BTNS = '#cursorToggle button[data-cursor], #viewerCursorToolbar button[data-cursor]';
 
 /** 同步頂部與浮空工具列的滑鼠模式按鈕 active 狀態 */
 function syncCursorModeButtons(mode) {
@@ -2924,6 +3509,12 @@ function applyCursorMode(mode, opts) {
 document.querySelectorAll(CURSOR_MODE_BTNS).forEach(btn => {
     btn.addEventListener('click', () => {
         applyCursorMode(btn.getAttribute('data-cursor'));
+    });
+});
+
+document.querySelectorAll('.viewer-clear-marks-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        clearAllViewerMarks();
     });
 });
 
