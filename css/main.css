@@ -1666,7 +1666,16 @@
         font-size: 13px;
     }
     .more-menu-actions button:hover:not(:disabled) { background: #4a4a5c; }
-    .more-menu-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .more-menu-actions button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        pointer-events: none; /* 讓外層 tip host 能顯示 title */
+    }
+    .more-menu-actions .ed-tool-tip-host { width: 100%; }
+    .send-menu button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
 
     /* ????????????????????? */
     .crop-overlay {

@@ -749,22 +749,64 @@ function createImageView(ids, options) {
         renderInfo(ds.header, ds.width, ds.height, infoExtra);
     }
 
+    /** 設定工具按鈕啟用狀態與提示（disabled 時改寫到外層 tip host） */
+    function setToolBtnState(btn, enabled, tip) {
+        if (!btn) return;
+        btn.disabled = !enabled;
+        btn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+        if (tip) {
+            btn.title = tip;
+            btn.setAttribute('aria-label', tip);
+            const tipHost = btn.closest('.ed-tool-tip-host');
+            if (tipHost) tipHost.title = tip;
+        }
+    }
+
     function updateEditButtons() {
         if (!editing) return;
         const has = !!st.dataset;
-        [el.cropRect, el.cropCircle, el.denoise, el.medianFilter, el.nanPatch, el.segLevel, el.segSkew, el.globalLevel, el.btnCalc, el.sendMenu].forEach(b => { if (b) b.disabled = !has; });
+        const scatter = has && isScatter(st.dataset);
+        const hasGrid = has && !scatter;
+        // 散布／高度圖皆可用
+        [el.cropRect, el.cropCircle, el.denoise, el.globalLevel, el.sendMenu].forEach(b => { if (b) b.disabled = !has; });
+        // 僅高度圖：散布點雲載入時停用並顯示不支援提示
+        const heightOnlyTools = [
+            { btn: el.medianFilter, tipKey: 'medianFilterTitle', scatterKey: 'medianFilterScatter' },
+            { btn: el.nanPatch, tipKey: 'nanPatchTitle', scatterKey: 'nanPatchScatter' },
+            { btn: el.segLevel, tipKey: 'segLevelTitle', scatterKey: 'segLevelScatter' },
+            { btn: el.segSkew, tipKey: 'segSkewTitle', scatterKey: 'segSkewScatter' },
+            { btn: el.btnCalc, tipKey: 'calcTitle', scatterKey: 'calcPcdScatter' },
+        ];
+        heightOnlyTools.forEach(({ btn, tipKey, scatterKey }) => {
+            let tip = t(tipKey);
+            if (scatter) tip = t(scatterKey);
+            else if (!has) tip = t('editNoData');
+            setToolBtnState(btn, hasGrid, tip);
+        });
+        // 傳送到分析／疊圖僅支援高度圖
+        const sendHeightOnly = [
+            { btn: el.sendToAnalysis, tipKey: 'sendToAnalysisTitle', scatterKey: 'anScatterUnsupported' },
+            { btn: el.sendToOverlayA, tipKey: 'sendToOverlayATitle', scatterKey: 'ovScatterUnsupported' },
+            { btn: el.sendToOverlayB, tipKey: 'sendToOverlayBTitle', scatterKey: 'ovScatterUnsupported' },
+        ];
+        sendHeightOnly.forEach(({ btn, tipKey, scatterKey }) => {
+            let tip = t(tipKey);
+            if (scatter) tip = t(scatterKey);
+            else if (!has) tip = t('editNoData');
+            setToolBtnState(btn, hasGrid, tip);
+        });
+        if (el.sendToViewer) {
+            setToolBtnState(el.sendToViewer, has, has ? t('sendToViewerTitle') : t('editNoData'));
+        }
         // 網格化僅適用散布點雲；已是高度圖（grid）時一律停用（含視覺反灰）
         const scatterGridBtn = el.scatterGrid || document.getElementById('edScatterGrid');
         const scatterGridTip = el.scatterGridTip || document.getElementById('edScatterGridTip');
         if (scatterGridBtn) {
-            const canGridify = has && isScatter(st.dataset);
-            scatterGridBtn.disabled = !canGridify;
-            scatterGridBtn.setAttribute('aria-disabled', canGridify ? 'false' : 'true');
+            const canGridify = has && scatter;
             let tip = t('scatterGridTitle');
-            if (has && !isScatter(st.dataset)) tip = t('scatterGridAlreadyGrid');
+            if (has && !scatter) tip = t('scatterGridAlreadyGrid');
             else if (!has) tip = t('editNoData');
-            scatterGridBtn.title = tip;
-            scatterGridBtn.setAttribute('aria-label', tip);
+            setToolBtnState(scatterGridBtn, canGridify, tip);
             // disabled 按鈕本身常不顯示原生 title，改設在外層 tip host
             if (scatterGridTip) scatterGridTip.title = tip;
             if (!el.scatterGrid) el.scatterGrid = scatterGridBtn;
@@ -5146,6 +5188,7 @@ function createImageView(ids, options) {
                 el.btnClear.title = t('btnClearTitle');
                 el.btnClear.setAttribute('aria-label', t('btnClearTitle'));
             }
+            if (editing) updateEditButtons();
         },
         clearData,
     };

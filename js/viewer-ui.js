@@ -686,6 +686,7 @@ function bindSendDropdown(wrap, trigger, items) {
     items.forEach(({ el: btn, action }) => {
         if (!btn) return;
         btn.addEventListener('click', () => {
+            if (btn.disabled) return;
             close();
             action();
         });
