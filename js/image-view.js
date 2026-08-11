@@ -76,6 +76,17 @@ function createImageView(ids, options) {
             nanPatchRoi: null,
             nanPatchRoiSel: null,
             nanPatchRoiAction: null,
+            roiLevel: false,
+            roiLevelBusy: false,
+            roiLevelRunId: 0,
+            roiLevelBase: null,
+            roiLevelResult: null,
+            roiLevelViews: null,
+            roiLevelPan: null,
+            roiLevelRoiMode: null,
+            roiLevelRoi: null,
+            roiLevelRoiSel: null,
+            roiLevelRoiAction: null,
             histLo: 0, histHi: 1,
             histAuto: false,   // 刪除雜點是否以自動（IQR）方式套用
             history: [],         // 編輯歷史（資料集快照）
@@ -634,6 +645,7 @@ function createImageView(ids, options) {
             else if (st.edit.medianFilter) renderMedianFilterCompare();
             else if (st.edit.scatterGrid) renderScatterGridCompare();
             else if (st.edit.nanPatch) renderNanPatchCompare();
+            else if (st.edit.roiLevel) renderRoiLevelCompare();
             else render(st.dataset, el.colormap.value, false);
         }
     });
@@ -773,6 +785,7 @@ function createImageView(ids, options) {
         const heightOnlyTools = [
             { btn: el.medianFilter, tipKey: 'medianFilterTitle', scatterKey: 'medianFilterScatter' },
             { btn: el.nanPatch, tipKey: 'nanPatchTitle', scatterKey: 'nanPatchScatter' },
+            { btn: el.roiLevel, tipKey: 'roiLevelTitle', scatterKey: 'roiLevelScatter' },
             { btn: el.segLevel, tipKey: 'segLevelTitle', scatterKey: 'segLevelScatter' },
             { btn: el.segSkew, tipKey: 'segSkewTitle', scatterKey: 'segSkewScatter' },
             { btn: el.btnCalc, tipKey: 'calcTitle', scatterKey: 'calcPcdScatter' },
@@ -847,6 +860,8 @@ function createImageView(ids, options) {
         if (el.nanPatchCancel) el.nanPatchCancel.disabled = !(has && st.edit.nanPatch);
         const nanPatchConfigLocked = !(has && st.edit.nanPatch && !st.edit.nanPatchBusy && st.edit.nanPatchResult);
         if (el.nanPatchKernel) el.nanPatchKernel.disabled = nanPatchConfigLocked;
+        if (el.roiLevelApply) el.roiLevelApply.disabled = !(has && st.edit.roiLevel && !st.edit.roiLevelBusy && st.edit.roiLevelResult);
+        if (el.roiLevelCancel) el.roiLevelCancel.disabled = !(has && st.edit.roiLevel);
         updateHistoryButtons();
     }
 
@@ -955,6 +970,7 @@ function createImageView(ids, options) {
         if (st.edit.medianFilter) cancelMedianFilter();
         if (st.edit.scatterGrid) cancelScatterGrid();
         if (st.edit.nanPatch) cancelNanPatch();
+        if (st.edit.roiLevel) cancelRoiLevel();
     }
     function doUndo() {
         if (!editing || !st.dataset || st.edit.histIndex <= 0) return;
@@ -1109,6 +1125,595 @@ function createImageView(ids, options) {
         setLastEditStep({ type: 'globalLevel' });
         el.status.textContent = t('globalLevelDone', n);
         showToast(t('globalLevelDone', n), 'info');
+    }
+
+    /* ---------- 擇區水平校正模式（ROI 擬合平面 → 全圖去傾斜） ---------- */
+
+    function roiLevelStatusText(result) {
+        if (!result || !result.plane) return '';
+        return t('roiLevelMeta', result.plane.n);
+    }
+
+    function roiLevelRoiKey(roi) {
+        if (!roi) return '';
+        return `${roi.shape}:${roi.x0},${roi.y0},${roi.x1},${roi.y1}`;
+    }
+
+    function captureRoiLevelRoi() {
+        return st.edit.roiLevelRoi ? { ...st.edit.roiLevelRoi } : null;
+    }
+
+    function snapshotRoiLevelBase() {
+        const ds = st.dataset;
+        ensureFloatPixels(ds);
+        st.edit.roiLevelBase = {
+            data: ds.data.slice(0),
+            vmin: ds.vmin,
+            vmax: ds.vmax,
+            width: ds.width,
+            height: ds.height,
+            header: ds.header,
+        };
+    }
+
+    function roiLevelEnsureViews() {
+        if (!st.edit.roiLevelViews) {
+            st.edit.roiLevelViews = {
+                beforeImg: segLevelDefaultView(),
+                afterImg: segLevelDefaultView(),
+            };
+        }
+        return st.edit.roiLevelViews;
+    }
+
+    function roiLevelResetViews() {
+        st.edit.roiLevelViews = null;
+        st.edit.roiLevelPan = null;
+    }
+
+    function roiLevelSyncViewTransform(zoomKey, canvas, resetView) {
+        if (!zoomKey || !canvas) return;
+        const wrap = canvas.parentElement;
+        if (!wrap) return;
+        const views = roiLevelEnsureViews();
+        const view = views[zoomKey];
+        const { cw, ch } = segLevelContentSize(canvas);
+        const sizeChanged = view.contentW !== cw || view.contentH !== ch;
+        if (resetView || sizeChanged) segLevelFitView(view, wrap, cw, ch);
+        segLevelApplyViewTransform(canvas, view, wrap);
+    }
+
+    function roiLevelZoomAt(zoomKey, wrap, canvas, screenX, screenY, zoomFactor) {
+        const views = roiLevelEnsureViews();
+        const view = views[zoomKey];
+        let newScale = view.scale * zoomFactor;
+        if (newScale < view.minScale) newScale = view.minScale;
+        if (newScale > view.maxScale) newScale = view.maxScale;
+        const k = newScale / view.scale;
+        view.tx = screenX - (screenX - view.tx) * k;
+        view.ty = screenY - (screenY - view.ty) * k;
+        view.scale = newScale;
+        segLevelApplyViewTransform(canvas, view, wrap);
+    }
+
+    function roiLevelRoiNormToWrapSel(roi) {
+        if (!roi || !st.dataset) return null;
+        const views = roiLevelEnsureViews();
+        const view = views.beforeImg;
+        const { width, height } = st.dataset;
+        const ix0 = roi.x0 * width, ix1 = roi.x1 * width;
+        const iy0 = roi.y0 * height, iy1 = roi.y1 * height;
+        return {
+            x0: ix0 * view.scale + view.tx,
+            y0: iy0 * view.scale + view.ty,
+            x1: ix1 * view.scale + view.tx,
+            y1: iy1 * view.scale + view.ty,
+        };
+    }
+
+    function roiLevelWrapSelToNorm(sel, shape) {
+        if (!sel || !st.dataset) return null;
+        const views = roiLevelEnsureViews();
+        const view = views.beforeImg;
+        const { width, height } = st.dataset;
+        const n = normSel(sel);
+        const ix0 = (n.x0 - view.tx) / view.scale;
+        const iy0 = (n.y0 - view.ty) / view.scale;
+        const ix1 = (n.x1 - view.tx) / view.scale;
+        const iy1 = (n.y1 - view.ty) / view.scale;
+        return {
+            shape,
+            x0: Math.max(0, Math.min(1, ix0 / width)),
+            y0: Math.max(0, Math.min(1, iy0 / height)),
+            x1: Math.max(0, Math.min(1, ix1 / width)),
+            y1: Math.max(0, Math.min(1, iy1 / height)),
+        };
+    }
+
+    function drawRoiLevelRoiShape() {
+        const sh = el.roiLevelCropShape;
+        if (!sh) return;
+        const mode = st.edit.roiLevelRoiMode;
+        const circle = mode === 'circle' || st.edit.roiLevelRoi?.shape === 'circle';
+        sh.classList.toggle('circle', !!circle);
+        const sel = st.edit.roiLevelRoiSel || roiLevelRoiNormToWrapSel(st.edit.roiLevelRoi);
+        if (!sel || !st.edit.roiLevel) {
+            drawRegionShape(sh, null);
+            return;
+        }
+        drawRegionShape(sh, sel);
+    }
+
+    function updateRoiLevelMeta() {
+        if (!el.roiLevelMeta) return;
+        const result = st.edit.roiLevelResult;
+        el.roiLevelMeta.textContent = result ? roiLevelStatusText(result) : '';
+    }
+
+    function updateRoiLevelRoiUI() {
+        const mode = st.edit.roiLevelRoiMode;
+        const hasRoi = !!st.edit.roiLevelRoi;
+        const wrap = el.roiLevelBeforeWrap || el.roiLevelBefore?.parentElement;
+        if (el.roiLevelRoiRect) el.roiLevelRoiRect.classList.toggle('active', mode === 'rect');
+        if (el.roiLevelRoiCircle) el.roiLevelRoiCircle.classList.toggle('active', mode === 'circle');
+        const roiLocked = !st.edit.roiLevel || st.edit.roiLevelBusy;
+        if (el.roiLevelRoiRect) el.roiLevelRoiRect.disabled = roiLocked;
+        if (el.roiLevelRoiCircle) el.roiLevelRoiCircle.disabled = roiLocked;
+        if (el.roiLevelRoiClear) el.roiLevelRoiClear.disabled = roiLocked || !(hasRoi || !!st.edit.roiLevelRoiSel || !!mode);
+        if (wrap) {
+            wrap.classList.toggle('crop-active', !!mode);
+            wrap.classList.toggle('nan-patch-roi-show', !!(mode || hasRoi || st.edit.roiLevelRoiSel));
+        }
+        if (el.roiLevelCropOverlay) {
+            el.roiLevelCropOverlay.setAttribute('aria-hidden', (mode || hasRoi) ? 'false' : 'true');
+        }
+        if (el.roiLevelCropHint) {
+            el.roiLevelCropHint.style.display = mode ? '' : 'none';
+        }
+        drawRoiLevelRoiShape();
+    }
+
+    function setRoiLevelRoiMode(mode) {
+        if (!st.edit.roiLevel || st.edit.roiLevelBusy) return;
+        if (st.edit.roiLevelRoiMode === mode) {
+            st.edit.roiLevelRoiMode = null;
+            st.edit.roiLevelRoiSel = null;
+            st.edit.roiLevelRoiAction = null;
+        } else {
+            if (mode && st.edit.roiLevelRoi && st.edit.roiLevelRoi.shape !== mode) {
+                st.edit.roiLevelRoi = null;
+                st.edit.roiLevelResult = null;
+                updateRoiLevelMeta();
+                clearRoiLevelAfterPane();
+            }
+            st.edit.roiLevelRoiMode = mode;
+            st.edit.roiLevelRoiSel = st.edit.roiLevelRoi ? roiLevelRoiNormToWrapSel(st.edit.roiLevelRoi) : null;
+            st.edit.roiLevelRoiAction = null;
+            if (el.roiLevelCropShape) el.roiLevelCropShape.classList.toggle('circle', mode === 'circle');
+        }
+        updateRoiLevelRoiUI();
+        updateEditButtons();
+    }
+
+    function clearRoiLevelRoi() {
+        if (!st.edit.roiLevel || st.edit.roiLevelBusy) return;
+        st.edit.roiLevelRoiMode = 'rect';
+        st.edit.roiLevelRoi = null;
+        st.edit.roiLevelRoiSel = null;
+        st.edit.roiLevelRoiAction = null;
+        st.edit.roiLevelResult = null;
+        updateRoiLevelMeta();
+        clearRoiLevelAfterPane();
+        updateRoiLevelRoiUI();
+        updateEditButtons();
+        el.status.textContent = t('roiLevelProcessing');
+    }
+
+    function startRoiLevelBeforePan(e) {
+        if (!st.edit.roiLevel || st.edit.roiLevelBusy || !st.edit.roiLevelRoiMode) return;
+        const wrap = el.roiLevelBeforeWrap || el.roiLevelBefore?.parentElement;
+        const canvas = el.roiLevelBefore;
+        if (!wrap || !canvas) return;
+        const views = roiLevelEnsureViews();
+        const view = views.beforeImg;
+        st.edit.roiLevelPan = {
+            key: 'beforeImg',
+            wrap,
+            canvas,
+            startX: e.clientX,
+            startY: e.clientY,
+            tx: view.tx,
+            ty: view.ty,
+        };
+        wrap.classList.add('grabbing');
+        e.preventDefault();
+    }
+
+    function setupRoiLevelMiddlePan() {
+        const wrap = el.roiLevelBeforeWrap || el.roiLevelBefore?.parentElement;
+        const overlay = el.roiLevelCropOverlay;
+        [wrap, overlay].forEach((node) => {
+            if (!node || node.dataset.roiLevelMidPanBound) return;
+            node.dataset.roiLevelMidPanBound = '1';
+            node.addEventListener('mousedown', (e) => {
+                if (e.button !== 1) return;
+                startRoiLevelBeforePan(e);
+            });
+        });
+    }
+
+    function onRoiLevelRoiSelectEnd(act) {
+        const mode = st.edit.roiLevelRoiMode;
+        if (!mode) return;
+        if (st.edit.roiLevelRoiSel) {
+            const n = normSel(st.edit.roiLevelRoiSel);
+            if ((n.x1 - n.x0) < CROP_MIN || (n.y1 - n.y0) < CROP_MIN) {
+                st.edit.roiLevelRoiSel = st.edit.roiLevelRoi ? roiLevelRoiNormToWrapSel(st.edit.roiLevelRoi) : null;
+                updateRoiLevelRoiUI();
+                return;
+            }
+            st.edit.roiLevelRoi = roiLevelWrapSelToNorm(st.edit.roiLevelRoiSel, mode);
+        } else if (act.type === 'draw' && st.edit.roiLevelRoi) {
+            st.edit.roiLevelRoiSel = roiLevelRoiNormToWrapSel(st.edit.roiLevelRoi);
+        } else {
+            st.edit.roiLevelRoi = null;
+        }
+        updateRoiLevelRoiUI();
+        recomputeRoiLevelPreview({ resetView: false, force: true });
+    }
+
+    function setupRoiLevelCropOverlay() {
+        const wrap = el.roiLevelBeforeWrap || el.roiLevelBefore?.parentElement;
+        setupRegionSelectOverlay({
+            overlay: el.roiLevelCropOverlay,
+            shape: el.roiLevelCropShape,
+            container: wrap,
+            isActive: () => st.edit.roiLevel && st.edit.roiLevelRoiMode && !st.edit.roiLevelBusy,
+            getSel: () => st.edit.roiLevelRoiSel,
+            setSel: (v) => { st.edit.roiLevelRoiSel = v; },
+            getAction: () => st.edit.roiLevelRoiAction,
+            setAction: (v) => { st.edit.roiLevelRoiAction = v; },
+            onEnd: onRoiLevelRoiSelectEnd,
+        });
+    }
+
+    function setupRoiLevelZoom() {
+        const beforeWrap = el.roiLevelBeforeWrap || el.roiLevelBefore?.parentElement;
+        const targets = [
+            { wrap: beforeWrap, canvas: el.roiLevelBefore, key: 'beforeImg' },
+            { wrap: el.roiLevelAfter?.parentElement, canvas: el.roiLevelAfter, key: 'afterImg' },
+        ];
+        for (const tgt of targets) {
+            if (!tgt.wrap || !tgt.canvas || tgt.wrap.dataset.roiLevelZoomBound) continue;
+            tgt.wrap.dataset.roiLevelZoomBound = '1';
+            tgt.wrap.classList.add('seg-level-zoomable');
+            if (!tgt.wrap.querySelector('.seg-level-zoom-ind')) {
+                const ind = document.createElement('div');
+                ind.className = 'seg-level-zoom-ind';
+                ind.setAttribute('aria-hidden', 'true');
+                tgt.wrap.appendChild(ind);
+            }
+            tgt.wrap.addEventListener('wheel', (e) => {
+                if (!st.edit.roiLevel || st.edit.roiLevelBusy) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const rect = tgt.wrap.getBoundingClientRect();
+                roiLevelZoomAt(tgt.key, tgt.wrap, tgt.canvas, e.clientX - rect.left, e.clientY - rect.top,
+                    Math.pow(1.0015, -(e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * tgt.wrap.clientHeight : e.deltaY)));
+                if (tgt.key === 'beforeImg') drawRoiLevelRoiShape();
+            }, { passive: false });
+            tgt.wrap.addEventListener('mousedown', (e) => {
+                if (!st.edit.roiLevel || st.edit.roiLevelBusy) return;
+                const isMid = e.button === 1;
+                if (e.button !== 0 && !isMid) return;
+                if (tgt.key === 'beforeImg' && tgt.wrap.classList.contains('crop-active')) {
+                    if (!isMid) return;
+                    startRoiLevelBeforePan(e);
+                    return;
+                }
+                const views = roiLevelEnsureViews();
+                const view = views[tgt.key];
+                st.edit.roiLevelPan = {
+                    key: tgt.key,
+                    wrap: tgt.wrap,
+                    canvas: tgt.canvas,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    tx: view.tx,
+                    ty: view.ty,
+                };
+                tgt.wrap.classList.add('grabbing');
+                e.preventDefault();
+            });
+            tgt.wrap.addEventListener('dblclick', (e) => {
+                if (!st.edit.roiLevel || st.edit.roiLevelBusy) return;
+                e.preventDefault();
+                const views = roiLevelEnsureViews();
+                const view = views[tgt.key];
+                segLevelFitView(view, tgt.wrap, view.contentW, view.contentH);
+                segLevelApplyViewTransform(tgt.canvas, view, tgt.wrap);
+                if (tgt.key === 'beforeImg') drawRoiLevelRoiShape();
+            });
+        }
+        if (!st.edit.roiLevelPanBound) {
+            st.edit.roiLevelPanBound = true;
+            window.addEventListener('mousemove', (e) => {
+                const pan = st.edit.roiLevelPan;
+                if (!pan) return;
+                const views = roiLevelEnsureViews();
+                const view = views[pan.key];
+                view.tx = pan.tx + (e.clientX - pan.startX);
+                view.ty = pan.ty + (e.clientY - pan.startY);
+                segLevelApplyViewTransform(pan.canvas, view, pan.wrap);
+                if (pan.key === 'beforeImg') drawRoiLevelRoiShape();
+            });
+            window.addEventListener('mouseup', () => {
+                const pan = st.edit.roiLevelPan;
+                if (!pan) return;
+                pan.wrap.classList.remove('grabbing');
+                st.edit.roiLevelPan = null;
+            });
+        }
+    }
+
+    function renderRoiLevelCanvas(canvas, data, width, height, cmin, crange, cmap, zoomKey, resetView) {
+        if (!canvas) return;
+        const cw = Math.max(1, width);
+        const ch = Math.max(1, height);
+        canvas.width = cw;
+        canvas.height = ch;
+        canvas.style.width = cw + 'px';
+        canvas.style.height = ch + 'px';
+        const ctx = canvas.getContext('2d');
+        const img = ctx.createImageData(cw, ch);
+        const px = img.data;
+        const lut = buildColormapLut(cmap);
+        for (let y = 0; y < ch; y++) {
+            const rowBase = y * width;
+            for (let x = 0; x < cw; x++) {
+                const v = data[rowBase + x];
+                const po = (y * cw + x) * 4;
+                if (!Number.isFinite(v)) {
+                    px[po] = px[po + 1] = px[po + 2] = 0;
+                    px[po + 3] = 255;
+                    continue;
+                }
+                let t = (v - cmin) / crange;
+                if (t < 0) t = 0; else if (t > 1) t = 1;
+                const lo = ((t * 255) | 0) * 3;
+                px[po] = lut[lo]; px[po + 1] = lut[lo + 1]; px[po + 2] = lut[lo + 2]; px[po + 3] = 255;
+            }
+        }
+        ctx.putImageData(img, 0, 0);
+        roiLevelSyncViewTransform(zoomKey, canvas, resetView);
+        if (zoomKey === 'beforeImg') drawRoiLevelRoiShape();
+    }
+
+    function setRoiLevelConfigUI(visible) {
+        if (el.roiLevelConfig) el.roiLevelConfig.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+
+    function setRoiLevelBusyUI(busy) {
+        st.edit.roiLevelBusy = !!busy;
+        if (el.roiLevelCompare) el.roiLevelCompare.classList.toggle('is-tune-busy', !!busy);
+        if (el.roiLevelBusy) {
+            el.roiLevelBusy.classList.toggle('show', !!busy);
+            el.roiLevelBusy.setAttribute('aria-hidden', busy ? 'false' : 'true');
+        }
+        updateRoiLevelRoiUI();
+        updateEditButtons();
+    }
+
+    function clearRoiLevelAfterPane() {
+        if (el.roiLevelAfter) {
+            const c = el.roiLevelAfter;
+            const ctx = c.getContext('2d');
+            if (ctx) ctx.clearRect(0, 0, c.width, c.height);
+        }
+        if (el.roiLevelAfterCbLo) el.roiLevelAfterCbLo.textContent = '';
+        if (el.roiLevelAfterCbHi) el.roiLevelAfterCbHi.textContent = '';
+    }
+
+    function renderRoiLevelCompare(opts) {
+        const resetView = !!(opts && opts.resetView);
+        const base = st.edit.roiLevelBase;
+        const result = st.edit.roiLevelResult;
+        if (!base || !result || !st.dataset) return;
+        const ds = st.dataset;
+        const cmap = el.colormap.value;
+        const { width, height } = ds;
+        const afterData = result.correctedData;
+        const afterStats = computeRange(afterData);
+        const beforeDr = segLevelDisplayRange(base.vmin, base.vmax, st.colorClip);
+        const afterDr = segLevelDisplayRange(afterStats.vmin, afterStats.vmax, st.colorClip);
+        renderRoiLevelCanvas(
+            el.roiLevelBefore, base.data, width, height,
+            beforeDr.cmin, beforeDr.crange, cmap, 'beforeImg', resetView,
+        );
+        renderRoiLevelCanvas(
+            el.roiLevelAfter, afterData, width, height,
+            afterDr.cmin, afterDr.crange, cmap, 'afterImg', resetView,
+        );
+        renderSegLevelPaneColorbar(
+            el.roiLevelBeforeCb, el.roiLevelBeforeCbLo, el.roiLevelBeforeCbHi,
+            base.vmin, base.vmax, cmap, st.colorClip,
+        );
+        renderSegLevelPaneColorbar(
+            el.roiLevelAfterCb, el.roiLevelAfterCbLo, el.roiLevelAfterCbHi,
+            afterStats.vmin, afterStats.vmax, cmap, st.colorClip,
+        );
+        updateRoiLevelMeta();
+        drawRoiLevelRoiShape();
+    }
+
+    function renderRoiLevelBeforeOnly() {
+        const base = st.edit.roiLevelBase;
+        if (!base || !st.dataset) return;
+        const cmap = el.colormap.value;
+        const { width, height } = st.dataset;
+        const dr = segLevelDisplayRange(base.vmin, base.vmax, st.colorClip);
+        renderRoiLevelCanvas(
+            el.roiLevelBefore, base.data, width, height,
+            dr.cmin, dr.crange, cmap, 'beforeImg', true,
+        );
+        renderSegLevelPaneColorbar(
+            el.roiLevelBeforeCb, el.roiLevelBeforeCbLo, el.roiLevelBeforeCbHi,
+            base.vmin, base.vmax, cmap, st.colorClip,
+        );
+        clearRoiLevelAfterPane();
+    }
+
+    async function recomputeRoiLevelPreview(options) {
+        options = options || {};
+        const base = st.edit.roiLevelBase;
+        if (!st.edit.roiLevel || !base || !st.dataset) return;
+
+        const roi = captureRoiLevelRoi();
+        if (!roi) {
+            st.edit.roiLevelResult = null;
+            updateRoiLevelMeta();
+            clearRoiLevelAfterPane();
+            updateEditButtons();
+            el.status.textContent = t('roiLevelNeedRoi');
+            return;
+        }
+
+        const roiKey = roiLevelRoiKey(roi);
+        const prev = st.edit.roiLevelResult;
+        if (prev && prev.roiKey === roiKey && !options.force) {
+            renderRoiLevelCompare({ resetView: !!options.resetView });
+            return;
+        }
+
+        const runId = ++st.edit.roiLevelRunId;
+        setRoiLevelBusyUI(true);
+        await segLevelYield();
+        if (runId !== st.edit.roiLevelRunId) {
+            setRoiLevelBusyUI(false);
+            return;
+        }
+
+        try {
+            if (typeof analyzeRoiLeveling !== 'function') return;
+            const dsProxy = {
+                data: base.data,
+                width: base.width,
+                height: base.height,
+                header: base.header,
+                type: 'grid',
+            };
+            const analysis = analyzeRoiLeveling(dsProxy, roi);
+            if (runId !== st.edit.roiLevelRunId) return;
+            if (!analysis.ok) {
+                st.edit.roiLevelResult = null;
+                updateRoiLevelMeta();
+                clearRoiLevelAfterPane();
+                if (analysis.reason === 'insufficient') showToast(t('roiLevelInsufficient'), 'info');
+                else showToast(t('roiLevelNeedRoi'), 'info');
+                el.status.textContent = t('roiLevelNeedRoi');
+                updateEditButtons();
+                return;
+            }
+            st.edit.roiLevelResult = {
+                correctedData: analysis.correctedData,
+                plane: analysis.plane,
+                roi: analysis.roi,
+                roiKey,
+            };
+            renderRoiLevelCompare({ resetView: !!options.resetView });
+            el.status.textContent = roiLevelStatusText(st.edit.roiLevelResult);
+        } finally {
+            if (runId === st.edit.roiLevelRunId) setRoiLevelBusyUI(false);
+        }
+    }
+
+    function enterRoiLevelUI(active) {
+        if (el.viewer) el.viewer.classList.toggle('roi-level-active', active);
+        if (el.roiLevelPanel) el.roiLevelPanel.setAttribute('aria-hidden', active ? 'false' : 'true');
+        if (el.roiLevel) el.roiLevel.classList.toggle('tool-active', active);
+        if (active && !st.edit.roiLevelBusy && st.edit.roiLevelResult) {
+            requestAnimationFrame(() => renderRoiLevelCompare({ resetView: true }));
+        }
+    }
+
+    function exitRoiLevelMode() {
+        st.edit.roiLevel = false;
+        st.edit.roiLevelBusy = false;
+        st.edit.roiLevelRunId++;
+        st.edit.roiLevelBase = null;
+        st.edit.roiLevelResult = null;
+        st.edit.roiLevelRoiMode = null;
+        st.edit.roiLevelRoi = null;
+        st.edit.roiLevelRoiSel = null;
+        st.edit.roiLevelRoiAction = null;
+        roiLevelResetViews();
+        setRoiLevelBusyUI(false);
+        setRoiLevelConfigUI(false);
+        updateRoiLevelMeta();
+        enterRoiLevelUI(false);
+        updateRoiLevelRoiUI();
+        updateEditButtons();
+    }
+
+    function cancelRoiLevel() {
+        if (!st.edit.roiLevel) return;
+        st.edit.roiLevelRunId++;
+        const base = st.edit.roiLevelBase;
+        if (base && st.dataset && !st.edit.roiLevelBusy) {
+            st.dataset.data = base.data.slice();
+            st.dataset.vmin = base.vmin;
+            st.dataset.vmax = base.vmax;
+            resetColorClip(false);
+            render(st.dataset, el.colormap.value, false);
+        }
+        exitRoiLevelMode();
+    }
+
+    async function startRoiLevelMode() {
+        if (!editing || !st.dataset) { showToast(t('editNoData'), 'info'); return; }
+        if (isScatter(st.dataset)) { showToast(t('roiLevelScatter'), 'info'); return; }
+        if (st.edit.roiLevel) {
+            if (st.edit.roiLevelBusy) {
+                st.edit.roiLevelRunId++;
+                exitRoiLevelMode();
+            } else {
+                cancelRoiLevel();
+            }
+            return;
+        }
+
+        endTransientModes();
+
+        snapshotRoiLevelBase();
+        roiLevelResetViews();
+        st.edit.roiLevel = true;
+        st.edit.roiLevelResult = null;
+        st.edit.roiLevelRoiMode = 'rect';
+        st.edit.roiLevelRoi = null;
+        st.edit.roiLevelRoiSel = null;
+        st.edit.roiLevelRoiAction = null;
+
+        enterRoiLevelUI(true);
+        setRoiLevelConfigUI(true);
+        updateRoiLevelMeta();
+        updateRoiLevelRoiUI();
+        renderRoiLevelBeforeOnly();
+        updateEditButtons();
+        el.status.textContent = t('roiLevelProcessing');
+    }
+
+    function applyRoiLevelEdit() {
+        if (!st.edit.roiLevel || st.edit.roiLevelBusy || !st.edit.roiLevelResult || !st.dataset) return;
+        const result = st.edit.roiLevelResult;
+        ensureFloatPixels(st.dataset);
+        st.dataset.data = result.correctedData.slice();
+        exitRoiLevelMode();
+        refreshAfterEdit(false);
+        pushHistory();
+        setLastEditStep({ type: 'roiLevel', roi: { ...result.roi } });
+        const msg = t('roiLevelDone', result.plane.n);
+        el.status.textContent = msg;
+        showToast(msg, 'info');
     }
 
     /* ---------- 分區校正模式（自動分割 + 各區水平校正） ---------- */
@@ -4515,6 +5120,7 @@ function createImageView(ids, options) {
         if (st.edit.medianFilter) cancelMedianFilter();
         if (st.edit.scatterGrid) cancelScatterGrid();
         if (st.edit.nanPatch) cancelNanPatch();
+        if (st.edit.roiLevel) cancelRoiLevel();
         return cloneDatasetForTransfer(st.dataset);
     }
 
@@ -4628,6 +5234,7 @@ function createImageView(ids, options) {
         if (st.edit.medianFilter) cancelMedianFilter();
         if (st.edit.scatterGrid) cancelScatterGrid();
         if (st.edit.nanPatch) cancelNanPatch();
+        if (st.edit.roiLevel) cancelRoiLevel();
         // 點擊已啟用的模式 → 關閉
         if (st.edit.cropMode === mode) { exitCrop(); return; }
         st.edit.cropMode = mode;
@@ -4925,6 +5532,7 @@ function createImageView(ids, options) {
             if (st.edit.medianFilter) cancelMedianFilter();
             if (st.edit.scatterGrid) cancelScatterGrid();
             if (st.edit.nanPatch) cancelNanPatch();
+            if (st.edit.roiLevel) cancelRoiLevel();
             st.edit.denoise = true;
             st.edit.histLo = 0; st.edit.histHi = 1;
             st.edit.histAuto = false;
@@ -5031,6 +5639,7 @@ function createImageView(ids, options) {
         if (st.edit.medianFilter) exitMedianFilterMode();
         if (st.edit.scatterGrid) exitScatterGridMode();
         if (st.edit.nanPatch) exitNanPatchMode();
+        if (st.edit.roiLevel) exitRoiLevelMode();
         resetHistory();          // 以新載入的資料作為歷史起點
         updateEditButtons();
     }
@@ -5108,6 +5717,15 @@ function createImageView(ids, options) {
         if (el.nanPatchRoiRect) el.nanPatchRoiRect.addEventListener('click', () => setNanPatchRoiMode('rect'));
         if (el.nanPatchRoiCircle) el.nanPatchRoiCircle.addEventListener('click', () => setNanPatchRoiMode('circle'));
         if (el.nanPatchRoiClear) el.nanPatchRoiClear.addEventListener('click', clearNanPatchRoi);
+        if (el.roiLevel) el.roiLevel.addEventListener('click', startRoiLevelMode);
+        if (el.roiLevelApply) el.roiLevelApply.addEventListener('click', applyRoiLevelEdit);
+        if (el.roiLevelCancel) el.roiLevelCancel.addEventListener('click', cancelRoiLevel);
+        setupRoiLevelZoom();
+        setupRoiLevelCropOverlay();
+        setupRoiLevelMiddlePan();
+        if (el.roiLevelRoiRect) el.roiLevelRoiRect.addEventListener('click', () => setRoiLevelRoiMode('rect'));
+        if (el.roiLevelRoiCircle) el.roiLevelRoiCircle.addEventListener('click', () => setRoiLevelRoiMode('circle'));
+        if (el.roiLevelRoiClear) el.roiLevelRoiClear.addEventListener('click', clearRoiLevelRoi);
         if (el.globalLevel) el.globalLevel.addEventListener('click', applyGlobalLeveling);
         if (el.histAuto) el.histAuto.addEventListener('click', () => autoDenoiseBounds());
         if (el.histApply) el.histApply.addEventListener('click', () => toggleDenoise(false));
@@ -5144,6 +5762,7 @@ function createImageView(ids, options) {
             if (st.edit.medianFilter) renderMedianFilterCompare({ resetView: true });
             if (st.edit.scatterGrid) renderScatterGridCompare({ resetView: true });
             if (st.edit.nanPatch) renderNanPatchCompare({ resetView: true });
+            if (st.edit.roiLevel) renderRoiLevelCompare({ resetView: true });
         });
         updateEditButtons();
     }
@@ -5173,6 +5792,7 @@ function createImageView(ids, options) {
                 if (st.edit.medianFilter) renderMedianFilterCompare({ resetView: true });
                 if (st.edit.scatterGrid) renderScatterGridCompare({ resetView: true });
                 if (st.edit.nanPatch) renderNanPatchCompare({ resetView: true });
+                if (st.edit.roiLevel) renderRoiLevelCompare({ resetView: true });
             }
         },
         syncLang: () => {
@@ -5287,6 +5907,22 @@ const editorView = createImageView({
     nanPatchAfterCbHi: 'edNanPatchAfterCbHi',
     nanPatchApply: 'edNanPatchApply', nanPatchCancel: 'edNanPatchCancel',
     globalLevel: 'edGlobalLevel',
+    roiLevel: 'edRoiLevel',
+    roiLevelPanel: 'edRoiLevelPanel', roiLevelConfig: 'edRoiLevelConfig',
+    roiLevelMeta: 'edRoiLevelMeta',
+    roiLevelBeforeWrap: 'edRoiLevelBeforeWrap',
+    roiLevelCropOverlay: 'edRoiLevelCropOverlay', roiLevelCropShape: 'edRoiLevelCropShape',
+    roiLevelCropHint: 'edRoiLevelCropHint',
+    roiLevelRoiRect: 'edRoiLevelRoiRect', roiLevelRoiCircle: 'edRoiLevelRoiCircle',
+    roiLevelRoiClear: 'edRoiLevelRoiClear',
+    roiLevelCompare: 'edRoiLevelCompare', roiLevelBusy: 'edRoiLevelBusy',
+    roiLevelBusyText: 'edRoiLevelBusyText',
+    roiLevelBefore: 'edRoiLevelBefore', roiLevelAfter: 'edRoiLevelAfter',
+    roiLevelBeforeCb: 'edRoiLevelBeforeCb', roiLevelBeforeCbLo: 'edRoiLevelBeforeCbLo',
+    roiLevelBeforeCbHi: 'edRoiLevelBeforeCbHi',
+    roiLevelAfterCb: 'edRoiLevelAfterCb', roiLevelAfterCbLo: 'edRoiLevelAfterCbLo',
+    roiLevelAfterCbHi: 'edRoiLevelAfterCbHi',
+    roiLevelApply: 'edRoiLevelApply', roiLevelCancel: 'edRoiLevelCancel',
     histPanel: 'edHistPanel', histWrap: 'edHistWrap', histCanvas: 'edHistCanvas',
     histHandleLo: 'edHistHandleLo', histHandleHi: 'edHistHandleHi',
     histValLo: 'edHistValLo', histValHi: 'edHistValHi',

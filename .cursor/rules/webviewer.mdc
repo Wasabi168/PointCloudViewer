@@ -58,6 +58,7 @@ alwaysApply: false
 - 批次轉檔 → `batch-convert.js`
 - 批次編輯流程 → `batch-edit.js`、`batch-pipeline.js`、`batch-file-manager.js`
 - 自動分區水平校正 → `segment-level.js`、`image-view.js`
+- 擇區水平校正 → `batch-pipeline.js`（`analyzeRoiLeveling`）、`image-view.js`
 - 自動分區錯位校正 → `segment-skew.js`、`image-view.js`
 - 中值濾波 → `median-filter.js`、`image-view.js`
 - 點雲分析／粗糙度 → `roughness.js`、`analysis-ui.js`、`overlay-analysis.js`

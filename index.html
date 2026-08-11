@@ -481,6 +481,9 @@
                     <span class="ed-toolbar-label" data-i18n="toolGroupCalib">校正</span>
                     <button type="button" id="edGlobalLevel" data-i18n="globalLevel" data-i18n-title="globalLevelTitle">全域水平校正</button>
                     <span class="ed-tool-tip-host">
+                        <button type="button" id="edRoiLevel" data-i18n="roiLevel" data-i18n-title="roiLevelTitle">擇區水平校正</button>
+                    </span>
+                    <span class="ed-tool-tip-host">
                         <button type="button" id="edSegLevel" data-i18n="segLevel" data-i18n-title="segLevelTitle">分區水平校正</button>
                     </span>
                     <span class="ed-tool-tip-host">
@@ -568,6 +571,93 @@
             <div class="drop-hint" id="edDropHint">
                 <div class="icon" id="edDropIcon">&#x2B07;</div>
                 <div id="edDropText" data-i18n="dropSupported">放開以載入檔案</div>
+            </div>
+            <div class="seg-level-panel" id="edRoiLevelPanel" aria-hidden="true">
+                <div class="seg-level-head">
+                    <div class="seg-level-title-wrap">
+                        <span class="seg-level-mode-badge" data-i18n="roiLevelModeName">擇區水平校正模式</span>
+                        <button type="button" class="info-btn seg-level-info-btn" id="edRoiLevelInfo" data-i18n-title="roiLevelInfoBtnTitle" data-i18n-aria="roiLevelInfoBtnTitle" title="擇區水平校正說明" aria-label="擇區水平校正說明">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true">
+                                <circle cx="12" cy="7" r="1.75" fill="currentColor" stroke="none"/>
+                                <path d="M12 11v8"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="seg-level-config" id="edRoiLevelConfig" aria-hidden="true">
+                        <div class="seg-level-config-item nan-patch-roi-tools">
+                            <span data-i18n="roiLevelRoiLabel">校正資料源</span>
+                            <div class="cursor-toggle ed-crop-toggle" id="edRoiLevelRoiToggle">
+                                <button type="button" id="edRoiLevelRoiRect" data-i18n-title="roiLevelRoiRectTitle" data-i18n-aria="cropRectShort" title="方形資料源" aria-label="方形">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                                        <rect x="5" y="5" width="14" height="14" rx="1" stroke-dasharray="4 3"/>
+                                    </svg>
+                                </button>
+                                <button type="button" id="edRoiLevelRoiCircle" data-i18n-title="roiLevelRoiCircleTitle" data-i18n-aria="cropCircleShort" title="圓形資料源" aria-label="圓形">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                        <circle cx="12" cy="12" r="7" stroke-dasharray="4 3"/>
+                                    </svg>
+                                </button>
+                                <button type="button" id="edRoiLevelRoiClear" class="btn-secondary" data-i18n-title="roiLevelRoiClearTitle" data-i18n-aria="roiLevelRoiClear" title="清除框選範圍" aria-label="清除">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                                        <path d="M6 6l12 12M18 6L6 18"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <span class="seg-level-config-meta" id="edRoiLevelMeta"></span>
+                    </div>
+                    <div class="seg-level-actions">
+                        <button type="button" id="edRoiLevelApply" data-i18n="roiLevelApply" data-i18n-title="roiLevelApplyTitle">套用</button>
+                        <button type="button" id="edRoiLevelCancel" class="btn-secondary" data-i18n="roiLevelCancel" data-i18n-title="roiLevelCancelTitle">取消</button>
+                    </div>
+                </div>
+                <div class="seg-level-compare seg-skew-compare" id="edRoiLevelCompare">
+                    <div class="seg-level-pane">
+                        <span class="seg-level-pane-label" data-i18n="roiLevelBefore">校正前</span>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap" id="edRoiLevelBeforeWrap">
+                                <canvas id="edRoiLevelBefore"></canvas>
+                                <div class="crop-overlay" id="edRoiLevelCropOverlay" aria-hidden="true">
+                                    <div class="crop-shape" id="edRoiLevelCropShape" style="display:none;">
+                                        <span class="crop-handle" data-h="nw"></span>
+                                        <span class="crop-handle" data-h="n"></span>
+                                        <span class="crop-handle" data-h="ne"></span>
+                                        <span class="crop-handle" data-h="e"></span>
+                                        <span class="crop-handle" data-h="se"></span>
+                                        <span class="crop-handle" data-h="s"></span>
+                                        <span class="crop-handle" data-h="sw"></span>
+                                        <span class="crop-handle" data-h="w"></span>
+                                    </div>
+                                    <div class="crop-hint" id="edRoiLevelCropHint" data-i18n="roiLevelRoiHint">在左側圖上拖曳以框選校正資料源</div>
+                                </div>
+                            </div>
+                            <div class="seg-level-cbar" aria-hidden="false">
+                                <span class="seg-level-cbar-val" id="edRoiLevelBeforeCbHi"></span>
+                                <canvas id="edRoiLevelBeforeCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                <span class="seg-level-cbar-val" id="edRoiLevelBeforeCbLo"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="seg-level-pane seg-level-pane-after">
+                        <span class="seg-level-pane-label" data-i18n="roiLevelAfter">校正後</span>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap">
+                                <canvas id="edRoiLevelAfter"></canvas>
+                            </div>
+                            <div class="seg-level-cbar" aria-hidden="false">
+                                <span class="seg-level-cbar-val" id="edRoiLevelAfterCbHi"></span>
+                                <canvas id="edRoiLevelAfterCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                <span class="seg-level-cbar-val" id="edRoiLevelAfterCbLo"></span>
+                            </div>
+                        </div>
+                        <div class="seg-level-tune-busy" id="edRoiLevelBusy" aria-hidden="true">
+                            <div class="seg-level-tune-busy-card">
+                                <div class="seg-level-spinner" aria-hidden="true"></div>
+                                <span class="seg-level-tune-busy-text" id="edRoiLevelBusyText" data-i18n="roiLevelUpdating">正在計算校正…</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="seg-level-panel" id="edSegLevelPanel" aria-hidden="true">
                 <div class="seg-level-head">
@@ -2145,6 +2235,43 @@
         </button>
     </div>
     <input type="file" id="bfmFileInput" accept=".wbatch,.json" hidden />
+</div>
+
+<!-- 擇區水平校正說明 modal -->
+<div class="info-overlay" id="roiLevelInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="roiLevelInfoTitle">
+    <div class="info-panel info-panel--wide">
+        <div class="info-header">
+            <h3 id="roiLevelInfoTitle" data-i18n="roiLevelInfoTitle">擇區水平校正說明</h3>
+            <button type="button" class="info-close" id="roiLevelInfoCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body">
+            <section class="info-section">
+                <h4 data-i18n="roiLevelInfoPurposeHeading">功能目的</h4>
+                <p data-i18n="roiLevelInfoPurposeText">在已知平坦的參考區域框選資料源，以該區擬合傾斜平面後套用到整張圖，避免特徵區或異常點干擾全域水平校正。</p>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="roiLevelInfoWorkflowHeading">操作流程</h4>
+                <ol class="info-steps">
+                    <li data-i18n="roiLevelInfoStep1">載入高度圖後，點選工具列「擇區水平校正」進入此模式。</li>
+                    <li data-i18n="roiLevelInfoStep2">在左側原圖上拖曳框選要作為校正資料源的區域（方形或圓形）。</li>
+                    <li data-i18n="roiLevelInfoStep3">系統以資料源擬合平面參數，扣除傾斜後顯示於右側全圖預覽。</li>
+                    <li data-i18n="roiLevelInfoStep4">可調整或清除框選後重新計算；確認結果後按「套用」寫入資料並離開。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="roiLevelInfoPrincipleHeading">演算法原理</h4>
+                <ol class="info-steps">
+                    <li data-i18n="roiLevelInfoPrinciple1">資料源擬合：僅使用框選區內有效像素，以最小平方法擬合平面 z = ax + by + c（座標為實體尺寸）。</li>
+                    <li data-i18n="roiLevelInfoPrinciple2">全圖套用：對整張圖每個有效像素扣除傾斜分量 ax + by，保留截距，使數值區間維持接近原始。</li>
+                    <li data-i18n="roiLevelInfoPrinciple3">與全域水平校正相同僅去傾斜；差異在於平面參數只由使用者指定的資料源決定。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="roiLevelInfoNoteHeading">注意事項</h4>
+                <p data-i18n="roiLevelInfoNoteText">僅適用於規則網格高度圖；散布點雲 (.pcd / .txt) 不支援。資料源內至少需要 3 個有效點才能擬合平面。請選擇相對平坦、代表性良好的參考面作為資料源。</p>
+            </section>
+        </div>
+    </div>
 </div>
 
 <!-- 分區水平校正說明 modal -->

@@ -1,7 +1,7 @@
 /**
  * 批次編輯管線
  * 依賴：file-parse.js, file-export.js
- * 匯出（全域）：batchApplyPipeline() 等
+ * 匯出（全域）：batchApplyPipeline()、analyzeRoiLeveling() 等
  */
 /* =========================================================================
  *  1c. 批次編輯管線（可重複套用的編輯步驟）
@@ -282,6 +282,87 @@ function batchApplyGlobalLevel(ds) {
     return { ok: true };
 }
 
+/**
+ * 擇區水平校正：僅用 ROI 內有效點擬合平面，再對全圖扣除傾斜 ax+by
+ * @param {{ shape: 'rect'|'circle', x0: number, y0: number, x1: number, y1: number }} roi 正規化座標 0~1
+ * @returns {{ ok: true, plane: {a:number,b:number,c:number,n:number}, correctedData: Float32Array } | { ok: false, reason: string }}
+ */
+function analyzeRoiLeveling(ds, roi) {
+    if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
+    if (!roi || !Number.isFinite(roi.x0) || !Number.isFinite(roi.y0)
+        || !Number.isFinite(roi.x1) || !Number.isFinite(roi.y1)) {
+        return { ok: false, reason: 'noRoi' };
+    }
+    const { data, width, height } = ds;
+    if (!data || !(width > 0) || !(height > 0)) return { ok: false, reason: 'invalid' };
+    const hdr = ds.header || {};
+    let xl = parseFloat(hdr.xlength ?? hdr['x-length'] ?? 0);
+    let yl = parseFloat(hdr.ylength ?? hdr['y-length'] ?? 0);
+    if (!Number.isFinite(xl) || xl <= 0) xl = width;
+    if (!Number.isFinite(yl) || yl <= 0) yl = height;
+    const dx = xl / Math.max(1, width - 1);
+    const dy = yl / Math.max(1, height - 1);
+    const circle = roi.shape === 'circle';
+    const pointInRoi = typeof nanPatchPointInRoi === 'function'
+        ? (px, py) => nanPatchPointInRoi(px, py, roi)
+        : (px, py) => batchPointInNormRect(px, py, roi, circle);
+
+    let n = 0, sx = 0, sy = 0, sz = 0;
+    let sxx = 0, syy = 0, sxy = 0, sxz = 0, syz = 0;
+    for (let y = 0; y < height; y++) {
+        const py = (y + 0.5) / height;
+        const yPhys = y * dy;
+        const row = y * width;
+        for (let x = 0; x < width; x++) {
+            const px = (x + 0.5) / width;
+            if (!pointInRoi(px, py)) continue;
+            const z = data[row + x];
+            if (!Number.isFinite(z)) continue;
+            const xPhys = x * dx;
+            n++;
+            sx += xPhys; sy += yPhys; sz += z;
+            sxx += xPhys * xPhys; syy += yPhys * yPhys; sxy += xPhys * yPhys;
+            sxz += xPhys * z; syz += yPhys * z;
+        }
+    }
+    if (n < 3) return { ok: false, reason: 'insufficient' };
+    const sol = batchSolveLinear3(
+        [[sxx, sxy, sx], [sxy, syy, sy], [sx, sy, n]],
+        [sxz, syz, sz],
+    );
+    if (!sol) return { ok: false, reason: 'insufficient' };
+    const a = sol[0], b = sol[1], c = sol[2];
+    const correctedData = data instanceof Float32Array ? data.slice() : Float32Array.from(data);
+    for (let y = 0; y < height; y++) {
+        const yPhys = y * dy;
+        const row = y * width;
+        for (let x = 0; x < width; x++) {
+            const i = row + x;
+            const z = correctedData[i];
+            if (!Number.isFinite(z)) continue;
+            correctedData[i] = z - (a * (x * dx) + b * yPhys);
+        }
+    }
+    return {
+        ok: true,
+        plane: { a, b, c, n },
+        correctedData,
+        roi: { shape: circle ? 'circle' : 'rect', x0: roi.x0, y0: roi.y0, x1: roi.x1, y1: roi.y1 },
+    };
+}
+
+function batchApplyRoiLevel(ds, step) {
+    if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
+    const roi = step && step.roi;
+    if (!roi) return { ok: false, reason: 'noRoi' };
+    batchEnsureFloatPixels(ds);
+    const analysis = analyzeRoiLeveling(ds, roi);
+    if (!analysis.ok) return { ok: false, reason: analysis.reason || 'insufficient' };
+    ds.data = analysis.correctedData;
+    batchRefreshRange(ds);
+    return { ok: true };
+}
+
 function batchApplyDenoise(ds, loFrac, hiFrac) {
     const src = isPcdScatterDataset(ds) ? ds.z : ds.data;
     const { vmin, vmax } = computeRange(src);
@@ -512,6 +593,7 @@ function batchApplyStep(ds, step) {
     if (!step || !step.type) return { ok: false, reason: 'invalid' };
     switch (step.type) {
         case 'globalLevel': return batchApplyGlobalLevel(ds);
+        case 'roiLevel': return batchApplyRoiLevel(ds, step);
         case 'segmentLevel': return batchApplySegmentLevel(ds);
         case 'segmentSkew': return batchApplySegmentSkew(ds, step);
         case 'denoise': return batchApplyDenoiseFromStep(ds, step);
@@ -550,6 +632,7 @@ function describeBatchStep(step) {
     if (!step) return '';
     switch (step.type) {
         case 'globalLevel': return t('bfmStepGlobalLevel');
+        case 'roiLevel': return t('bfmStepRoiLevel');
         case 'segmentLevel': return t('bfmStepSegmentLevel');
         case 'segmentSkew': {
             const dir = step.direction === 'vertical' ? t('segSkewDirVertical') : t('segSkewDirHorizontal');

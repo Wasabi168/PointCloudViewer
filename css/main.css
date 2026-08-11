@@ -1863,6 +1863,11 @@
     #edViewer.nan-patch-active #edZoomIndicator,
     #edViewer.nan-patch-active #edCropOverlay,
     #edViewer.nan-patch-active #edDropHint,
+    #edViewer.roi-level-active #edCanvas,
+    #edViewer.roi-level-active #edZoomHint,
+    #edViewer.roi-level-active #edZoomIndicator,
+    #edViewer.roi-level-active #edCropOverlay,
+    #edViewer.roi-level-active #edDropHint,
     #edViewer.scatter-grid-active #edCanvas,
     #edViewer.scatter-grid-active #edZoomHint,
     #edViewer.scatter-grid-active #edZoomIndicator,
@@ -1874,6 +1879,7 @@
     #edViewer.seg-skew-active .seg-level-panel#edSegSkewPanel,
     #edViewer.median-filter-active .seg-level-panel#edMedianFilterPanel,
     #edViewer.nan-patch-active .seg-level-panel#edNanPatchPanel,
+    #edViewer.roi-level-active .seg-level-panel#edRoiLevelPanel,
     #edViewer.scatter-grid-active .seg-level-panel#edScatterGridPanel {
         display: flex;
     }
@@ -2311,7 +2317,9 @@
         pointer-events: none;
     }
     #edNanPatchRoiRect.active,
-    #edNanPatchRoiCircle.active {
+    #edNanPatchRoiCircle.active,
+    #edRoiLevelRoiRect.active,
+    #edRoiLevelRoiCircle.active {
         background: rgba(79, 140, 255, 0.2);
         border-color: var(--accent);
         color: var(--accent-hover);
