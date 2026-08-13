@@ -1900,16 +1900,21 @@ const AnalysisView = (() => {
             result.params.Rz.toFixed(4));
     }
 
+    /** UTF-8 BOM，避免 Excel 以系統 ANSI 開啟時中文檔名變亂碼 */
+    function downloadCsv(csv, filename) {
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+
     function exportCsv() {
         if (!st.result || !st.result.ok) return;
         const csv = Roughness.toCsv(st.result);
         const base = stripExt(st.dataset?.filename || 'roughness');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${base}_roughness.csv`;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        downloadCsv(csv, `${base}_roughness.csv`);
         showToast(t('anExported'), 'info');
     }
 
@@ -1917,12 +1922,7 @@ const AnalysisView = (() => {
         if (!st.pfResult || !st.pfResult.ok) return;
         const csv = Roughness.toCsvProfile(st.pfResult);
         const base = stripExt(st.dataset?.filename || 'profile');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${base}_profile_Ra.csv`;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        downloadCsv(csv, `${base}_profile_Ra.csv`);
         showToast(t('anExported'), 'info');
     }
 
