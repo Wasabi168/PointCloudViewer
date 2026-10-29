@@ -432,6 +432,40 @@ function batchApplyNanPatch(ds, kernelSize, roi) {
     return { ok: true };
 }
 
+/**
+ * 上下顛倒：對每個有限值做 Z' = (zmin + zmax) - Z。
+ * 極值只從有效像素現算，NaN／Infinity 保持不變。全圖同值時不改資料。
+ * @returns {{ ok:boolean, changed?:boolean, n?:number, reason?:string }}
+ */
+function applyInvertZToBuffer(src) {
+    let zmin = Infinity, zmax = -Infinity, n = 0;
+    for (let i = 0; i < src.length; i++) {
+        const v = src[i];
+        if (!Number.isFinite(v)) continue;
+        n++;
+        if (v < zmin) zmin = v;
+        if (v > zmax) zmax = v;
+    }
+    if (n === 0) return { ok: false, reason: 'noValid' };
+    if (zmin === zmax) return { ok: true, changed: false, n };
+    const c = zmin + zmax;
+    for (let i = 0; i < src.length; i++) {
+        const v = src[i];
+        if (Number.isFinite(v)) src[i] = c - v;
+    }
+    return { ok: true, changed: true, n };
+}
+
+function batchApplyInvertZ(ds) {
+    if (!isPcdScatterDataset(ds)) batchEnsureFloatPixels(ds);
+    const buf = isPcdScatterDataset(ds) ? ds.z : ds.data;
+    if (!buf) return { ok: false, reason: 'noValid' };
+    const res = applyInvertZToBuffer(buf);
+    if (!res.ok) return res;
+    if (res.changed) batchRefreshRange(ds);
+    return { ok: true };
+}
+
 function batchApplyCalc(ds, op, operand) {
     if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
     if (!Number.isFinite(operand)) return { ok: false, reason: 'invalid' };
@@ -592,6 +626,7 @@ function batchApplyScatterGrid(ds, step) {
 function batchApplyStep(ds, step) {
     if (!step || !step.type) return { ok: false, reason: 'invalid' };
     switch (step.type) {
+        case 'invertZ': return batchApplyInvertZ(ds);
         case 'globalLevel': return batchApplyGlobalLevel(ds);
         case 'roiLevel': return batchApplyRoiLevel(ds, step);
         case 'segmentLevel': return batchApplySegmentLevel(ds);
@@ -631,6 +666,7 @@ function batchApplyPipeline(ds, steps) {
 function describeBatchStep(step) {
     if (!step) return '';
     switch (step.type) {
+        case 'invertZ': return t('bfmStepInvertZ');
         case 'globalLevel': return t('bfmStepGlobalLevel');
         case 'roiLevel': return t('bfmStepRoiLevel');
         case 'segmentLevel': return t('bfmStepSegmentLevel');

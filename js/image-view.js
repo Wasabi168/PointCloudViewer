@@ -780,7 +780,7 @@ function createImageView(ids, options) {
         const scatter = has && isScatter(st.dataset);
         const hasGrid = has && !scatter;
         // 散布／高度圖皆可用
-        [el.cropRect, el.cropCircle, el.denoise, el.globalLevel, el.sendMenu].forEach(b => { if (b) b.disabled = !has; });
+        [el.cropRect, el.cropCircle, el.denoise, el.invertZ, el.globalLevel, el.sendMenu].forEach(b => { if (b) b.disabled = !has; });
         // 僅高度圖：散布點雲載入時停用並顯示不支援提示
         const heightOnlyTools = [
             { btn: el.medianFilter, tipKey: 'medianFilterTitle', scatterKey: 'medianFilterScatter' },
@@ -1095,6 +1095,32 @@ function createImageView(ids, options) {
         );
         if (!sol) return null;
         return { a: sol[0], b: sol[1], c: sol[2], n };
+    }
+
+    /**
+     * 上下顛倒：Z' = (Zmin + Zmax) − Z。
+     * 波峰與波谷對調，數值留在原本的距離區間；NaN 不變。全圖同值時不寫入歷史。
+     */
+    function applyInvertZ() {
+        if (!editing || !st.dataset) { showToast(t('editNoData'), 'info'); return; }
+        endTransientModes();
+        const ds = st.dataset;
+        if (!isScatter(ds)) ensureFloatPixels(ds);
+        const buf = isScatter(ds) ? ds.z : ds.data;
+        const res = applyInvertZToBuffer(buf);
+        if (!res.ok) {
+            showToast(t(res.reason === 'noValid' ? 'invertZNoValid' : 'editNoData'), 'info');
+            return;
+        }
+        if (!res.changed) {
+            showToast(t('invertZFlat'), 'info');
+            return;
+        }
+        refreshAfterEdit(false);
+        pushHistory();
+        setLastEditStep({ type: 'invertZ' });
+        el.status.textContent = t('invertZDone', res.n);
+        showToast(t('invertZDone', res.n), 'info');
     }
 
     /** 全域水平校正：僅扣除傾斜 ax+by，保留截距（數值區間維持接近原始） */
@@ -5726,6 +5752,7 @@ function createImageView(ids, options) {
         if (el.roiLevelRoiRect) el.roiLevelRoiRect.addEventListener('click', () => setRoiLevelRoiMode('rect'));
         if (el.roiLevelRoiCircle) el.roiLevelRoiCircle.addEventListener('click', () => setRoiLevelRoiMode('circle'));
         if (el.roiLevelRoiClear) el.roiLevelRoiClear.addEventListener('click', clearRoiLevelRoi);
+        if (el.invertZ) el.invertZ.addEventListener('click', applyInvertZ);
         if (el.globalLevel) el.globalLevel.addEventListener('click', applyGlobalLeveling);
         if (el.histAuto) el.histAuto.addEventListener('click', () => autoDenoiseBounds());
         if (el.histApply) el.histApply.addEventListener('click', () => toggleDenoise(false));
@@ -5906,6 +5933,7 @@ const editorView = createImageView({
     nanPatchAfterCb: 'edNanPatchAfterCb', nanPatchAfterCbLo: 'edNanPatchAfterCbLo',
     nanPatchAfterCbHi: 'edNanPatchAfterCbHi',
     nanPatchApply: 'edNanPatchApply', nanPatchCancel: 'edNanPatchCancel',
+    invertZ: 'edInvertZ',
     globalLevel: 'edGlobalLevel',
     roiLevel: 'edRoiLevel',
     roiLevelPanel: 'edRoiLevelPanel', roiLevelConfig: 'edRoiLevelConfig',
