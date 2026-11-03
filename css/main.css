@@ -3152,6 +3152,18 @@
         pointer-events: none;
         cursor: pointer;
     }
+    .ov-mark-delete circle {
+        fill: rgba(16, 16, 22, 0.92);
+        stroke: rgba(255, 255, 255, 0.92);
+        stroke-width: 1;
+    }
+    .ov-mark-delete.hot circle { fill: #d64545; }
+    .ov-mark-delete path {
+        stroke: #fff;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        fill: none;
+    }
     .ov-viewer.line-active .ov-line-overlay .crop-hint {
         display: block;
     }

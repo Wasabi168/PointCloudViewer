@@ -921,6 +921,7 @@ function startCanvasPan(e) {
 
 canvasEl.addEventListener('mousedown', (e) => {
     if (!currentDataset || view3dActive) return;
+    if (consumeViewerMarkDelete(e)) return;
     const leftPan = e.button === 0 && cursorMode === 'pan';
     const middlePan = e.button === 1 && isOverlayMeasureMode();
     if (!leftPan && !middlePan) return;
@@ -1126,6 +1127,8 @@ const profileState = {
     measureSets: [],  // 已完成組：[{ pts: [i0, i1] }, ...]
     measurePts: [],   // 目前編輯中的一組（0～1 個索引；滿 2 點即提交）
     measureDrag: null, // { setIndex: number|'draft', ptIndex: 0|1, moved: boolean }
+    hoverMeasure: null, // { key: number|'draft', part: 'body'|'delete' }
+    lineHover: null, // 'body' | 'delete' | null（影像上的剖面線）
     distDisplayUnit: (() => {
         const u = normalizeLengthUnit(getUserPref('profileDistUnit'));
         return LENGTH_UNIT_CYCLE.includes(u) ? u : '';
@@ -1184,6 +1187,7 @@ function clearProfileMeasureDraft() {
     profileState.measurePts = [];
     profileState.hoverIndex = null;
     profileState.measureDrag = null;
+    profileState.hoverMeasure = null;
 }
 
 function clearProfileMeasurePts() {
@@ -1192,6 +1196,7 @@ function clearProfileMeasurePts() {
     profileState.measureMode = false;
     profileState.hoverIndex = null;
     profileState.measureDrag = null;
+    profileState.hoverMeasure = null;
 }
 
 function setProfileMeasureMode(on) {
@@ -1384,25 +1389,48 @@ function clampToImage(p) {
 
 /** 偵測滑鼠是否落在剖面線的端點或線段上（螢幕座標） */
 function profileHitTest(clientX, clientY) {
+    const rect = viewerEl.getBoundingClientRect();
+    return profileHitAt(clientX - rect.left, clientY - rect.top);
+}
+
+function profileHitAt(mx, my) {
     const L = profileState.line;
     if (!L) return null;
-    const rect = viewerEl.getBoundingClientRect();
-    const mx = clientX - rect.left, my = clientY - rect.top;
     const a = profilePtToScreen(L.x0, L.y0);
     const b = profilePtToScreen(L.x1, L.y1);
     const r = PROFILE_HIT_RADIUS;
-
     if (Math.hypot(mx - a.x, my - a.y) <= r) return 'ep0';
     if (Math.hypot(mx - b.x, my - b.y) <= r) return 'ep1';
-
     const dx = b.x - a.x, dy = b.y - a.y;
     const len2 = dx * dx + dy * dy;
     if (len2 > 0) {
         let t = ((mx - a.x) * dx + (my - a.y) * dy) / len2;
         if (t < 0) t = 0; else if (t > 1) t = 1;
-        const dist = Math.hypot(mx - (a.x + t * dx), my - (a.y + t * dy));
-        if (dist <= r) return 'move';
+        if (Math.hypot(mx - (a.x + t * dx), my - (a.y + t * dy)) <= r) return 'move';
     }
+    return null;
+}
+
+function profileLineDecor(width, height) {
+    const L = profileState.line;
+    if (!L || !profileState.data) return null;
+    const a = profilePtToScreen(L.x0, L.y0);
+    const b = profilePtToScreen(L.x1, L.y1);
+    const anchor = markRightmostAnchor([
+        { x: a.x, y: a.y, clearance: 12 },
+        { x: b.x, y: b.y, clearance: 12 },
+    ]);
+    return markAttachDeleteButton(anchor.x, anchor.y, anchor.clearance, width, height);
+}
+
+function profileLinePointer(mx, my) {
+    if (!profileState.line || !profileState.data || profileState.drawing || profileState.editMode) return null;
+    const rect = viewerEl.getBoundingClientRect();
+    const decor = profileLineDecor(rect.width, rect.height);
+    if (!decor) return null;
+    if (markPointInBox(mx, my, decor.button, 3)) return 'delete';
+    if (markPointInBox(mx, my, decor.bridge, 0)) return 'body';
+    if (profileHitAt(mx, my)) return 'body';
     return null;
 }
 
@@ -1662,6 +1690,15 @@ function drawProfileOverlay() {
         ctx.beginPath(); ctx.arc(hp.x, hp.y, 5, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(255,210,74,0.55)'; ctx.fill();
         ctx.lineWidth = 1.5; ctx.strokeStyle = '#ffd24a'; ctx.stroke();
+    }
+
+    if (profileState.lineHover && profileState.data && !profileState.drawing && !profileState.editMode) {
+        const decor = profileLineDecor(rect.width, rect.height);
+        if (decor) drawMarkDeleteButton(ctx, decor.button, profileState.lineHover === 'delete');
+    }
+    if (ms && ms.distHover && ms.distLine && !ms.distDrawing && !ms.distEditMode) {
+        const decor = measureDistDecor(ctx);
+        if (decor) drawMarkDeleteButton(ctx, decor.button, ms.distHover === 'delete');
     }
 }
 
@@ -2124,6 +2161,148 @@ function renderProfileChart() {
     drawProfileChartMeasure();
 }
 
+/** 標記刪除鈕（與 BumpCop 相同：滑過標記才出現，點擊移除） */
+const MARK_DELETE_SIZE = 12;
+let profileMeasureLayouts = [];
+
+function markClamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+}
+
+function markPointInBox(px, py, box, pad) {
+    if (!box) return false;
+    const extra = pad || 0;
+    const x = box.x != null ? box.x : box.left;
+    const y = box.y != null ? box.y : box.top;
+    const w = box.w != null ? box.w : box.width;
+    const h = box.h != null ? box.h : box.height;
+    return px >= x - extra && py >= y - extra && px <= x + w + extra && py <= y + h + extra;
+}
+
+function markRightmostAnchor(candidates) {
+    let bestEdge = -Infinity;
+    const tied = [];
+    for (let i = 0; i < candidates.length; i++) {
+        const item = candidates[i];
+        const edge = item.x + item.clearance;
+        if (edge > bestEdge + 0.5) {
+            bestEdge = edge;
+            tied.length = 0;
+            tied.push(item);
+        } else if (edge >= bestEdge - 0.5) tied.push(item);
+    }
+    if (!tied.length) return { x: 0, y: 0, clearance: 0 };
+    let y = 0;
+    for (let i = 0; i < tied.length; i++) y += tied[i].y;
+    return { x: tied[0].x, y: y / tied.length, clearance: tied[0].clearance };
+}
+
+function markAttachDeleteButton(x, y, clearance, width, height) {
+    const size = MARK_DELETE_SIZE;
+    const margin = 2;
+    let bx = x + clearance + 5;
+    let by = y - size / 2;
+    if (bx + size > width - margin) bx = x + clearance - size;
+    bx = markClamp(bx, margin, Math.max(margin, width - margin - size));
+    by = markClamp(by, margin, Math.max(margin, height - margin - size));
+    const button = { x: bx, y: by, w: size, h: size };
+    const x0 = Math.min(x, button.x) - 6;
+    const y0 = Math.min(y, button.y) - 8;
+    const x1 = Math.max(x, button.x + button.w) + 2;
+    const y1 = Math.max(y, button.y + button.h) + 8;
+    return { button, bridge: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } };
+}
+
+function drawMarkDeleteButton(ctx, button, hot) {
+    if (!button) return;
+    const cx = button.x + button.w / 2;
+    const cy = button.y + button.h / 2;
+    const arm = 2.6;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, button.w / 2, 0, Math.PI * 2);
+    ctx.fillStyle = hot ? '#d64545' : 'rgba(16, 16, 22, 0.92)';
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#fff';
+    ctx.moveTo(cx - arm, cy - arm);
+    ctx.lineTo(cx + arm, cy + arm);
+    ctx.moveTo(cx + arm, cy - arm);
+    ctx.lineTo(cx - arm, cy + arm);
+    ctx.stroke();
+    ctx.restore();
+}
+
+function markDistToSegment(px, py, x0, y0, x1, y1) {
+    const dx = x1 - x0, dy = y1 - y0;
+    const len2 = dx * dx + dy * dy;
+    if (len2 <= 0) return Math.hypot(px - x0, py - y0);
+    const tt = markClamp(((px - x0) * dx + (py - y0) * dy) / len2, 0, 1);
+    return Math.hypot(px - (x0 + tt * dx), py - (y0 + tt * dy));
+}
+
+function markLayoutBodyDist(mx, my, item) {
+    if (markPointInBox(mx, my, item.bridge, 0)) return 0;
+    let best = Infinity;
+    const near = (p) => { if (p) best = Math.min(best, Math.hypot(mx - p.px, my - p.py)); };
+    near(item.p0);
+    near(item.p1);
+    if (item.p0 && item.corner) {
+        best = Math.min(best, markDistToSegment(mx, my, item.p0.px, item.p0.py, item.corner.px, item.corner.py));
+    }
+    if (item.corner && item.p1) {
+        best = Math.min(best, markDistToSegment(mx, my, item.corner.px, item.corner.py, item.p1.px, item.p1.py));
+    }
+    const labels = item.labels || [];
+    for (let i = 0; i < labels.length; i++) {
+        if (markPointInBox(mx, my, labels[i], 2)) return 0;
+    }
+    return best <= 10 ? best : null;
+}
+
+function markMeasurePointer(layouts, mx, my) {
+    if (!layouts || !layouts.length) return null;
+    for (let i = layouts.length - 1; i >= 0; i--) {
+        if (markPointInBox(mx, my, layouts[i].button, 3)) return { key: layouts[i].key, part: 'delete' };
+    }
+    let best = null;
+    let bestDist = Infinity;
+    for (let i = layouts.length - 1; i >= 0; i--) {
+        const dist = markLayoutBodyDist(mx, my, layouts[i]);
+        if (dist != null && dist < bestDist) {
+            bestDist = dist;
+            best = { key: layouts[i].key, part: 'body' };
+        }
+    }
+    return best;
+}
+
+function rememberMarkLayout(list, key, p0, p1, corner, labels, width, height) {
+    const candidates = [];
+    if (p0) candidates.push({ x: p0.px, y: p0.py, clearance: 12 });
+    if (p1) candidates.push({ x: p1.px, y: p1.py, clearance: 12 });
+    if (corner) candidates.push({ x: corner.px, y: corner.py, clearance: 8 });
+    for (let i = 0; i < labels.length; i++) {
+        const lb = labels[i];
+        candidates.push({ x: lb.x + lb.w, y: lb.y + lb.h / 2, clearance: 0 });
+    }
+    if (!candidates.length) return;
+    const anchor = markRightmostAnchor(candidates);
+    const attached = markAttachDeleteButton(anchor.x, anchor.y, anchor.clearance, width, height);
+    list.push({
+        key,
+        p0, p1, corner,
+        labels,
+        button: attached.button,
+        bridge: attached.bridge,
+    });
+}
+
 /** 在剖面圖上繪製測量標記（直角標註：水平距離 + 垂直階高） */
 function profileMeasureLabelBox(ctx, text, anchorX, anchorY, align, baseline) {
     const font = '10px Consolas, monospace';
@@ -2293,11 +2472,12 @@ function drawProfileMeasureLabelLeader(ctx, box, color, targetX, targetY) {
 
 function drawProfileChartMeasure() {
     const d = profileState.data, g = profileState.geom;
+    profileMeasureLayouts = [];
     if (!d || !g) return;
     const ctx = profileCanvas.getContext('2d');
     const showSetNum = profileState.measureSets.length > 1;
 
-    const drawPair = (pts, style, setNum) => {
+    const drawPair = (pts, style, setNum, key) => {
         if (!pts || pts.length === 0) return;
         const coords = [];
         for (let k = 0; k < pts.length; k++) {
@@ -2305,6 +2485,8 @@ function drawProfileChartMeasure() {
             if (!p) continue;
             coords.push({ ...p, color: style.colors[k % style.colors.length] });
         }
+        const labels = [];
+        let corner = null;
         if (coords.length === 2) {
             const p0 = coords[0], p1 = coords[1];
             const corner = { px: p1.px, py: p0.py };
@@ -2381,9 +2563,20 @@ function drawProfileChartMeasure() {
                 }
                 drawProfileMeasureDimLabel(ctx, layout.dist, distColor);
                 drawProfileMeasureDimLabel(ctx, layout.step, stepColor);
+                labels.push(
+                    { x: layout.dist.bx, y: layout.dist.by, w: layout.dist.boxW, h: layout.dist.boxH },
+                    { x: layout.step.bx, y: layout.step.by, w: layout.step.boxW, h: layout.step.boxH },
+                );
             }
             ctx.setLineDash([]);
             ctx.restore();
+        }
+
+        if (coords.length) {
+            const p0 = coords[0];
+            const p1 = coords.length === 2 ? coords[1] : null;
+            if (coords.length === 2) corner = { px: p1.px, py: p0.py };
+            rememberMarkLayout(profileMeasureLayouts, key, p0, p1, corner, labels, g.cw, g.ch);
         }
 
         for (const c of coords) {
@@ -2398,14 +2591,24 @@ function drawProfileChartMeasure() {
     };
 
     for (let s = 0; s < profileState.measureSets.length; s++) {
-        drawPair(profileState.measureSets[s].pts, profileMeasureSetStyle(s), s + 1);
+        drawPair(profileState.measureSets[s].pts, profileMeasureSetStyle(s), s + 1, s);
     }
     if (profileState.measurePts.length > 0) {
         drawPair(
             profileState.measurePts,
             profileMeasureSetStyle(profileState.measureSets.length),
-            profileState.measureSets.length + 1
+            profileState.measureSets.length + 1,
+            'draft'
         );
+    }
+
+    const hover = profileState.hoverMeasure;
+    if (hover && !profileState.measureDrag) {
+        for (let i = 0; i < profileMeasureLayouts.length; i++) {
+            if (profileMeasureLayouts[i].key !== hover.key) continue;
+            drawMarkDeleteButton(ctx, profileMeasureLayouts[i].button, hover.part === 'delete');
+            break;
+        }
     }
 
     if (profileState.measureMode && profileState.hoverIndex != null
@@ -2421,6 +2624,18 @@ function drawProfileChartMeasure() {
             ctx.stroke();
         }
     }
+}
+
+function deleteProfileMeasure(key) {
+    if (key === 'draft') profileState.measurePts = [];
+    else if (typeof key === 'number' && profileState.measureSets[key]) profileState.measureSets.splice(key, 1);
+    else return;
+    profileState.hoverMeasure = null;
+    profileState.hoverIndex = null;
+    profileTip.classList.remove('show');
+    syncProfileMeasureUI();
+    renderProfileChart();
+    drawProfileOverlay();
 }
 
 /** 在剖面圖上畫 hover 垂直線與點 */
@@ -2455,6 +2670,9 @@ function clearProfile() {
     profileState.data = null;
     profileState.geom = null;
     profileState.hoverIndex = null;
+    profileState.lineHover = null;
+    profileState.hoverMeasure = null;
+    profileMeasureLayouts = [];
     resetProfileYView();
     clearProfileMeasurePts();
     profileTip.classList.remove('show');
@@ -2535,6 +2753,13 @@ profileCanvas.addEventListener('pointerdown', (e) => {
     const rect = profileCanvas.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
     if (isProfileYAxisHit(mx, my, g)) return;
+    const mark = markMeasurePointer(profileMeasureLayouts, mx, my);
+    if (mark && mark.part === 'delete') {
+        e.preventDefault();
+        profileMeasureSuppressClick = true;
+        deleteProfileMeasure(mark.key);
+        return;
+    }
     const hit = profileMeasureHitHandle(mx, my);
     if (!hit) return;
     e.preventDefault();
@@ -2545,6 +2770,7 @@ profileCanvas.addEventListener('pointerdown', (e) => {
         pointerId: e.pointerId,
     };
     profileState.hoverIndex = null;
+    profileState.hoverMeasure = null;
     try { profileCanvas.setPointerCapture(e.pointerId); } catch (_) {}
     profileCanvas.style.cursor = 'grabbing';
     profileTip.classList.remove('show');
@@ -2632,11 +2858,30 @@ profileCanvas.addEventListener('mousemove', (e) => {
     if (isProfileYAxisHit(mx, my, g)) {
         profileCanvas.style.cursor = 'ns-resize';
         profileState.hoverIndex = null;
+        profileState.hoverMeasure = null;
         profileTip.classList.remove('show');
         renderProfileChart();
         drawProfileOverlay();
         return;
     }
+
+    const mark = markMeasurePointer(profileMeasureLayouts, mx, my);
+    const prevMark = profileState.hoverMeasure;
+    const sameMark = prevMark && mark && prevMark.key === mark.key && prevMark.part === mark.part;
+    if (mark) {
+        profileState.hoverMeasure = mark;
+        profileCanvas.style.cursor = mark.part === 'delete'
+            ? 'pointer'
+            : (profileMeasureHitHandle(mx, my) ? 'grab' : 'default');
+        profileState.hoverIndex = null;
+        profileTip.classList.remove('show');
+        if (!sameMark) {
+            renderProfileChart();
+            drawProfileOverlay();
+        }
+        return;
+    }
+    if (prevMark) profileState.hoverMeasure = null;
 
     if (profileMeasureHitHandle(mx, my)) {
         profileCanvas.style.cursor = 'grab';
@@ -2676,6 +2921,7 @@ profileCanvas.addEventListener('mousemove', (e) => {
 profileCanvas.addEventListener('mouseleave', () => {
     if (profileState.measureDrag) return;
     profileState.hoverIndex = null;
+    profileState.hoverMeasure = null;
     profileTip.classList.remove('show');
     profileCanvas.style.cursor = '';
     renderProfileChart();
@@ -2736,6 +2982,15 @@ viewerEl.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
     if (!currentDataset) return;
     if (isViewerOverlayUi(e.target)) return;
+    if (consumeViewerMarkDelete(e)) return;
+    {
+        const rect = viewerEl.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        if (profileLinePointer(mx, my) === 'body' && !profileHitAt(mx, my)) {
+            e.preventDefault();
+            return;
+        }
+    }
 
     const scatter = isPcdScatterDataset(currentDataset);
     profileState.space = scatter ? 'world' : 'image';
@@ -2881,6 +3136,7 @@ const measureState = {
     areaStats: null,
     areaEditMode: null,
     areaEditStart: null,
+    distHover: null, // 'body' | 'delete' | null
 };
 
 function overlaySpaceForDataset() {
@@ -3050,6 +3306,7 @@ function clearMeasureDistance() {
     measureState.distLine = null;
     measureState.distEditMode = null;
     measureState.distEditStart = null;
+    measureState.distHover = null;
     updateMeasurePanel();
     drawProfileOverlay();
 }
@@ -3072,19 +3329,15 @@ function clearAllViewerMarks() {
     viewerEl.style.cursor = '';
 }
 
-function measureDistHitTest(clientX, clientY) {
+function measureDistHitAt(mx, my) {
     const L = measureState.distLine;
     if (!L) return null;
-    const rect = viewerEl.getBoundingClientRect();
-    const mx = clientX - rect.left, my = clientY - rect.top;
     const space = measureState.space;
     const a = overlayPtToScreen(L.x0, L.y0, space);
     const b = overlayPtToScreen(L.x1, L.y1, space);
     const r = MEASURE_HIT_RADIUS;
-
     if (Math.hypot(mx - a.x, my - a.y) <= r) return 'ep0';
     if (Math.hypot(mx - b.x, my - b.y) <= r) return 'ep1';
-
     const dx = b.x - a.x, dy = b.y - a.y;
     const len2 = dx * dx + dy * dy;
     if (len2 > 0) {
@@ -3092,6 +3345,48 @@ function measureDistHitTest(clientX, clientY) {
         if (t < 0) t = 0; else if (t > 1) t = 1;
         if (Math.hypot(mx - (a.x + t * dx), my - (a.y + t * dy)) <= r) return 'move';
     }
+    return null;
+}
+
+function measureDistHitTest(clientX, clientY) {
+    const rect = viewerEl.getBoundingClientRect();
+    return measureDistHitAt(clientX - rect.left, clientY - rect.top);
+}
+
+function measureDistDecor(ctx) {
+    const L = measureState.distLine;
+    if (!L) return null;
+    const rect = viewerEl.getBoundingClientRect();
+    const space = measureState.space;
+    const a = overlayPtToScreen(L.x0, L.y0, space);
+    const b = overlayPtToScreen(L.x1, L.y1, space);
+    const d = computeMeasureDistance(L);
+    const unit = space === 'world' ? t('measureUnitWorld') : t('measureUnitPx');
+    const text = `${formatValue(d.dist)} ${unit}`;
+    ctx.save();
+    ctx.font = '12px Consolas, monospace';
+    const tw = ctx.measureText(text).width + 10;
+    ctx.restore();
+    const midX = (a.x + b.x) * 0.5, midY = (a.y + b.y) * 0.5;
+    const labelBox = { x: midX - tw * 0.5, y: midY - 20, w: tw, h: 18 };
+    const anchor = markRightmostAnchor([
+        { x: a.x, y: a.y, clearance: 12 },
+        { x: b.x, y: b.y, clearance: 12 },
+        { x: labelBox.x + labelBox.w, y: labelBox.y + labelBox.h / 2, clearance: 0 },
+    ]);
+    const attached = markAttachDeleteButton(anchor.x, anchor.y, anchor.clearance, rect.width, rect.height);
+    return { a, b, text, labelBox, button: attached.button, bridge: attached.bridge };
+}
+
+function measureDistPointer(mx, my) {
+    if (!measureState.distLine || measureState.distDrawing || measureState.distEditMode) return null;
+    if (!currentDataset || !overlayEl) return null;
+    const decor = measureDistDecor(overlayEl.getContext('2d'));
+    if (!decor) return null;
+    if (markPointInBox(mx, my, decor.button, 3)) return 'delete';
+    if (markPointInBox(mx, my, decor.bridge, 0)) return 'body';
+    if (markPointInBox(mx, my, decor.labelBox, 2)) return 'body';
+    if (measureDistHitAt(mx, my)) return 'body';
     return null;
 }
 
@@ -3121,10 +3416,9 @@ function measureAreaHitTest(clientX, clientY) {
 }
 
 function drawMeasureDistOverlay(ctx) {
-    const L = measureState.distLine;
-    const space = measureState.space;
-    const a = overlayPtToScreen(L.x0, L.y0, space);
-    const b = overlayPtToScreen(L.x1, L.y1, space);
+    const decor = measureDistDecor(ctx);
+    if (!decor) return;
+    const a = decor.a, b = decor.b;
 
     ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
@@ -3138,19 +3432,19 @@ function drawMeasureDistOverlay(ctx) {
         ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
     }
 
-    const midX = (a.x + b.x) * 0.5, midY = (a.y + b.y) * 0.5;
-    const d = computeMeasureDistance(L);
-    const unit = space === 'world' ? t('measureUnitWorld') : t('measureUnitPx');
-    const label = `${formatValue(d.dist)} ${unit}`;
+    const box = decor.labelBox;
     ctx.font = '12px Consolas, monospace';
-    const tw = ctx.measureText(label).width + 10;
     ctx.fillStyle = 'rgba(0,0,0,0.72)';
-    ctx.fillRect(midX - tw * 0.5, midY - 20, tw, 18);
+    ctx.fillRect(box.x, box.y, box.w, box.h);
     ctx.fillStyle = '#3ecf8e';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, midX, midY - 11);
+    ctx.fillText(decor.text, box.x + box.w / 2, box.y + box.h / 2);
     ctx.textAlign = 'left';
+
+    if (measureState.distHover && !measureState.distDrawing && !measureState.distEditMode) {
+        drawMarkDeleteButton(ctx, decor.button, measureState.distHover === 'delete');
+    }
 }
 
 function drawMeasureAreaOverlay(ctx) {
@@ -3216,6 +3510,15 @@ viewerEl.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
     if (!currentDataset) return;
     if (isViewerOverlayUi(e.target)) return;
+    if (consumeViewerMarkDelete(e)) return;
+    {
+        const rect = viewerEl.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        if (measureDistPointer(mx, my) === 'body' && !measureDistHitAt(mx, my)) {
+            e.preventDefault();
+            return;
+        }
+    }
 
     measureState.space = overlaySpaceForDataset();
 
@@ -3296,6 +3599,75 @@ viewerEl.addEventListener('mousemove', (e) => {
         else if (hit === 'move') viewerEl.style.cursor = 'move';
         else viewerEl.style.cursor = '';
     }
+});
+
+function consumeViewerMarkDelete(e) {
+    if (!e || e.button !== 0 || view3dActive || !currentDataset) return false;
+    const rect = viewerEl.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const dist = measureDistPointer(mx, my);
+    const line = profileLinePointer(mx, my);
+    if (dist !== 'delete' && line !== 'delete') return false;
+    if (dist === 'delete') {
+        measureState.distHover = null;
+        clearMeasureDistance();
+    }
+    if (line === 'delete') {
+        profileState.lineHover = null;
+        clearProfile();
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    return true;
+}
+
+function refreshViewerMarkHover(e) {
+    if (view3dActive || !currentDataset || !viewerEl) return;
+    const busy = panning || profileState.drawing || profileState.editMode
+        || measureState.distDrawing || measureState.distEditMode
+        || measureState.areaDrawing || measureState.areaEditMode;
+    if (busy) {
+        if (measureState.distHover || profileState.lineHover) {
+            measureState.distHover = null;
+            profileState.lineHover = null;
+            if (canvasEl.style.cursor === 'pointer') canvasEl.style.cursor = '';
+            drawProfileOverlay();
+        }
+        return;
+    }
+    if (isViewerOverlayUi(e.target)) {
+        if (measureState.distHover || profileState.lineHover) {
+            measureState.distHover = null;
+            profileState.lineHover = null;
+            if (canvasEl.style.cursor === 'pointer') canvasEl.style.cursor = '';
+            drawProfileOverlay();
+        }
+        return;
+    }
+    const rect = viewerEl.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const inside = mx >= 0 && my >= 0 && mx <= rect.width && my <= rect.height;
+    const dist = inside ? measureDistPointer(mx, my) : null;
+    const line = inside ? profileLinePointer(mx, my) : null;
+    const changed = measureState.distHover !== dist || profileState.lineHover !== line;
+    measureState.distHover = dist;
+    profileState.lineHover = line;
+    if (changed) drawProfileOverlay();
+    if (dist === 'delete' || line === 'delete') {
+        viewerEl.style.cursor = 'pointer';
+        canvasEl.style.cursor = 'pointer';
+    } else if (canvasEl.style.cursor === 'pointer') {
+        canvasEl.style.cursor = '';
+    }
+}
+
+viewerEl.addEventListener('mousemove', refreshViewerMarkHover);
+viewerEl.addEventListener('mouseleave', () => {
+    if (!measureState.distHover && !profileState.lineHover) return;
+    measureState.distHover = null;
+    profileState.lineHover = null;
+    if (canvasEl && canvasEl.style.cursor === 'pointer') canvasEl.style.cursor = '';
+    drawProfileOverlay();
 });
 
 window.addEventListener('mousemove', (e) => {

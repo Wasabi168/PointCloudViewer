@@ -68,6 +68,7 @@ const OverlayAnalysis = (() => {
             lineH0: $('ovLineH0A'),
             lineH1: $('ovLineH1A'),
             lineHover: $('ovLineHoverA'),
+            lineDelete: $('ovLineDeleteA'),
             lineMeasures: $('ovLineMeasuresA'),
             lineHint: $('ovLineHintA'),
             profilePanel: $('ovProfilePanelA'),
@@ -94,6 +95,7 @@ const OverlayAnalysis = (() => {
             lineH0: $('ovLineH0B'),
             lineH1: $('ovLineH1B'),
             lineHover: $('ovLineHoverB'),
+            lineDelete: $('ovLineDeleteB'),
             lineMeasures: $('ovLineMeasuresB'),
             lineHint: $('ovLineHintB'),
             profilePanel: $('ovProfilePanelB'),
@@ -130,6 +132,9 @@ const OverlayAnalysis = (() => {
         measureSets: [],
         measurePts: [],
         measureDrag: null, // { side, setKey, ptIndex, moved, pointerId }
+        measureLayouts: { a: [], b: [] },
+        hoverMeasure: null, // { side, key, part }
+        lineHover: null, // { side, part: 'body'|'delete' }
         // 剖面圖可視距離窗（雙圖同步）；d1=null 表示顯示全長
         chartView: { d0: 0, d1: null },
         // 剖面圖 Y 軸顯示範圍（雙圖同步）；null＝依可見 X 窗自動值域
@@ -392,6 +397,7 @@ const OverlayAnalysis = (() => {
         if (s.lineH0) { s.lineH0.setAttribute('cx', '0'); s.lineH0.setAttribute('cy', '0'); }
         if (s.lineH1) { s.lineH1.setAttribute('cx', '0'); s.lineH1.setAttribute('cy', '0'); }
         if (s.lineHover) s.lineHover.setAttribute('visibility', 'hidden');
+        if (s.lineDelete) s.lineDelete.setAttribute('visibility', 'hidden');
         if (s.lineMeasures) {
             while (s.lineMeasures.firstChild) s.lineMeasures.removeChild(s.lineMeasures.firstChild);
         }
@@ -513,6 +519,52 @@ const OverlayAnalysis = (() => {
             else hideLineOnSide(s);
         }
         syncHoverOnImages();
+        syncLineDelete();
+    }
+
+    function lineDeleteDecor(side) {
+        const L = st.lineImage;
+        const s = sides[side];
+        if (!L || !s || !s.viewer) return null;
+        const rect = s.viewer.getBoundingClientRect();
+        const a = imageToViewport(L.x0, L.y0);
+        const b = imageToViewport(L.x1, L.y1);
+        const anchor = markRightmostAnchor([
+            { x: a.x, y: a.y, clearance: 12 },
+            { x: b.x, y: b.y, clearance: 12 },
+        ]);
+        return markAttachDeleteButton(anchor.x, anchor.y, anchor.clearance, rect.width, rect.height);
+    }
+
+    function linePointer(side, mx, my) {
+        if (!st.lineImage || st.lineAction || st.panning) return null;
+        const decor = lineDeleteDecor(side);
+        if (!decor) return null;
+        if (markPointInBox(mx, my, decor.button, 3)) return 'delete';
+        if (markPointInBox(mx, my, decor.bridge, 0)) return 'body';
+        if (lineHitTest(mx, my)) return 'body';
+        return null;
+    }
+
+    function syncLineDelete() {
+        for (const key of ['a', 'b']) {
+            const s = sides[key];
+            if (!s.lineDelete) continue;
+            if (!st.lineImage) {
+                s.lineDelete.setAttribute('visibility', 'hidden');
+                continue;
+            }
+            const decor = lineDeleteDecor(key);
+            if (!decor) {
+                s.lineDelete.setAttribute('visibility', 'hidden');
+                continue;
+            }
+            const btn = decor.button;
+            s.lineDelete.setAttribute('transform', `translate(${btn.x + btn.w / 2} ${btn.y + btn.h / 2})`);
+            const show = !st.panning && !st.lineAction && st.lineHover && st.lineHover.side === key;
+            s.lineDelete.setAttribute('visibility', show ? 'visible' : 'hidden');
+            s.lineDelete.classList.toggle('hot', !!(show && st.lineHover.part === 'delete'));
+        }
     }
 
     function recomputeProfiles() {
@@ -914,11 +966,12 @@ const OverlayAnalysis = (() => {
     }
 
     function drawMeasureOnChart(ctx, side, data, geom) {
+        st.measureLayouts[side] = [];
         if (!data || !geom) return;
         const showSetNum = st.measureSets.length > 1;
         const zUnit = headerZUnit(dsOf(side));
 
-        const drawPair = (pts, style, setNum) => {
+        const drawPair = (pts, style, setNum, key) => {
             if (!pts || pts.length === 0) return;
             const coords = [];
             for (let k = 0; k < pts.length; k++) {
@@ -926,6 +979,7 @@ const OverlayAnalysis = (() => {
                 if (!p) continue;
                 coords.push({ ...p, color: style.colors[k % style.colors.length] });
             }
+            const labels = [];
 
             if (coords.length === 2) {
                 const p0 = coords[0], p1 = coords[1];
@@ -980,7 +1034,18 @@ const OverlayAnalysis = (() => {
                     );
                     drawMeasureLabelAt(ctx, distText, layout.dist.x, layout.dist.y, style.dist);
                     drawMeasureLabelAt(ctx, stepText, layout.step.x, layout.step.y, style.step);
+                    labels.push(
+                        { x: layout.dist.x, y: layout.dist.y, w: distBoxW, h: boxH },
+                        { x: layout.step.x, y: layout.step.y, w: stepBoxW, h: boxH },
+                    );
                 }
+            }
+
+            if (coords.length) {
+                const p0 = coords[0];
+                const p1 = coords.length === 2 ? coords[1] : null;
+                const corner = p1 ? { px: p1.px, py: p0.py } : null;
+                rememberMarkLayout(st.measureLayouts[side], key, p0, p1, corner, labels, geom.cw, geom.ch);
             }
 
             for (const c of coords) {
@@ -995,14 +1060,25 @@ const OverlayAnalysis = (() => {
         };
 
         for (let s = 0; s < st.measureSets.length; s++) {
-            drawPair(st.measureSets[s].pts, measureSetStyle(s), s + 1);
+            drawPair(st.measureSets[s].pts, measureSetStyle(s), s + 1, s);
         }
         if (st.measurePts.length > 0) {
             drawPair(
                 st.measurePts,
                 measureSetStyle(st.measureSets.length),
-                st.measureSets.length + 1
+                st.measureSets.length + 1,
+                'draft'
             );
+        }
+
+        const hover = st.hoverMeasure;
+        if (hover && hover.side === side && !st.measureDrag) {
+            const layouts = st.measureLayouts[side];
+            for (let i = 0; i < layouts.length; i++) {
+                if (layouts[i].key !== hover.key) continue;
+                drawMarkDeleteButton(ctx, layouts[i].button, hover.part === 'delete');
+                break;
+            }
         }
 
         if (st.measureMode && st.hoverIndex != null
@@ -1059,7 +1135,20 @@ const OverlayAnalysis = (() => {
         st.measureMode = false;
         st.hoverIndex = null;
         st.measureDrag = null;
+        st.hoverMeasure = null;
         syncMeasureUI();
+    }
+
+    function deleteOvMeasure(key) {
+        if (key === 'draft') st.measurePts = [];
+        else if (typeof key === 'number' && st.measureSets[key]) st.measureSets.splice(key, 1);
+        else return;
+        st.hoverMeasure = null;
+        st.hoverIndex = null;
+        st.hoverSide = null;
+        syncMeasureUI();
+        renderProfileCharts();
+        syncHoverOnImages();
     }
 
     function setMeasureMode(on) {
@@ -1370,6 +1459,7 @@ const OverlayAnalysis = (() => {
         st.lineAction = null;
         st.hoverIndex = null;
         st.hoverSide = null;
+        st.lineHover = null;
         st.profileA = null;
         st.profileB = null;
         clearMeasurePts();
@@ -1877,9 +1967,17 @@ const OverlayAnalysis = (() => {
 
             e.preventDefault();
             e.stopPropagation();
+            const p = pt(e);
+            const mark = st.lineImage ? linePointer(side, p.x, p.y) : null;
+            if (mark === 'delete') {
+                st.lineHover = null;
+                clearLine();
+                return;
+            }
+            if (mark === 'body' && !lineHitTest(p.x, p.y)) return;
+
             overlay.setPointerCapture(e.pointerId);
             st.lineSource = side;
-            const p = pt(e);
             const img = mouseToImg(e);
 
             // 已有剖線：優先編輯端點或整線
@@ -1918,10 +2016,23 @@ const OverlayAnalysis = (() => {
             // 剖面模式游標提示（未拖曳時）
             if (st.lineMode && !st.lineAction && !st.panning) {
                 const p = pt(e);
-                const hit = st.lineImage ? lineHitTest(p.x, p.y) : null;
-                if (hit === 'ep0' || hit === 'ep1') overlay.style.cursor = 'pointer';
-                else if (hit === 'move') overlay.style.cursor = 'move';
-                else overlay.style.cursor = 'crosshair';
+                const mark = st.lineImage ? linePointer(side, p.x, p.y) : null;
+                const prev = st.lineHover;
+                const next = mark ? { side, part: mark } : null;
+                const changed = !prev !== !next || (prev && next && (prev.side !== next.side || prev.part !== next.part));
+                if (!mark && prev && prev.side !== side) {
+                    /* 另一側的 hover 由該側自己更新 */
+                } else {
+                    st.lineHover = next;
+                    if (changed) syncLineDelete();
+                }
+                if (mark === 'delete') overlay.style.cursor = 'pointer';
+                else {
+                    const hit = st.lineImage ? lineHitTest(p.x, p.y) : null;
+                    if (hit === 'ep0' || hit === 'ep1') overlay.style.cursor = 'pointer';
+                    else if (hit === 'move') overlay.style.cursor = 'move';
+                    else overlay.style.cursor = 'crosshair';
+                }
             }
 
             if (st.panning && st.panStart) {
@@ -1964,6 +2075,10 @@ const OverlayAnalysis = (() => {
         });
 
         overlay.addEventListener('pointerleave', () => {
+            if (st.lineHover && st.lineHover.side === side) {
+                st.lineHover = null;
+                syncLineDelete();
+            }
             if (!st.lineAction && !st.panning && st.lineMode) {
                 overlay.style.cursor = 'crosshair';
             }
@@ -2076,8 +2191,15 @@ const OverlayAnalysis = (() => {
             const mx = e.clientX - rect.left;
             const my = e.clientY - rect.top;
 
-            // 左鍵優先拖曳測量圓點
+            // 左鍵優先刪除或拖曳測量圓點
             if (e.button === 0 && measureHasAny() && !isYAxisHit(mx, my, geom)) {
+                const mark = markMeasurePointer(st.measureLayouts[side], mx, my);
+                if (mark && mark.part === 'delete') {
+                    e.preventDefault();
+                    measureSuppressClick = true;
+                    deleteOvMeasure(mark.key);
+                    return;
+                }
                 const hit = measureHitHandle(side, mx, my);
                 if (hit) {
                     e.preventDefault();
@@ -2098,7 +2220,8 @@ const OverlayAnalysis = (() => {
             }
 
             // 中鍵，或非測量模式下的左鍵：平移（僅在已縮放時）
-            const wantPan = (e.button === 1) || (e.button === 0 && !st.measureMode);
+            const onMark = markMeasurePointer(st.measureLayouts[side], mx, my);
+            const wantPan = (e.button === 1) || (e.button === 0 && !st.measureMode && !onMark);
             if (!wantPan || !isChartZoomed(data)) return;
             e.preventDefault();
             canvas.setPointerCapture(e.pointerId);
@@ -2155,6 +2278,25 @@ const OverlayAnalysis = (() => {
             const rect = canvas.getBoundingClientRect();
             const mx = e.clientX - rect.left;
             const my = e.clientY - rect.top;
+
+            const mark = markMeasurePointer(st.measureLayouts[side], mx, my);
+            const prevMark = st.hoverMeasure;
+            const sameMark = prevMark && mark && prevMark.side === side
+                && prevMark.key === mark.key && prevMark.part === mark.part;
+            if (mark) {
+                st.hoverMeasure = { side, key: mark.key, part: mark.part };
+                canvas.style.cursor = mark.part === 'delete'
+                    ? 'pointer'
+                    : (measureHitHandle(side, mx, my) ? 'grab' : 'default');
+                if (st.hoverIndex != null || st.hoverSide != null || !sameMark) {
+                    st.hoverIndex = null;
+                    st.hoverSide = null;
+                    hideProfileTips();
+                    renderProfileCharts();
+                }
+                return;
+            }
+            if (prevMark && prevMark.side === side) st.hoverMeasure = null;
 
             if (isYAxisHit(mx, my, geom)) {
                 canvas.style.cursor = 'ns-resize';
@@ -2286,7 +2428,11 @@ const OverlayAnalysis = (() => {
             canvas.style.cursor = '';
             if (st.measureDrag && st.measureDrag.side === side) return;
             if (st.chartPan && st.chartPan.side === side) return;
-            if (st.hoverSide !== side && st.hoverIndex != null) return;
+            if (st.hoverMeasure && st.hoverMeasure.side === side) st.hoverMeasure = null;
+            if (st.hoverSide !== side && st.hoverIndex != null) {
+                renderProfileCharts();
+                return;
+            }
             st.hoverIndex = null;
             st.hoverSide = null;
             hideProfileTips();
