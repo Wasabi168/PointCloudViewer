@@ -396,13 +396,20 @@ function createImageView(ids, options) {
 
     const EDITABLE_UNIT_KEYS = new Set(['xunit', 'yunit', 'zunit', 'x-unit', 'y-unit', 'z-unit']);
     const ALLOWED_HEADER_UNITS = new Set(['nm', 'um', 'mm', 'cm']);
+    const ALLOWED_Z_UNITS = new Set(['nm', 'um', 'mm', 'cm', '%']);
 
     function normalizeHeaderUnitInput(raw) {
         return String(raw || '').trim().toLowerCase().replace(/µ/g, 'u').replace(/[\[\]]/g, '');
     }
 
-    function isAllowedHeaderUnit(unit) {
-        return ALLOWED_HEADER_UNITS.has(normalizeHeaderUnitInput(unit));
+    function isZUnitKey(headerKey) {
+        return headerKey === 'zunit' || headerKey === 'z-unit';
+    }
+
+    function isAllowedHeaderUnit(unit, headerKey) {
+        const normalized = normalizeHeaderUnitInput(unit);
+        const allowed = isZUnitKey(headerKey) ? ALLOWED_Z_UNITS : ALLOWED_HEADER_UNITS;
+        return allowed.has(normalized);
     }
 
     function startHeaderUnitEdit(valSpan, headerKey, currentVal) {
@@ -418,7 +425,7 @@ function createImageView(ids, options) {
             if (!input.isConnected) return;
             if (commit) {
                 const normalized = normalizeHeaderUnitInput(input.value);
-                if (!isAllowedHeaderUnit(normalized)) {
+                if (!isAllowedHeaderUnit(normalized, headerKey)) {
                     showToast(t('unitInvalid'), 'error');
                 } else if (normalized !== normalizeHeaderUnitInput(currentVal) && st.dataset?.header) {
                     st.dataset.header[headerKey] = normalized;
@@ -458,7 +465,7 @@ function createImageView(ids, options) {
             const displayVal = strVal.length > 30 ? strVal.slice(0, 30) + '…' : v;
             if (canEditUnits && EDITABLE_UNIT_KEYS.has(k)) {
                 valSpan.classList.add('info-unit-editable');
-                valSpan.title = t('unitEditTitle');
+                valSpan.title = t(isZUnitKey(k) ? 'unitEditTitleZ' : 'unitEditTitle');
                 valSpan.textContent = displayVal;
                 valSpan.addEventListener('dblclick', (e) => {
                     e.preventDefault();
@@ -498,20 +505,7 @@ function createImageView(ids, options) {
         setBusy(edOpenLabel, true);
         if (el.btnSave) el.btnSave.disabled = true;
         try {
-            let result;
-            switch (ext) {
-                case 'bcrf': result = await readBcrf(file, setProgress); break;
-                case 'asc':  result = await readAsc(file, setProgress); break;
-                case 'tif':
-                case 'tiff': result = await readTiff(file, setProgress); break;
-                case 'pcd':  result = await readPcd(file, setProgress); break;
-                case 'txt':  result = await readTxt(file, setProgress); break;
-                case 'bmp':  result = await readBmp(file, setProgress); break;
-                case 'png':  result = await readPng(file, setProgress); break;
-                case 'jpg':
-                case 'jpeg': result = await readJpg(file, setProgress); break;
-                default: throw new Error(t('errUnknownExt', ext));
-            }
+            const result = await readDatasetByExt(ext, file, setProgress);
             const rangeSrc = result.type === 'pcd-scatter' ? result.z : result.data;
             const { vmin, vmax } = computeRange(rangeSrc);
             st.dataset = { ...result, vmin, vmax, filename: file.name, canvasEl: el.canvas };
@@ -526,9 +520,17 @@ function createImageView(ids, options) {
             if (el.btnClear) el.btnClear.disabled = false;
             syncPointSizeControls();
         } catch (err) {
-            console.error(err);
-            el.status.textContent = t('statusReadFailed', err.message);
-            showToast(t('statusReadFailed', err.message), 'error');
+            if (isLoadCancelled(err)) {
+                el.status.textContent = st.dataset
+                    ? (st.dataset.type === 'pcd-scatter'
+                        ? t('statusLoadedPcd', st.dataset.filename, st.dataset.pointCount)
+                        : t('statusLoaded', st.dataset.filename, st.dataset.width, st.dataset.height))
+                    : t('statusIdle');
+            } else {
+                console.error(err);
+                el.status.textContent = t('statusReadFailed', err.message);
+                showToast(t('statusReadFailed', err.message), 'error');
+            }
         } finally {
             hideProgress();
             setBusy(edOpenLabel, false);

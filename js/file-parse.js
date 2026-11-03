@@ -1,7 +1,7 @@
 /**
- * 檔案解析 (BCRF/ASC 等)
+ * 檔案解析 (BCRF/ASC/FSS CSV 等)
  * 依賴：i18n.js, prefs.js
- * 匯出（全域）：parseFileToDataset() 等讀檔函式
+ * 匯出（全域）：readBcrf()、readAsc()、readAreaScanCsv()、readDatasetByExt()、isLoadCancelled() 等
  */
 /* =========================================================================
  *  1. 檔案解析 (對應 wr_file.py 中的 read_bcrf_file_thread / read_asc_file_thread)
@@ -178,6 +178,261 @@ async function readAsc(file, onProgress) {
 
     if (onProgress) onProgress(1.0);
     return { header: headerDict, data, width, height };
+}
+
+
+/* -------------------------------------------------------------------------
+ *  FSS AreaScan CSV
+ *  標頭（無單位）＋以分號分隔的數值矩陣，NaN 為無效點。
+ *  x_range / y_range 視為掃描範圍（xlength / ylength）。
+ * ------------------------------------------------------------------------- */
+
+const CSV_LENGTH_UNITS = ['nm', 'um', 'mm', 'cm'];
+const CSV_Z_UNITS = ['nm', 'um', 'mm', 'cm', '%'];
+const csvUnitsByFile = new WeakMap();
+let csvPromptChain = Promise.resolve();
+
+function isLoadCancelled(err) {
+    return !!(err && err.code === 'load-cancelled');
+}
+
+function loadCancelledError() {
+    const err = new Error(t('statusLoadCancelled'));
+    err.code = 'load-cancelled';
+    return err;
+}
+
+function rememberedCsvUnit(key, fallback, allowed) {
+    const v = getUserPref(key);
+    const list = allowed || CSV_LENGTH_UNITS;
+    return list.includes(v) ? v : fallback;
+}
+
+/** 解析 FSS 區域掃描 CSV 文字。不含單位；範圍取自 x_range / y_range。 */
+function parseAreaScanCsvText(text) {
+    const lines = String(text).replace(/^\uFEFF/, '').split(/\r?\n/);
+    const meta = { title: '', signalId: '', xRange: NaN, yRange: NaN };
+    const rows = [];
+    let seenData = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        if (!seenData && line.includes(';')) seenData = true;
+        if (!seenData) {
+            const colon = line.indexOf(':');
+            if (colon >= 0) {
+                const key = line.slice(0, colon).trim().toLowerCase();
+                const value = line.slice(colon + 1).trim();
+                if (key === 'signal id') meta.signalId = value;
+                else if (key === 'x_range' || key === 'x-range' || key === 'xrange') meta.xRange = parseFloat(value);
+                else if (key === 'y_range' || key === 'y-range' || key === 'yrange') meta.yRange = parseFloat(value);
+            } else if (!meta.title) {
+                meta.title = line;
+            }
+            continue;
+        }
+        const parts = line.split(';');
+        if (parts.length && parts[parts.length - 1].trim() === '') parts.pop();
+        if (!parts.length) continue;
+        rows.push(parts);
+    }
+
+    if (!rows.length) throw new Error(t('errCsvNoData'));
+    const width = rows[0].length;
+    const height = rows.length;
+    if (!width) throw new Error(t('errCsvNoData'));
+    for (let r = 1; r < height; r++) {
+        if (rows[r].length !== width) {
+            throw new Error(t('errCsvRowWidth', r + 1, rows[r].length, width));
+        }
+    }
+
+    const data = new Float32Array(width * height);
+    let voidPixels = 0;
+    for (let y = 0; y < height; y++) {
+        const row = rows[y];
+        for (let x = 0; x < width; x++) {
+            const s = row[x].trim();
+            let v = NaN;
+            if (s && !/^nan$/i.test(s)) {
+                const n = parseFloat(s);
+                if (Number.isFinite(n)) v = n;
+            }
+            if (!Number.isFinite(v)) voidPixels++;
+            data[y * width + x] = v;
+        }
+    }
+
+    meta.voidPixels = voidPixels;
+    meta.hasRange = Number.isFinite(meta.xRange) && meta.xRange > 0
+        && Number.isFinite(meta.yRange) && meta.yRange > 0;
+    return { meta, data, width, height };
+}
+
+function csvUnitMetaText(info) {
+    const lines = [];
+    if (info.filename) lines.push(t('csvUnitFile', info.filename));
+    lines.push(t('csvUnitSize', info.width, info.height));
+    if (info.title) lines.push(t('csvUnitTitleLine', info.title));
+    if (info.signalId) lines.push(t('csvUnitSignal', info.signalId));
+    if (info.hasRange) {
+        lines.push(t('csvUnitXRange', info.xRange));
+        lines.push(t('csvUnitYRange', info.yRange));
+    } else {
+        lines.push(t('csvUnitRangeMissing'));
+    }
+    return lines.join('\n');
+}
+
+function openCsvUnitDialog(info) {
+    const overlay = document.getElementById('csvUnitOverlay');
+    const form = document.getElementById('csvUnitForm');
+    const metaEl = document.getElementById('csvUnitMeta');
+    const errEl = document.getElementById('csvUnitError');
+    const selX = document.getElementById('csvUnitX');
+    const selY = document.getElementById('csvUnitY');
+    const selZ = document.getElementById('csvUnitZ');
+    const rangeBlock = document.getElementById('csvUnitRangeBlock');
+    const lenX = document.getElementById('csvUnitXLen');
+    const lenY = document.getElementById('csvUnitYLen');
+    const closeBtn = document.getElementById('csvUnitClose');
+    const cancelBtn = document.getElementById('csvUnitCancel');
+    if (!overlay || !form || !selX || !selY || !selZ) {
+        return Promise.reject(new Error(t('errCsvNoDialog')));
+    }
+
+    return new Promise((resolve) => {
+        const ac = new AbortController();
+        const opt = { signal: ac.signal };
+        let settled = false;
+
+        selX.value = rememberedCsvUnit('csvXunit', 'mm');
+        selY.value = rememberedCsvUnit('csvYunit', 'mm');
+        selZ.value = rememberedCsvUnit('csvZunit', 'um', CSV_Z_UNITS);
+        if (metaEl) metaEl.textContent = csvUnitMetaText(info);
+        if (errEl) errEl.textContent = '';
+        if (rangeBlock) rangeBlock.hidden = !!info.hasRange;
+        if (lenX) lenX.value = '';
+        if (lenY) lenY.value = '';
+
+        function finish(value) {
+            if (settled) return;
+            settled = true;
+            ac.abort();
+            overlay.classList.remove('show');
+            overlay.setAttribute('aria-hidden', 'true');
+            resolve(value);
+        }
+
+        function onOk() {
+            const xunit = selX.value;
+            const yunit = selY.value;
+            const zunit = selZ.value;
+            if (!CSV_LENGTH_UNITS.includes(xunit) || !CSV_LENGTH_UNITS.includes(yunit) || !CSV_Z_UNITS.includes(zunit)) {
+                if (errEl) errEl.textContent = t('unitInvalid');
+                return;
+            }
+            let xlength = info.xRange;
+            let ylength = info.yRange;
+            if (!info.hasRange) {
+                xlength = parseFloat(lenX && lenX.value);
+                ylength = parseFloat(lenY && lenY.value);
+                if (!(xlength > 0) || !(ylength > 0)) {
+                    if (errEl) errEl.textContent = t('csvUnitRangeInvalid');
+                    return;
+                }
+            }
+            setUserPref('csvXunit', xunit);
+            setUserPref('csvYunit', yunit);
+            setUserPref('csvZunit', zunit);
+            finish({ xunit, yunit, zunit, xlength, ylength });
+        }
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            onOk();
+        }, opt);
+        if (cancelBtn) cancelBtn.addEventListener('click', () => finish(null), opt);
+        if (closeBtn) closeBtn.addEventListener('click', () => finish(null), opt);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                finish(null);
+            }
+        }, opt);
+
+        overlay.classList.add('show');
+        overlay.setAttribute('aria-hidden', 'false');
+        selX.focus();
+    });
+}
+
+function promptCsvLoadSettings(info) {
+    const job = csvPromptChain.then(() => openCsvUnitDialog(info), () => openCsvUnitDialog(info));
+    csvPromptChain = job.then(() => {}, () => {});
+    return job;
+}
+
+/** 解析 FSS AreaScan CSV，並請使用者指定 xunit / yunit / zunit。 */
+async function readAreaScanCsv(file, onProgress) {
+    if (onProgress) onProgress(0.05);
+    const text = await file.text();
+    if (onProgress) onProgress(0.45);
+    const parsed = parseAreaScanCsvText(text);
+    if (onProgress) onProgress(0.7);
+
+    let units = csvUnitsByFile.get(file);
+    if (!units) {
+        const chosen = await promptCsvLoadSettings({
+            filename: file.name || '',
+            title: parsed.meta.title,
+            signalId: parsed.meta.signalId,
+            width: parsed.width,
+            height: parsed.height,
+            xRange: parsed.meta.xRange,
+            yRange: parsed.meta.yRange,
+            hasRange: parsed.meta.hasRange,
+        });
+        if (!chosen) throw loadCancelledError();
+        units = chosen;
+        csvUnitsByFile.set(file, units);
+    }
+
+    const header = {
+        fileformat: 'fss_csv',
+        xpixels: String(parsed.width),
+        ypixels: String(parsed.height),
+        xlength: String(units.xlength),
+        ylength: String(units.ylength),
+        xunit: units.xunit,
+        yunit: units.yunit,
+        zunit: units.zunit,
+        voidpixels: String(parsed.meta.voidPixels),
+    };
+    if (parsed.meta.title) header.Title = parsed.meta.title;
+    if (parsed.meta.signalId) header['Signal ID'] = parsed.meta.signalId;
+
+    if (onProgress) onProgress(1.0);
+    return { header, data: parsed.data, width: parsed.width, height: parsed.height };
+}
+
+/** 依副檔名讀取資料集（各頁面載入路徑共用） */
+async function readDatasetByExt(ext, file, onProgress) {
+    switch (ext) {
+        case 'bcrf': return readBcrf(file, onProgress);
+        case 'asc': return readAsc(file, onProgress);
+        case 'tif':
+        case 'tiff': return readTiff(file, onProgress);
+        case 'pcd': return readPcd(file, onProgress);
+        case 'txt': return readTxt(file, onProgress);
+        case 'csv': return readAreaScanCsv(file, onProgress);
+        case 'bmp': return readBmp(file, onProgress);
+        case 'png': return readPng(file, onProgress);
+        case 'jpg':
+        case 'jpeg': return readJpg(file, onProgress);
+        default: throw new Error(t('errUnknownExt', ext));
+    }
 }
 
 

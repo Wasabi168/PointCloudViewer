@@ -1693,25 +1693,18 @@ const AnalysisView = (() => {
         el.status.textContent = t('statusReading', file.name);
         setProgress(0);
         try {
-            let result;
-            switch (ext) {
-                case 'bcrf': result = await readBcrf(file, setProgress); break;
-                case 'asc':  result = await readAsc(file, setProgress); break;
-                case 'tif':
-                case 'tiff': result = await readTiff(file, setProgress); break;
-                case 'pcd':  result = await readPcd(file, setProgress); break;
-                case 'txt':  result = await readTxt(file, setProgress); break;
-                case 'bmp':  result = await readBmp(file, setProgress); break;
-                case 'png':  result = await readPng(file, setProgress); break;
-                case 'jpg':
-                case 'jpeg': result = await readJpg(file, setProgress); break;
-                default: throw new Error(t('errUnknownExt', ext));
-            }
+            const result = await readDatasetByExt(ext, file, setProgress);
             await acceptDataset({ ...result, filename: file.name });
         } catch (err) {
-            console.error(err);
-            el.status.textContent = t('statusReadFailed', err.message);
-            showToast(t('statusReadFailed', err.message), 'error');
+            if (isLoadCancelled(err)) {
+                el.status.textContent = st.dataset
+                    ? t('statusLoaded', st.dataset.filename, st.dataset.width, st.dataset.height)
+                    : t('statusIdle');
+            } else {
+                console.error(err);
+                el.status.textContent = t('statusReadFailed', err.message);
+                showToast(t('statusReadFailed', err.message), 'error');
+            }
         } finally {
             hideProgress();
         }
@@ -2744,6 +2737,7 @@ async function transferDatasetToAnalysis(opts = {}) {
         if (ok) showToast(t('sentToAnalysis'), 'info');
         return ok;
     } catch (err) {
+        if (isLoadCancelled(err)) return false;
         console.error(err);
         showToast(t('statusReadFailed', err.message), 'error');
         return false;
@@ -2775,6 +2769,7 @@ async function transferDatasetToOverlayAnalysis(side, opts = {}) {
         }
         return await OverlayAnalysis.loadDataset(s, dataset);
     } catch (err) {
+        if (isLoadCancelled(err)) return false;
         console.error(err);
         showToast(t('statusReadFailed', err.message), 'error');
         return false;

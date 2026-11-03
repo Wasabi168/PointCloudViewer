@@ -11,7 +11,7 @@ const OverlayAnalysis = (() => {
     const MIN_LINE = 1;
     const VIEW_MIN = 0.02;
     const VIEW_MAX = 100;
-    const OV_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'pcd', 'txt', 'bmp', 'png', 'jpg', 'jpeg'];
+    const OV_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'pcd', 'txt', 'csv', 'bmp', 'png', 'jpg', 'jpeg'];
     const MEASURE_SET_STYLES = [
         { colors: ['#ff6b6b', '#51cf66'], dist: '#ffd24a', step: '#ff7b72', fill: 'rgba(255,210,74,0.12)' },
         { colors: ['#74c0fc', '#b197fc'], dist: '#66d9e8', step: '#da77f2', fill: 'rgba(102,217,232,0.12)' },
@@ -1565,20 +1565,7 @@ const OverlayAnalysis = (() => {
         if (!OV_EXTS.includes(ext) && !SUPPORTED_EXTS.includes(ext)) {
             throw new Error(t('statusUnsupported', file.name, SUPPORTED_TEXT));
         }
-        let result;
-        switch (ext) {
-            case 'bcrf': result = await readBcrf(file, setProgress); break;
-            case 'asc':  result = await readAsc(file, setProgress); break;
-            case 'tif':
-            case 'tiff': result = await readTiff(file, setProgress); break;
-            case 'pcd':  result = await readPcd(file, setProgress); break;
-            case 'txt':  result = await readTxt(file, setProgress); break;
-            case 'bmp':  result = await readBmp(file, setProgress); break;
-            case 'png':  result = await readPng(file, setProgress); break;
-            case 'jpg':
-            case 'jpeg': result = await readJpg(file, setProgress); break;
-            default: throw new Error(t('errUnknownExt', ext));
-        }
+        const result = await readDatasetByExt(ext, file, setProgress);
         if (result && result.type === 'pcd-scatter') {
             throw new Error(t('ovScatterUnsupported'));
         }
@@ -1687,6 +1674,10 @@ const OverlayAnalysis = (() => {
             afterSideLoaded(side, clone, other);
             return true;
         } catch (err) {
+            if (isLoadCancelled(err)) {
+                el.status.textContent = t('statusLoadCancelled');
+                return false;
+            }
             console.error(err);
             el.status.textContent = t('statusReadFailed', err.message);
             showToast(t('statusReadFailed', err.message), 'error');
@@ -1712,6 +1703,10 @@ const OverlayAnalysis = (() => {
             afterSideLoaded(side, ds, other);
             return true;
         } catch (err) {
+            if (isLoadCancelled(err)) {
+                el.status.textContent = t('statusLoadCancelled');
+                return false;
+            }
             console.error(err);
             el.status.textContent = t('statusReadFailed', err.message);
             showToast(t('statusReadFailed', err.message), 'error');
@@ -1746,6 +1741,10 @@ const OverlayAnalysis = (() => {
             showToast(t('ovLoadedPair', dsA.filename || '', dsB.filename || ''), 'info');
             return true;
         } catch (err) {
+            if (isLoadCancelled(err)) {
+                el.status.textContent = t('statusLoadCancelled');
+                return false;
+            }
             console.error(err);
             el.status.textContent = t('statusReadFailed', err.message);
             showToast(t('statusReadFailed', err.message), 'error');

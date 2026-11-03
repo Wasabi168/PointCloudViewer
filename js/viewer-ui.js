@@ -94,8 +94,8 @@ applySelectPref(document.getElementById('saveFormat'), 'saveFormat');
 applySelectPref(document.getElementById('edColormap'), 'edColormap');
 applySelectPref(document.getElementById('edSaveFormat'), 'edSaveFormat');
 
-const SUPPORTED_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'pcd', 'txt', 'bmp', 'png', 'jpg', 'jpeg'];
-const SUPPORTED_TEXT = '.bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg';
+const SUPPORTED_EXTS = ['bcrf', 'asc', 'tif', 'tiff', 'pcd', 'txt', 'csv', 'bmp', 'png', 'jpg', 'jpeg'];
+const SUPPORTED_TEXT = '.bcrf / .asc / .tif / .pcd / .txt / .csv / .bmp / .png / .jpg';
 
 function setProgress(p) {
     progressEl.classList.add('show');
@@ -134,20 +134,7 @@ async function parseFileToDataset(file, onProgress) {
     if (!SUPPORTED_EXTS.includes(ext)) {
         throw new Error(t('statusUnsupported', file.name, SUPPORTED_TEXT));
     }
-    let result;
-    switch (ext) {
-        case 'bcrf':          result = await readBcrf(file, onProgress); break;
-        case 'asc':           result = await readAsc(file, onProgress); break;
-        case 'tif':
-        case 'tiff':          result = await readTiff(file, onProgress); break;
-        case 'pcd':           result = await readPcd(file, onProgress); break;
-        case 'txt':           result = await readTxt(file, onProgress); break;
-        case 'bmp':           result = await readBmp(file, onProgress); break;
-        case 'png':           result = await readPng(file, onProgress); break;
-        case 'jpg':
-        case 'jpeg':          result = await readJpg(file, onProgress); break;
-        default:              throw new Error(t('errUnknownExt', ext));
-    }
+    const result = await readDatasetByExt(ext, file, onProgress);
     const rangeSrc = result.type === 'pcd-scatter' ? result.z : result.data;
     const { vmin, vmax } = rangeSrc.length >= LARGE_PIXEL_THRESHOLD
         ? await computeRangeAsync(rangeSrc)
@@ -197,9 +184,17 @@ async function loadFile(file) {
         applyPreferredViewMode();
         syncPointSizeControls();
     } catch (err) {
-        console.error(err);
-        statusEl.textContent = t('statusReadFailed', err.message);
-        showToast(t('statusReadFailed', err.message), 'error');
+        if (isLoadCancelled(err)) {
+            statusEl.textContent = currentDataset
+                ? (currentDataset.type === 'pcd-scatter'
+                    ? t('statusLoadedPcd', currentDataset.filename, currentDataset.pointCount)
+                    : t('statusLoaded', currentDataset.filename, currentDataset.width, currentDataset.height))
+                : t('statusIdle');
+        } else {
+            console.error(err);
+            statusEl.textContent = t('statusReadFailed', err.message);
+            showToast(t('statusReadFailed', err.message), 'error');
+        }
     } finally {
         hideProgress();
         setBusy(openLabel, false);
@@ -467,6 +462,10 @@ async function transferDatasetToViewer(opts = {}) {
         showToast(t('sentToViewer'), 'info');
         return true;
     } catch (err) {
+        if (isLoadCancelled(err)) {
+            statusEl.textContent = t('statusLoadCancelled');
+            return false;
+        }
         console.error(err);
         statusEl.textContent = t('statusReadFailed', err.message);
         showToast(t('statusReadFailed', err.message), 'error');
@@ -534,6 +533,10 @@ async function transferDatasetToEditor(opts = {}) {
         showToast(t('sentToEditor'), 'info');
         return true;
     } catch (err) {
+        if (isLoadCancelled(err)) {
+            if (edStatus) edStatus.textContent = t('statusLoadCancelled');
+            return false;
+        }
         console.error(err);
         if (edStatus) edStatus.textContent = t('statusReadFailed', err.message);
         showToast(t('statusReadFailed', err.message), 'error');

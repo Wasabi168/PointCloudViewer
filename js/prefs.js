@@ -19,6 +19,9 @@ const PREFS_DEFAULTS = {
     profileChartStyle: 'line',
     profileDistUnit: '',
     anNavCollapsed: false,
+    csvXunit: 'mm',
+    csvYunit: 'mm',
+    csvZunit: 'um',
 };
 
 let userPrefs = (() => {

@@ -45,7 +45,7 @@
 <header id="viewerHeader">
     <h1>
         <span data-i18n="tabViewer">點雲檢視</span>
-        <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg)</span>
+        <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .txt / .csv / .bmp / .png / .jpg)</span>
     </h1>
     <div class="controls controls--overflow" id="viewerControls">
         <!-- 群組：檔案（永不收納） -->
@@ -55,7 +55,7 @@
                     <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
                     <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
                 </svg>
-                <input type="file" id="fileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.bmp,.png,.jpg,.jpeg" />
+                <input type="file" id="fileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.csv,.bmp,.png,.jpg,.jpeg" />
             </label>
             <button type="button" id="btnSave" class="toolbar-icon-btn" data-i18n-title="btnSave" data-i18n-aria="btnSave" title="儲存" aria-label="儲存">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -202,7 +202,7 @@
 <main>
     <div class="viewer" id="viewer">
         <div class="placeholder" id="placeholder" data-i18n="placeholder">
-            點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg 檔案拖曳到此處
+            點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .pcd / .txt / .csv / .bmp / .png / .jpg 檔案拖曳到此處
         </div>
         <canvas id="canvas" style="display:none;"></canvas>
         <canvas id="canvas3d" class="canvas3d"></canvas>
@@ -386,7 +386,7 @@
     <header id="edHeader">
         <h1>
             <span data-i18n="editorTitle">點雲編輯</span>
-            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg)</span>
+            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .txt / .csv / .bmp / .png / .jpg)</span>
         </h1>
         <div class="controls controls--overflow" id="edControls">
             <!-- 群組：檔案（永不收納） -->
@@ -396,7 +396,7 @@
                         <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
                         <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
                     </svg>
-                    <input type="file" id="edFileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.bmp,.png,.jpg,.jpeg" />
+                    <input type="file" id="edFileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.csv,.bmp,.png,.jpg,.jpeg" />
                 </label>
                 <button type="button" id="edBtnSave" class="toolbar-icon-btn" data-i18n-title="btnSave" data-i18n-aria="btnSave" title="儲存" aria-label="儲存">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -561,7 +561,7 @@
       <div class="ed-left">
         <div class="viewer" id="edViewer">
             <div class="placeholder" id="edPlaceholder" data-i18n="placeholder">
-                點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg 檔案拖曳到此處
+                點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .pcd / .txt / .csv / .bmp / .png / .jpg 檔案拖曳到此處
             </div>
             <canvas id="edCanvas" style="display:none;"></canvas>
             <canvas id="edOverlay" class="overlay"></canvas>
@@ -1264,7 +1264,7 @@
                         <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
                         <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
                     </svg>
-                    <input type="file" id="anFileInput" accept=".bcrf,.asc,.tif,.tiff,.bmp,.png,.jpg,.jpeg" />
+                    <input type="file" id="anFileInput" accept=".bcrf,.asc,.tif,.tiff,.csv,.bmp,.png,.jpg,.jpeg" />
                 </label>
                 <button type="button" id="anBtnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="btnClearTitle" data-i18n-aria="btnClearTitle" title="清除目前載入的資料" aria-label="清除目前載入的資料" disabled>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1362,7 +1362,7 @@
                                     <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
                                     <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
                                 </svg>
-                                <input type="file" id="ovFileA" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.bmp,.png,.jpg,.jpeg" />
+                                <input type="file" id="ovFileA" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.csv,.bmp,.png,.jpg,.jpeg" />
                             </label>
                             <button type="button" id="ovClearA" class="toolbar-icon-btn btn-secondary" data-i18n-title="ovClearA" data-i18n-aria="ovClearA" title="清除圖 A" aria-label="清除圖 A" disabled>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1462,7 +1462,7 @@
                                     <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
                                     <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
                                 </svg>
-                                <input type="file" id="ovFileB" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.bmp,.png,.jpg,.jpeg" />
+                                <input type="file" id="ovFileB" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.csv,.bmp,.png,.jpg,.jpeg" />
                             </label>
                             <button type="button" id="ovClearB" class="toolbar-icon-btn btn-secondary" data-i18n-title="ovClearB" data-i18n-aria="ovClearB" title="清除圖 B" aria-label="清除圖 B" disabled>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2163,7 +2163,7 @@
     <header id="batchHeader">
         <h1>
             <span data-i18n="batchTitle">批次轉檔</span>
-            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg)</span>
+            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .txt / .csv / .bmp / .png / .jpg)</span>
         </h1>
         <div class="controls">
             <div class="ctrl-group">
@@ -2174,7 +2174,7 @@
                         <path d="M12 11v6"/>
                         <path d="M9 14h6"/>
                     </svg>
-                    <input type="file" id="batchFileInput" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.bmp,.png,.jpg,.jpeg" />
+                    <input type="file" id="batchFileInput" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.csv,.bmp,.png,.jpg,.jpeg" />
                 </label>
                 <button type="button" id="batchBtnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="batchBtnClear" data-i18n-aria="batchBtnClear" title="清除清單" aria-label="清除清單" disabled>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2239,7 +2239,7 @@
     <header id="batchEditHeader">
         <h1>
             <span data-i18n="batchEditTitle">批次編輯</span>
-            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg)</span>
+            <span style="color:var(--muted);font-weight:400;font-size:13px;">(.bcrf / .asc / .tif / .pcd / .txt / .csv / .bmp / .png / .jpg)</span>
         </h1>
         <div class="controls">
             <div class="ctrl-group">
@@ -2250,7 +2250,7 @@
                         <path d="M12 11v6"/>
                         <path d="M9 14h6"/>
                     </svg>
-                    <input type="file" id="batchEditFileInput" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.bmp,.png,.jpg,.jpeg" />
+                    <input type="file" id="batchEditFileInput" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.csv,.bmp,.png,.jpg,.jpeg" />
                 </label>
                 <button type="button" id="batchEditBtnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="batchEditBtnClear" data-i18n-aria="batchEditBtnClear" title="清除清單" aria-label="清除清單" disabled>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2520,6 +2520,10 @@
                         <dd data-i18n="infoFmtAsc">ASCII 文字格式：以 # 開頭的行為標頭，其餘為數值高度矩陣（空白或逗號分隔）。</dd>
                     </div>
                     <div>
+                        <dt>.csv</dt>
+                        <dd data-i18n="infoFmtCsv">FSS 區域掃描 CSV：開頭為標題、Signal ID、x_range、y_range，其後為以分號分隔的數值矩陣，NaN 表示無效點。檔案不含單位，載入時需指定。</dd>
+                    </div>
+                    <div>
                         <dt>.pcd</dt>
                         <dd data-i18n="infoFmtPcd">Point Cloud Data 標準格式：文字標頭定義欄位與點數，資料區可為 ASCII、binary 或 binary_compressed 編碼的 x、y、z 點雲。</dd>
                     </div>
@@ -2535,6 +2539,55 @@
                 <p class="info-email"><a href="mailto:alex.lin@precitec.tw">alex.lin@precitec.tw</a></p>
             </section>
         </div>
+    </div>
+</div>
+
+<!-- FSS CSV 單位設定 -->
+<div class="info-overlay" id="csvUnitOverlay" role="dialog" aria-modal="true" aria-labelledby="csvUnitTitle" aria-hidden="true">
+    <div class="info-panel csv-unit-panel">
+        <div class="info-header">
+            <h3 id="csvUnitTitle" data-i18n="csvUnitTitle">設定座標單位</h3>
+            <button type="button" class="info-close" id="csvUnitClose" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <form class="info-body" id="csvUnitForm">
+            <p class="csv-unit-desc" data-i18n="csvUnitDesc">此 CSV 沒有 X、Y、Z 單位。請從選單指定。掃描範圍使用檔案中的 x_range、y_range，並以您選的 X、Y 單位解釋。確定後會記住，下次載入時自動帶入。</p>
+            <p class="csv-unit-meta" id="csvUnitMeta"></p>
+            <div class="csv-unit-grid">
+                <label for="csvUnitX" data-i18n="csvUnitX">X 單位</label>
+                <select id="csvUnitX">
+                    <option value="nm">nm</option>
+                    <option value="um">um</option>
+                    <option value="mm">mm</option>
+                    <option value="cm">cm</option>
+                </select>
+                <label for="csvUnitY" data-i18n="csvUnitY">Y 單位</label>
+                <select id="csvUnitY">
+                    <option value="nm">nm</option>
+                    <option value="um">um</option>
+                    <option value="mm">mm</option>
+                    <option value="cm">cm</option>
+                </select>
+                <label for="csvUnitZ" data-i18n="csvUnitZ">Z 單位</label>
+                <select id="csvUnitZ">
+                    <option value="nm">nm</option>
+                    <option value="um">um</option>
+                    <option value="mm">mm</option>
+                    <option value="cm">cm</option>
+                    <option value="%">%</option>
+                </select>
+            </div>
+            <div class="csv-unit-grid" id="csvUnitRangeBlock" hidden>
+                <label for="csvUnitXLen" data-i18n="csvUnitXLen">X 範圍</label>
+                <input type="number" id="csvUnitXLen" step="any" min="0" />
+                <label for="csvUnitYLen" data-i18n="csvUnitYLen">Y 範圍</label>
+                <input type="number" id="csvUnitYLen" step="any" min="0" />
+            </div>
+            <p class="csv-unit-error" id="csvUnitError"></p>
+            <div class="csv-unit-actions">
+                <button type="button" class="btn-secondary" id="csvUnitCancel" data-i18n="csvUnitCancel">取消</button>
+                <button type="submit" id="csvUnitOk" data-i18n="csvUnitOk">確定</button>
+            </div>
+        </form>
     </div>
 </div>
 

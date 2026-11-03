@@ -196,7 +196,7 @@
                 return ds;
             })
             .catch((err) => {
-                entry.previewError = err.message || String(err);
+                if (!isLoadCancelled(err)) entry.previewError = err.message || String(err);
                 entry.previewLoading = null;
                 return null;
             });
@@ -500,6 +500,13 @@
                 });
                 ok++;
             } catch (err) {
+                if (isLoadCancelled(err)) {
+                    entry.status = 'pending';
+                    entry.error = t('statusLoadCancelled');
+                    updateBatchEntryRow(entry);
+                    fail++;
+                    continue;
+                }
                 console.error(err);
                 entry.status = 'error';
                 entry.error = err.message || String(err);

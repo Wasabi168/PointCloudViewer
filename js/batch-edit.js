@@ -308,6 +308,7 @@
                     continue;
                 }
             } catch (err) {
+                if (isLoadCancelled(err)) continue;
                 console.error(err);
                 showToast(t('batchUnsupported', file.name), 'error');
                 continue;
@@ -557,6 +558,14 @@
                 entry.statusText = t('batchItemDone');
                 ok++;
             } catch (err) {
+                if (isLoadCancelled(err)) {
+                    entry.status = 'pending';
+                    entry.statusText = t('statusLoadCancelled');
+                    entry.error = '';
+                    fail++;
+                    updateFileListStatuses();
+                    continue;
+                }
                 console.error(err);
                 entry.status = 'error';
                 entry.statusText = t('batchItemFailed');
