@@ -224,10 +224,12 @@ function createImageView(ids, options) {
             canvas.style.transform = 'none';
             const pct = (st.sc.baseWorldPerPx / st.sc.worldPerPx) * 100;
             ind.textContent = (pct >= 100 ? pct.toFixed(0) : pct.toFixed(1)) + '%';
+            if (st.redrawTools) st.redrawTools();
             return;
         }
         canvas.style.transform = `translate(${st.view.tx}px, ${st.view.ty}px) scale(${st.view.scale})`;
         ind.textContent = (st.view.scale * 100).toFixed(st.view.scale >= 1 ? 0 : 1) + '%';
+        if (st.redrawTools) st.redrawTools();
     }
 
     function fitImage() {
@@ -261,6 +263,7 @@ function createImageView(ids, options) {
         el.zoomIndicator.classList.add('show');
         el.zoomHint.classList.add('show');
         if (resetView) fitImage(); else applyTransform();
+        if (st.refreshTools) st.refreshTools(true);
         renderColorbar(cmap);
         el.zMin.textContent = ds.vmin.toFixed(4);
         el.zMax.textContent = ds.vmax.toFixed(4);
@@ -676,15 +679,32 @@ function createImageView(ids, options) {
         applyTransform();
     }, { passive: false });
 
-    el.canvas.addEventListener('mousedown', (e) => {
-        if (!st.dataset || e.button !== 0) return;
+    function beginViewPan(e) {
         st.panning = true;
         st.panStart = { x: e.clientX, y: e.clientY, tx: st.view.tx, ty: st.view.ty, cx: st.sc.centerX, cy: st.sc.centerY };
         el.canvas.classList.add('grabbing');
         e.preventDefault();
+    }
+    el.canvas.addEventListener('mousedown', (e) => {
+        if (!st.dataset) return;
+        if (st.toolPointerDown && st.toolPointerDown(e)) return;
+        const mode = st.toolMode ? st.toolMode() : 'pan';
+        const leftPan = e.button === 0 && mode === 'pan';
+        const midPan = e.button === 1 && !!el.cursorToolbar && mode !== 'pan';
+        if (!el.cursorToolbar) {
+            if (e.button !== 0) return;
+            beginViewPan(e);
+            return;
+        }
+        if (!leftPan && !midPan) return;
+        beginViewPan(e);
+    });
+    el.canvas.addEventListener('auxclick', (e) => {
+        if (e.button === 1 && el.cursorToolbar) e.preventDefault();
     });
     window.addEventListener('mousemove', (e) => {
         if (!st.panning) return;
+        if (el.valueIndicator) el.valueIndicator.classList.remove('show');
         const dx = e.clientX - st.panStart.x, dy = e.clientY - st.panStart.y;
         if (isScatter(st.dataset)) {
             st.sc.centerX = st.panStart.cx - dx * st.sc.worldPerPx;
@@ -695,6 +715,7 @@ function createImageView(ids, options) {
         st.view.tx = st.panStart.tx + dx;
         st.view.ty = st.panStart.ty + dy;
         applyTransform();
+        if (st.redrawTools) st.redrawTools();
     });
     window.addEventListener('mouseup', () => {
         if (!st.panning) return;
@@ -712,7 +733,1021 @@ function createImageView(ids, options) {
         if (!st.dataset || el.viewer.clientWidth <= 0) return;
         if (isScatter(st.dataset)) { st.sc.screenW = el.viewer.clientWidth; st.sc.screenH = el.viewer.clientHeight; requestScatterRedraw(); }
         else fitImage();
+        if (st.refreshTools) st.refreshTools(false);
     });
+
+    setupImageViewTools();
+
+    /* 編輯圖上的檢視工具列：拖曳 / 數值 / 剖面 / 距離 / 區域，行為對齊點雲檢視 */
+    function setupImageViewTools() {
+        if (!el.cursorToolbar || !el.overlay) return;
+        const HIT = 10;
+        const tool = {
+            mode: 'pan',
+            profile: null,
+            profileData: null,
+            measure: null,
+            area: null,
+            areaStats: null,
+            drag: null,
+            hover: null,
+        };
+        const saved = (typeof getUserPref === 'function') ? getUserPref('edCursorMode') : 'pan';
+        if (saved === 'inspect' || saved === 'profile' || saved === 'measure' || saved === 'area' || saved === 'pan') {
+            tool.mode = saved;
+        }
+        const chart = {
+            data: null,
+            geom: null,
+            yView: null,
+            hoverIndex: null,
+            measureMode: false,
+            measureSets: [],
+            measurePts: [],
+            measureDrag: null,
+            hoverMeasure: null,
+            halfW: 0,
+            layouts: [],
+            suppressClick: false,
+        };
+
+        function localOf(e) {
+            const r = el.viewer.getBoundingClientRect();
+            return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height };
+        }
+        function screenToData(mx, my) {
+            if (isScatter(st.dataset)) {
+                const sc = st.sc;
+                sc.screenW = el.viewer.clientWidth;
+                sc.screenH = el.viewer.clientHeight;
+                return {
+                    x: sc.centerX + (mx - sc.screenW * 0.5) * sc.worldPerPx,
+                    y: sc.centerY - (my - sc.screenH * 0.5) * sc.worldPerPx,
+                };
+            }
+            return { x: (mx - st.view.tx) / st.view.scale, y: (my - st.view.ty) / st.view.scale };
+        }
+        function dataToScreen(x, y) {
+            if (isScatter(st.dataset)) {
+                const s = scWorldToScreen(x, y);
+                return { x: s.sx, y: s.sy };
+            }
+            return { x: x * st.view.scale + st.view.tx, y: y * st.view.scale + st.view.ty };
+        }
+        function clampData(p) {
+            if (!st.dataset || isScatter(st.dataset)) return p;
+            return {
+                x: Math.max(0, Math.min(st.dataset.width - 1, p.x)),
+                y: Math.max(0, Math.min(st.dataset.height - 1, p.y)),
+            };
+        }
+        function distPointSeg(px, py, ax, ay, bx, by) {
+            const dx = bx - ax, dy = by - ay;
+            const len2 = dx * dx + dy * dy;
+            if (len2 <= 0) return Math.hypot(px - ax, py - ay);
+            let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+            if (t < 0) t = 0; else if (t > 1) t = 1;
+            return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+        }
+        function lineHit(line, mx, my) {
+            if (!line) return null;
+            const a = dataToScreen(line.x0, line.y0);
+            const b = dataToScreen(line.x1, line.y1);
+            if (Math.hypot(mx - a.x, my - a.y) <= HIT) return 'ep0';
+            if (Math.hypot(mx - b.x, my - b.y) <= HIT) return 'ep1';
+            if (distPointSeg(mx, my, a.x, a.y, b.x, b.y) <= HIT) return 'move';
+            return null;
+        }
+        function areaNorm(r) {
+            return { x0: Math.min(r.x0, r.x1), y0: Math.min(r.y0, r.y1), x1: Math.max(r.x0, r.x1), y1: Math.max(r.y0, r.y1) };
+        }
+        function areaHit(mx, my) {
+            if (!tool.area || !tool.areaStats) return null;
+            const n = areaNorm(tool.area);
+            const corners = [
+                ['tl', n.x0, n.y0], ['tr', n.x1, n.y0], ['bl', n.x0, n.y1], ['br', n.x1, n.y1],
+            ];
+            for (const c of corners) {
+                const s = dataToScreen(c[1], c[2]);
+                if (Math.hypot(mx - s.x, my - s.y) <= HIT) return c[0];
+            }
+            const tl = dataToScreen(n.x0, n.y0);
+            const br = dataToScreen(n.x1, n.y1);
+            const minX = Math.min(tl.x, br.x), maxX = Math.max(tl.x, br.x);
+            const minY = Math.min(tl.y, br.y), maxY = Math.max(tl.y, br.y);
+            if (mx >= minX && mx <= maxX && my >= minY && my <= maxY) return 'move';
+            return null;
+        }
+        function sampleAt(x, y) {
+            const ds = st.dataset;
+            if (!ds) return NaN;
+            if (isScatter(ds)) {
+                const s = dataToScreen(x, y);
+                const n = ds.z.length;
+                const step = Math.max(1, Math.ceil(n / 25000));
+                let best = Infinity, val = NaN;
+                for (let i = 0; i < n; i += step) {
+                    const p = scWorldToScreen(ds.x[i], ds.y[i]);
+                    const d = (p.sx - s.x) * (p.sx - s.x) + (p.sy - s.y) * (p.sy - s.y);
+                    if (d < best) { best = d; val = ds.z[i]; }
+                }
+                return best <= 12 * 12 ? val : NaN;
+            }
+            const px = Math.round(x), py = Math.round(y);
+            if (px < 0 || py < 0 || px >= ds.width || py >= ds.height) return NaN;
+            return ds.data[py * ds.width + px];
+        }
+        function lineDecor(line, width, height, withLabel) {
+            const a = dataToScreen(line.x0, line.y0);
+            const b = dataToScreen(line.x1, line.y1);
+            const anchors = [
+                { x: a.x, y: a.y, clearance: 12 },
+                { x: b.x, y: b.y, clearance: 12 },
+            ];
+            let label = null;
+            let text = '';
+            if (withLabel) {
+                const d = Math.hypot(line.x1 - line.x0, line.y1 - line.y0);
+                const unit = isScatter(st.dataset) ? t('measureUnitWorld') : t('measureUnitPx');
+                text = formatValue(d) + ' ' + unit;
+                const ctx = el.overlay.getContext('2d');
+                ctx.save();
+                ctx.font = '12px Consolas, monospace';
+                const tw = ctx.measureText(text).width + 10;
+                ctx.restore();
+                label = { x: (a.x + b.x) * 0.5 - tw * 0.5, y: (a.y + b.y) * 0.5 - 22, w: tw, h: 18 };
+                anchors.push({ x: label.x + label.w, y: label.y + label.h / 2, clearance: 0 });
+            }
+            const anchor = markRightmostAnchor(anchors);
+            const attached = markAttachDeleteButton(anchor.x, anchor.y, anchor.clearance, width, height);
+            return { a, b, text, label, button: attached.button, bridge: attached.bridge };
+        }
+        function pointerOnLine(line, mx, my, withLabel) {
+            if (!line || tool.drag) return null;
+            const rect = el.viewer.getBoundingClientRect();
+            const decor = lineDecor(line, rect.width, rect.height, withLabel);
+            if (markPointInBox(mx, my, decor.button, 3)) return 'delete';
+            if (markPointInBox(mx, my, decor.bridge, 0)) return 'body';
+            if (decor.label && markPointInBox(mx, my, decor.label, 2)) return 'body';
+            if (lineHit(line, mx, my)) return 'body';
+            return null;
+        }
+        function drawLineMark(ctx, line, color, withLabel, hot) {
+            const rect = el.viewer.getBoundingClientRect();
+            const decor = lineDecor(line, rect.width, rect.height, withLabel);
+            ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(decor.a.x, decor.a.y); ctx.lineTo(decor.b.x, decor.b.y);
+            ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 4; ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(decor.a.x, decor.a.y); ctx.lineTo(decor.b.x, decor.b.y);
+            ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+            for (const p of [decor.a, decor.b]) {
+                ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = color; ctx.fill();
+                ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+            }
+            if (decor.label) {
+                ctx.font = '12px Consolas, monospace';
+                ctx.fillStyle = 'rgba(0,0,0,0.72)';
+                ctx.fillRect(decor.label.x, decor.label.y, decor.label.w, decor.label.h);
+                ctx.fillStyle = color;
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(decor.text, decor.label.x + decor.label.w / 2, decor.label.y + decor.label.h / 2);
+                ctx.textAlign = 'left';
+            }
+            if (hot) drawMarkDeleteButton(ctx, decor.button, hot === 'delete');
+        }
+        function drawArea(ctx) {
+            if (!tool.area) return;
+            const n = areaNorm(tool.area);
+            const tl = dataToScreen(n.x0, n.y0);
+            const tr = dataToScreen(n.x1, n.y0);
+            const br = dataToScreen(n.x1, n.y1);
+            const bl = dataToScreen(n.x0, n.y1);
+            ctx.beginPath();
+            ctx.moveTo(tl.x, tl.y); ctx.lineTo(tr.x, tr.y); ctx.lineTo(br.x, br.y); ctx.lineTo(bl.x, bl.y); ctx.closePath();
+            ctx.fillStyle = 'rgba(255, 180, 74, 0.15)';
+            ctx.fill();
+            ctx.setLineDash([5, 4]);
+            ctx.strokeStyle = 'rgba(255, 180, 74, 0.85)'; ctx.lineWidth = 1.5; ctx.stroke();
+            ctx.setLineDash([]);
+            for (const p of [tl, tr, br, bl]) {
+                ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffb84a'; ctx.fill();
+                ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+            }
+        }
+        function redrawOverlay() {
+            const canvas = el.overlay;
+            const rect = el.viewer.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            const bw = Math.max(1, Math.round(rect.width * dpr));
+            const bh = Math.max(1, Math.round(rect.height * dpr));
+            if (canvas.width !== bw) canvas.width = bw;
+            if (canvas.height !== bh) canvas.height = bh;
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, rect.width, rect.height);
+            const any = tool.profile || tool.measure || tool.area;
+            canvas.classList.toggle('show', !!any && !!st.dataset);
+            if (!any || !st.dataset) return;
+            const hot = (kind) => (!tool.drag && !st.panning && tool.hover && tool.hover.kind === kind) ? tool.hover.part : null;
+            if (tool.area) drawArea(ctx);
+            if (tool.measure) drawLineMark(ctx, tool.measure, '#3ecf8e', true, hot('measure'));
+            if (tool.profile && chart.data && chart.data.scatter && chart.halfW > 0) drawProfileBand(ctx);
+            if (tool.profile) drawLineMark(ctx, tool.profile, '#4f8cff', false, hot('profile'));
+            if (tool.profile && chart.data) drawProfileSampleMarks(ctx);
+        }
+        function profileIndexPoint(i) {
+            const d = chart.data;
+            const L = tool.profile;
+            if (!d || !L || i < 0 || i >= d.N) return null;
+            if (d.scatter) return { x: d.wx[i], y: d.wy[i] };
+            const tt = d.N > 1 ? i / (d.N - 1) : 0;
+            return { x: L.x0 + (L.x1 - L.x0) * tt, y: L.y0 + (L.y1 - L.y0) * tt };
+        }
+        function drawProfileBand(ctx) {
+            const L = tool.profile;
+            const dx = L.x1 - L.x0, dy = L.y1 - L.y0;
+            const len = Math.hypot(dx, dy);
+            if (!(len > 0)) return;
+            const nx = -dy / len, ny = dx / len;
+            const hw = chart.halfW;
+            const pts = [
+                dataToScreen(L.x0 + nx * hw, L.y0 + ny * hw),
+                dataToScreen(L.x1 + nx * hw, L.y1 + ny * hw),
+                dataToScreen(L.x1 - nx * hw, L.y1 - ny * hw),
+                dataToScreen(L.x0 - nx * hw, L.y0 - ny * hw),
+            ];
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(79,140,255,0.15)';
+            ctx.fill();
+            ctx.setLineDash([5, 4]);
+            ctx.strokeStyle = 'rgba(79,140,255,0.7)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        function drawProfileSampleMarks(ctx) {
+            const ends = [];
+            for (let s = 0; s < chart.measureSets.length; s++) {
+                const style = profileMeasureSetStyle(s);
+                const pts = chart.measureSets[s].pts;
+                for (let k = 0; k < pts.length; k++) {
+                    ends.push({ i: pts[k], color: style.colors[k % style.colors.length] });
+                }
+            }
+            const draftStyle = profileMeasureSetStyle(chart.measureSets.length);
+            for (let k = 0; k < chart.measurePts.length; k++) {
+                ends.push({ i: chart.measurePts[k], color: draftStyle.colors[k % draftStyle.colors.length] });
+            }
+            for (const ep of ends) {
+                const p = profileIndexPoint(ep.i);
+                if (!p) continue;
+                const s = dataToScreen(p.x, p.y);
+                ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+                ctx.fillStyle = ep.color; ctx.fill();
+                ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+            }
+            if (chart.measureMode && chart.hoverIndex != null && !profileMeasureIndexTaken(chart.hoverIndex, chart)) {
+                const p = profileIndexPoint(chart.hoverIndex);
+                if (!p) return;
+                const s = dataToScreen(p.x, p.y);
+                ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,210,74,0.55)'; ctx.fill();
+                ctx.lineWidth = 1.5; ctx.strokeStyle = '#ffd24a'; ctx.stroke();
+            }
+        }
+        function chartHasMeasures() {
+            return chart.measureSets.length > 0 || chart.measurePts.length > 0;
+        }
+        function resetProfileChart() {
+            chart.data = null;
+            chart.geom = null;
+            chart.yView = null;
+            chart.hoverIndex = null;
+            chart.measureMode = false;
+            chart.measureSets = [];
+            chart.measurePts = [];
+            chart.measureDrag = null;
+            chart.hoverMeasure = null;
+            chart.layouts.length = 0;
+            chart.suppressClick = false;
+            if (el.profileTip) el.profileTip.classList.remove('show');
+            if (el.profileCanvas) el.profileCanvas.style.cursor = '';
+        }
+        function syncEditorChartChrome(show) {
+            const scatter = !!(show && chart.data && chart.data.scatter);
+            if (el.profileBandWrap) el.profileBandWrap.style.display = scatter ? 'inline-flex' : 'none';
+            if (el.profileChartStyleWrap) {
+                el.profileChartStyleWrap.style.display = show ? 'inline-flex' : 'none';
+                el.profileChartStyleWrap.querySelectorAll('button[data-profile-chart]').forEach((btn) => {
+                    btn.classList.toggle('active', btn.getAttribute('data-profile-chart') === profileChartStyle);
+                });
+            }
+            if (el.profileMeasureBtn) {
+                el.profileMeasureBtn.style.display = show ? 'inline-flex' : 'none';
+                el.profileMeasureBtn.classList.toggle('active', chart.measureMode);
+                const atMax = chart.measureSets.length >= PROFILE_MEASURE_MAX_SETS;
+                el.profileMeasureBtn.disabled = !chart.measureMode && atMax;
+            }
+            if (el.profileMeasureClearBtn) {
+                el.profileMeasureClearBtn.style.display = show ? 'inline-flex' : 'none';
+                const has = chartHasMeasures();
+                el.profileMeasureClearBtn.disabled = !has;
+                el.profileMeasureClearBtn.classList.toggle('has-measures', has);
+            }
+            const plot = el.profileCanvas && el.profileCanvas.parentElement;
+            if (plot) plot.classList.toggle('measure-mode', !!(show && chart.measureMode));
+        }
+        function renderProfileChart() {
+            const panel = el.profilePanel;
+            const canvas = el.profileCanvas;
+            chart.data = tool.profileData;
+            if (!panel || !canvas) return;
+            if (!tool.profile || !chart.data) {
+                panel.classList.remove('show');
+                syncEditorChartChrome(false);
+                return;
+            }
+            panel.classList.add('show');
+            syncEditorChartChrome(true);
+            profilePaintFmt = { dataset: st.dataset, line: tool.profile };
+            try {
+                if (el.profileMeta) updateProfileMetaDisplay(chart.data, el.profileMeta, chart);
+                paintProfileChart(canvas, chart, profileChartStyle, chart.layouts);
+            } finally {
+                profilePaintFmt = null;
+            }
+        }
+        function recomputeProfile(resetMarks) {
+            if (!tool.profile || !st.dataset) {
+                tool.profileData = null;
+                chart.data = null;
+                return;
+            }
+            if (isScatter(st.dataset)) {
+                if (!(chart.halfW > 0)) {
+                    chart.halfW = 8 * st.sc.worldPerPx;
+                    if (el.profileBand) el.profileBand.value = formatValue(chart.halfW * 2);
+                }
+                tool.profileData = sampleProfileScatter(tool.profile, chart.halfW, st.dataset);
+                if (resetMarks && tool.profileData.N === 0) showToast(t('profileNoPoints'), 'info');
+            } else {
+                tool.profileData = sampleProfile(tool.profile, st.dataset);
+                if (resetMarks && !tool.profileData.anyValid) showToast(t('profileNoValid'), 'info');
+            }
+            chart.data = tool.profileData;
+            if (resetMarks) {
+                chart.yView = null;
+                chart.hoverIndex = null;
+                chart.measureMode = false;
+                chart.measureSets = [];
+                chart.measurePts = [];
+                chart.measureDrag = null;
+                chart.hoverMeasure = null;
+            } else {
+                const n = chart.data.N;
+                const ok = (i) => i >= 0 && i < n;
+                chart.measureSets = chart.measureSets.filter((s) => s.pts.length === 2 && ok(s.pts[0]) && ok(s.pts[1]));
+                chart.measurePts = chart.measurePts.filter(ok);
+                if (chart.hoverIndex != null && !ok(chart.hoverIndex)) chart.hoverIndex = null;
+            }
+        }
+        function showEditorChartTip(e, html) {
+            if (!el.profileTip || !el.profileCanvas) return;
+            el.profileTip.innerHTML = html;
+            el.profileTip.classList.add('show');
+            const plotRect = el.profileCanvas.parentElement.getBoundingClientRect();
+            const tw = el.profileTip.offsetWidth, th = el.profileTip.offsetHeight;
+            let left = (e.clientX - plotRect.left) + 12;
+            let top = (e.clientY - plotRect.top) + 12;
+            if (left + tw > plotRect.width - 4) left = (e.clientX - plotRect.left) - tw - 12;
+            if (top + th > plotRect.height - 4) top = (e.clientY - plotRect.top) - th - 12;
+            if (left < 2) left = 2;
+            if (top < 2) top = 2;
+            el.profileTip.style.left = left + 'px';
+            el.profileTip.style.top = top + 'px';
+        }
+        function updateEditorMeasureTip(e) {
+            const d = chart.data;
+            if (!d) return;
+            const n = chart.measurePts.length;
+            const setNum = chart.measureSets.length + 1;
+            if (n < 2) {
+                const hint = n === 0 ? t('profileMeasurePick1Set', setNum) : t('profileMeasurePick2Set', setNum);
+                showEditorChartTip(e, '<div>' + hint + '</div>');
+                return;
+            }
+            profilePaintFmt = { dataset: st.dataset, line: tool.profile };
+            try {
+                const mr = profileMeasureResultFromPts(chart.measurePts, d);
+                if (!mr) return;
+                const stepUnit = profileMeasureStepUnit();
+                showEditorChartTip(e,
+                    '<div><span class="k">' + t('measureDist') + ':</span>' + formatProfileMeasureDistValue(mr, d) + '</div>' +
+                    '<div><span class="k">' + t('profileMeasureStep') + ':</span>' + formatValue(mr.step) + (stepUnit ? ' ' + stepUnit : '') + '</div>');
+            } finally {
+                profilePaintFmt = null;
+            }
+        }
+        function computeAreaStats(rect) {
+            const n = areaNorm(rect);
+            const ds = st.dataset;
+            if (isScatter(ds)) {
+                let count = 0, valid = 0, sum = 0, sumSq = 0, min = Infinity, max = -Infinity;
+                const step = 1;
+                for (let i = 0; i < ds.z.length; i += step) {
+                    if (ds.x[i] < n.x0 || ds.x[i] > n.x1 || ds.y[i] < n.y0 || ds.y[i] > n.y1) continue;
+                    count++;
+                    const v = ds.z[i];
+                    if (!Number.isFinite(v)) continue;
+                    valid++; sum += v; sumSq += v * v;
+                    if (v < min) min = v;
+                    if (v > max) max = v;
+                }
+                if (!valid) { min = NaN; max = NaN; }
+                const mean = valid ? sum / valid : NaN;
+                const std = valid > 1 ? Math.sqrt(Math.max(0, (sumSq - sum * sum / valid) / (valid - 1))) : (valid === 1 ? 0 : NaN);
+                return { count, valid, min, max, mean, std, w: n.x1 - n.x0, h: n.y1 - n.y0, scatter: true };
+            }
+            const ix0 = Math.max(0, Math.floor(n.x0)), ix1 = Math.min(ds.width - 1, Math.ceil(n.x1));
+            const iy0 = Math.max(0, Math.floor(n.y0)), iy1 = Math.min(ds.height - 1, Math.ceil(n.y1));
+            let count = 0, valid = 0, sum = 0, sumSq = 0, min = Infinity, max = -Infinity;
+            for (let y = iy0; y <= iy1; y++) {
+                for (let x = ix0; x <= ix1; x++) {
+                    count++;
+                    const v = ds.data[y * ds.width + x];
+                    if (!Number.isFinite(v)) continue;
+                    valid++; sum += v; sumSq += v * v;
+                    if (v < min) min = v;
+                    if (v > max) max = v;
+                }
+            }
+            if (!valid) { min = NaN; max = NaN; }
+            const mean = valid ? sum / valid : NaN;
+            const std = valid > 1 ? Math.sqrt(Math.max(0, (sumSq - sum * sum / valid) / (valid - 1))) : (valid === 1 ? 0 : NaN);
+            return { count, valid, min, max, mean, std, w: ix1 - ix0 + 1, h: iy1 - iy0 + 1, scatter: false };
+        }
+        function updateMeasurePanel() {
+            if (!el.measurePanel || !el.measureMeta) return;
+            let show = false;
+            let title = t('measureTitle');
+            let meta = '';
+            if (tool.mode === 'measure' && tool.measure) {
+                const d = Math.hypot(tool.measure.x1 - tool.measure.x0, tool.measure.y1 - tool.measure.y0);
+                const unit = isScatter(st.dataset) ? t('measureUnitWorld') : t('measureUnitPx');
+                title = t('cursorMeasure');
+                meta = t('measureDist') + ': ' + formatValue(d) + ' ' + unit;
+                const v0 = sampleAt(tool.measure.x0, tool.measure.y0);
+                const v1 = sampleAt(tool.measure.x1, tool.measure.y1);
+                if (Number.isFinite(v0) || Number.isFinite(v1)) {
+                    meta += ' · V₀: ' + formatValue(v0) + ' · V₁: ' + formatValue(v1);
+                }
+                show = true;
+            } else if (tool.mode === 'area' && tool.areaStats) {
+                const s = tool.areaStats;
+                title = t('cursorArea');
+                meta = (s.scatter ? t('measureAreaPoints') : t('measureAreaPixels')) + ': ' + s.count +
+                    ' · ' + t('measureAreaValid') + ': ' + s.valid +
+                    ' · ' + t('measureAreaSize') + ': ' + formatValue(s.w) + '×' + formatValue(s.h) +
+                    ' · Min: ' + formatValue(s.min) + ' · Max: ' + formatValue(s.max) +
+                    ' · ' + t('measureMean') + ': ' + formatValue(s.mean) +
+                    ' · ' + t('measureStd') + ': ' + formatValue(s.std);
+                show = true;
+            }
+            if (el.measureTitle) el.measureTitle.textContent = title;
+            el.measureMeta.textContent = meta;
+            el.measurePanel.classList.toggle('show', show);
+        }
+        function updateChrome() {
+            const show = !!st.dataset;
+            el.cursorToolbar.classList.toggle('show', show);
+            if (el.modeIndicator && el.modeIndicatorLabel) {
+                const key = tool.mode === 'inspect' ? 'modeBadgeInspect'
+                    : tool.mode === 'profile' ? 'modeBadgeProfile'
+                    : tool.mode === 'measure' ? 'modeBadgeMeasure'
+                    : tool.mode === 'area' ? 'modeBadgeArea'
+                    : 'modeBadgePan';
+                el.modeIndicatorLabel.textContent = t(key);
+                el.modeIndicator.classList.toggle('show', show);
+            }
+        }
+        function syncMode(mode) {
+            if (mode !== 'pan' && mode !== 'inspect' && mode !== 'profile' && mode !== 'measure' && mode !== 'area') mode = 'pan';
+            tool.mode = mode;
+            if (typeof setUserPref === 'function') setUserPref('edCursorMode', mode);
+            el.cursorToolbar.querySelectorAll('button[data-cursor]').forEach((b) => {
+                b.classList.toggle('active', b.getAttribute('data-cursor') === mode);
+            });
+            el.canvas.classList.toggle('inspect-mode', mode === 'inspect');
+            el.canvas.classList.toggle('profile-mode', mode === 'profile');
+            el.canvas.classList.toggle('measure-mode', mode === 'measure');
+            el.canvas.classList.toggle('area-mode', mode === 'area');
+            if (mode !== 'inspect' && el.valueIndicator) el.valueIndicator.classList.remove('show');
+            updateChrome();
+            updateMeasurePanel();
+        }
+        function clearMarks() {
+            tool.profile = null;
+            tool.profileData = null;
+            resetProfileChart();
+            tool.measure = null;
+            tool.area = null;
+            tool.areaStats = null;
+            tool.drag = null;
+            tool.hover = null;
+            if (el.valueIndicator) el.valueIndicator.classList.remove('show');
+            renderProfileChart();
+            updateMeasurePanel();
+            updateChrome();
+            redrawOverlay();
+        }
+        function refreshHover(mx, my) {
+            if (tool.drag || st.panning) return;
+            let next = null;
+            const onProfile = pointerOnLine(tool.profile, mx, my, false);
+            const onMeasure = pointerOnLine(tool.measure, mx, my, true);
+            if (onMeasure === 'delete') next = { kind: 'measure', part: 'delete' };
+            else if (onProfile === 'delete') next = { kind: 'profile', part: 'delete' };
+            else if (onMeasure) next = { kind: 'measure', part: 'body' };
+            else if (onProfile) next = { kind: 'profile', part: 'body' };
+            const prev = tool.hover;
+            const changed = (!prev !== !next) || (prev && next && (prev.kind !== next.kind || prev.part !== next.part));
+            tool.hover = next;
+            if (changed) redrawOverlay();
+            if (next && next.part === 'delete') el.canvas.style.cursor = 'pointer';
+            else if (tool.mode === 'profile' && tool.profile) {
+                const hit = lineHit(tool.profile, mx, my);
+                el.canvas.style.cursor = hit === 'move' ? 'move' : (hit ? 'pointer' : '');
+            } else if (tool.mode === 'measure' && tool.measure) {
+                const hit = lineHit(tool.measure, mx, my);
+                el.canvas.style.cursor = hit === 'move' ? 'move' : (hit ? 'pointer' : '');
+            } else if (tool.mode === 'area' && tool.areaStats) {
+                const hit = areaHit(mx, my);
+                el.canvas.style.cursor = hit === 'move' ? 'move' : (hit ? 'nwse-resize' : '');
+            } else if (el.canvas.style.cursor === 'pointer' || el.canvas.style.cursor === 'move' || el.canvas.style.cursor === 'nwse-resize') {
+                el.canvas.style.cursor = '';
+            }
+        }
+        function showValue(e) {
+            if (!el.valueIndicator || tool.mode !== 'inspect' || !st.dataset || st.panning) {
+                if (el.valueIndicator) el.valueIndicator.classList.remove('show');
+                return;
+            }
+            const loc = localOf(e);
+            if (loc.x < 0 || loc.y < 0 || loc.x > loc.w || loc.y > loc.h) {
+                el.valueIndicator.classList.remove('show');
+                return;
+            }
+            const p = screenToData(loc.x, loc.y);
+            let html = '';
+            if (isScatter(st.dataset)) {
+                const v = sampleAt(p.x, p.y);
+                if (!Number.isFinite(v)) { el.valueIndicator.classList.remove('show'); return; }
+                html = '<div><span class="k">' + t('valueWorldPos') + ':</span>(' + formatValue(p.x) + ', ' + formatValue(p.y) + ')</div>' +
+                    '<div><span class="k">' + t('valueLabel') + ' (z):</span>' + formatValue(v) + '</div>';
+            } else {
+                const px = Math.floor(p.x), py = Math.floor(p.y);
+                if (px < 0 || py < 0 || px >= st.dataset.width || py >= st.dataset.height) {
+                    el.valueIndicator.classList.remove('show');
+                    return;
+                }
+                html = '<div><span class="k">' + t('valuePos') + ':</span>(' + px + ', ' + py + ')</div>' +
+                    '<div><span class="k">' + t('valueLabel') + ':</span>' + formatValue(st.dataset.data[py * st.dataset.width + px]) + '</div>';
+            }
+            el.valueIndicator.innerHTML = html;
+            el.valueIndicator.classList.add('show');
+            const pad = 14;
+            let left = loc.x + pad, top = loc.y + pad;
+            const iw = el.valueIndicator.offsetWidth, ih = el.valueIndicator.offsetHeight;
+            if (left + iw > loc.w - 4) left = loc.x - iw - pad;
+            if (top + ih > loc.h - 4) top = loc.y - ih - pad;
+            el.valueIndicator.style.left = Math.max(4, left) + 'px';
+            el.valueIndicator.style.top = Math.max(4, top) + 'px';
+        }
+
+        st.toolMode = () => tool.mode;
+        st.redrawTools = redrawOverlay;
+        st.clearTools = clearMarks;
+        st.syncToolLang = () => { updateChrome(); updateMeasurePanel(); renderProfileChart(); };
+        st.refreshTools = (recompute) => {
+            updateChrome();
+            if (recompute && tool.profile) recomputeProfile();
+            if (recompute && tool.area) tool.areaStats = computeAreaStats(tool.area);
+            renderProfileChart();
+            updateMeasurePanel();
+            redrawOverlay();
+        };
+        st.toolPointerDown = (e) => {
+            if (!st.dataset || e.button !== 0) return false;
+            if (e.target && e.target.closest && e.target.closest('.viewer-cursor-toolbar, .profile-panel, .measure-panel')) return true;
+            const loc = localOf(e);
+            const prof = pointerOnLine(tool.profile, loc.x, loc.y, false);
+            const meas = pointerOnLine(tool.measure, loc.x, loc.y, true);
+            if (meas === 'delete') { tool.measure = null; tool.hover = null; updateMeasurePanel(); redrawOverlay(); e.preventDefault(); return true; }
+            if (prof === 'delete') {
+                tool.profile = null; tool.profileData = null; tool.hover = null;
+                resetProfileChart();
+                renderProfileChart();
+                redrawOverlay(); e.preventDefault(); return true;
+            }
+            if (tool.mode === 'profile') {
+                const hit = lineHit(tool.profile, loc.x, loc.y);
+                const p = clampData(screenToData(loc.x, loc.y));
+                tool.hover = null;
+                if (hit) tool.drag = { kind: 'profile', hit, origin: p, line: { ...tool.profile } };
+                else if (prof === 'body') { e.preventDefault(); return true; }
+                else tool.drag = { kind: 'profile-new', origin: p };
+                if (!hit) tool.profile = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+                redrawOverlay();
+                e.preventDefault();
+                return true;
+            }
+            if (tool.mode === 'measure') {
+                const hit = lineHit(tool.measure, loc.x, loc.y);
+                const p = clampData(screenToData(loc.x, loc.y));
+                tool.hover = null;
+                if (hit) tool.drag = { kind: 'measure', hit, origin: p, line: { ...tool.measure } };
+                else if (meas === 'body') { e.preventDefault(); return true; }
+                else tool.drag = { kind: 'measure-new', origin: p };
+                if (!hit) tool.measure = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+                redrawOverlay();
+                e.preventDefault();
+                return true;
+            }
+            if (tool.mode === 'area') {
+                const hit = areaHit(loc.x, loc.y);
+                const p = clampData(screenToData(loc.x, loc.y));
+                tool.hover = null;
+                if (hit) tool.drag = { kind: 'area', hit, origin: p, rect: { ...tool.area } };
+                else {
+                    tool.drag = { kind: 'area-new', origin: p };
+                    tool.area = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+                    tool.areaStats = null;
+                }
+                redrawOverlay();
+                e.preventDefault();
+                return true;
+            }
+            refreshHover(loc.x, loc.y);
+            return false;
+        };
+
+        el.cursorToolbar.querySelectorAll('button[data-cursor]').forEach((btn) => {
+            btn.addEventListener('click', () => syncMode(btn.getAttribute('data-cursor')));
+        });
+        if (el.clearMarks) el.clearMarks.addEventListener('click', clearMarks);
+        if (el.profileClear) el.profileClear.addEventListener('click', () => {
+            tool.profile = null; tool.profileData = null; tool.hover = null;
+            resetProfileChart();
+            renderProfileChart();
+            redrawOverlay();
+        });
+        if (el.profileChartStyleWrap) {
+            el.profileChartStyleWrap.addEventListener('click', (e) => {
+                const btn = e.target.closest('button[data-profile-chart]');
+                if (!btn) return;
+                const style = btn.getAttribute('data-profile-chart');
+                if ((style !== 'line' && style !== 'dots') || style === profileChartStyle) return;
+                profileChartStyle = style;
+                if (typeof setUserPref === 'function') setUserPref('profileChartStyle', style);
+                if (typeof syncProfileChartStyleUI === 'function') syncProfileChartStyleUI();
+                renderProfileChart();
+            });
+        }
+        if (el.profileMeasureBtn) {
+            el.profileMeasureBtn.addEventListener('click', () => {
+                if (chart.measureMode) {
+                    chart.measureMode = false;
+                    chart.measurePts = [];
+                    chart.hoverIndex = null;
+                    chart.measureDrag = null;
+                    chart.hoverMeasure = null;
+                } else {
+                    if (chart.measureSets.length >= PROFILE_MEASURE_MAX_SETS) {
+                        showToast(t('profileMeasureMaxSets', PROFILE_MEASURE_MAX_SETS), 'info');
+                        return;
+                    }
+                    chart.measureMode = true;
+                    chart.measurePts = [];
+                    chart.hoverIndex = null;
+                    chart.measureDrag = null;
+                    chart.hoverMeasure = null;
+                }
+                if (el.profileTip) el.profileTip.classList.remove('show');
+                renderProfileChart();
+                redrawOverlay();
+            });
+        }
+        if (el.profileMeasureClearBtn) {
+            el.profileMeasureClearBtn.addEventListener('click', () => {
+                if (!chartHasMeasures()) return;
+                chart.measureSets = [];
+                chart.measurePts = [];
+                chart.measureMode = false;
+                chart.hoverIndex = null;
+                chart.measureDrag = null;
+                chart.hoverMeasure = null;
+                if (el.profileTip) el.profileTip.classList.remove('show');
+                renderProfileChart();
+                redrawOverlay();
+            });
+        }
+        if (el.profileBand) {
+            el.profileBand.addEventListener('input', () => {
+                if (!isScatter(st.dataset) || !tool.profile) return;
+                const full = parseFloat(el.profileBand.value);
+                if (!Number.isFinite(full) || full < 0) return;
+                chart.halfW = full / 2;
+                recomputeProfile(true);
+                renderProfileChart();
+                redrawOverlay();
+            });
+        }
+        if (el.profileMeta) {
+            el.profileMeta.addEventListener('click', (e) => {
+                const btn = e.target.closest('.profile-unit-toggle');
+                if (!btn || !el.profileMeta.contains(btn)) return;
+                e.preventDefault();
+                profilePaintFmt = { dataset: st.dataset, line: tool.profile };
+                let native = '';
+                try { native = profileMeasureNativeDistUnit(chart.data); }
+                finally { profilePaintFmt = null; }
+                const cur = resolveProfileDistDisplayUnit(native) || native || 'mm';
+                setProfileDistDisplayUnit(cycleLengthUnit(cur));
+                renderProfileChart();
+            });
+        }
+        if (el.measureClear) el.measureClear.addEventListener('click', () => {
+            if (tool.mode === 'area') { tool.area = null; tool.areaStats = null; }
+            else tool.measure = null;
+            tool.hover = null;
+            updateMeasurePanel();
+            redrawOverlay();
+        });
+        el.viewer.addEventListener('mousemove', (e) => {
+            if (!st.dataset || st.panning || tool.drag) return;
+            const loc = localOf(e);
+            if (e.target && e.target.closest && e.target.closest('.viewer-cursor-toolbar, .profile-panel, .measure-panel')) {
+                if (tool.hover) { tool.hover = null; redrawOverlay(); }
+                if (el.valueIndicator) el.valueIndicator.classList.remove('show');
+                return;
+            }
+            refreshHover(loc.x, loc.y);
+            showValue(e);
+        });
+        el.viewer.addEventListener('mouseleave', () => {
+            if (el.valueIndicator) el.valueIndicator.classList.remove('show');
+            if (tool.hover) { tool.hover = null; redrawOverlay(); }
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!tool.drag || !st.dataset) return;
+            const loc = localOf(e);
+            const p = clampData(screenToData(loc.x, loc.y));
+            const d = tool.drag;
+            if (d.kind === 'profile-new') tool.profile = { x0: d.origin.x, y0: d.origin.y, x1: p.x, y1: p.y };
+            else if (d.kind === 'measure-new') tool.measure = { x0: d.origin.x, y0: d.origin.y, x1: p.x, y1: p.y };
+            else if (d.kind === 'area-new') tool.area = { x0: d.origin.x, y0: d.origin.y, x1: p.x, y1: p.y };
+            else if (d.kind === 'profile' || d.kind === 'measure') {
+                const dx = p.x - d.origin.x, dy = p.y - d.origin.y;
+                let line = { ...d.line };
+                if (d.hit === 'ep0') line = { ...line, x0: d.line.x0 + dx, y0: d.line.y0 + dy };
+                else if (d.hit === 'ep1') line = { ...line, x1: d.line.x1 + dx, y1: d.line.y1 + dy };
+                else line = { x0: d.line.x0 + dx, y0: d.line.y0 + dy, x1: d.line.x1 + dx, y1: d.line.y1 + dy };
+                if (!isScatter(st.dataset)) {
+                    const a = clampData({ x: line.x0, y: line.y0 });
+                    const b = clampData({ x: line.x1, y: line.y1 });
+                    line = { x0: a.x, y0: a.y, x1: b.x, y1: b.y };
+                }
+                if (d.kind === 'profile') tool.profile = line;
+                else tool.measure = line;
+            } else if (d.kind === 'area') {
+                const dx = p.x - d.origin.x, dy = p.y - d.origin.y;
+                let r = { ...d.rect };
+                if (d.hit === 'move') r = { x0: d.rect.x0 + dx, y0: d.rect.y0 + dy, x1: d.rect.x1 + dx, y1: d.rect.y1 + dy };
+                else if (d.hit === 'tl') r = { x0: p.x, y0: p.y, x1: d.rect.x1, y1: d.rect.y1 };
+                else if (d.hit === 'tr') r = { x0: d.rect.x0, y0: p.y, x1: p.x, y1: d.rect.y1 };
+                else if (d.hit === 'bl') r = { x0: p.x, y0: d.rect.y0, x1: d.rect.x1, y1: p.y };
+                else if (d.hit === 'br') r = { x0: d.rect.x0, y0: d.rect.y0, x1: p.x, y1: p.y };
+                tool.area = r;
+            }
+            if (tool.mode === 'measure' || d.kind === 'measure' || d.kind === 'measure-new') updateMeasurePanel();
+            redrawOverlay();
+        });
+        window.addEventListener('mouseup', () => {
+            if (!tool.drag) return;
+            const d = tool.drag;
+            tool.drag = null;
+            const minLen = isScatter(st.dataset) ? 3 * st.sc.worldPerPx : 1;
+            if (d.kind === 'profile-new' || d.kind === 'profile') {
+                const line = tool.profile;
+                if (!line || Math.hypot(line.x1 - line.x0, line.y1 - line.y0) < minLen) {
+                    if (d.line) tool.profile = { ...d.line };
+                    else tool.profile = null;
+                }
+                recomputeProfile(true);
+                renderProfileChart();
+            }
+            if (d.kind === 'measure-new' || d.kind === 'measure') {
+                const line = tool.measure;
+                if (!line || Math.hypot(line.x1 - line.x0, line.y1 - line.y0) < minLen) {
+                    if (d.line) tool.measure = { ...d.line };
+                    else tool.measure = null;
+                }
+            }
+            if (d.kind === 'area-new' || d.kind === 'area') {
+                const r = tool.area ? areaNorm(tool.area) : null;
+                if (!r || (r.x1 - r.x0) < minLen || (r.y1 - r.y0) < minLen) {
+                    if (d.rect) { tool.area = { ...d.rect }; tool.areaStats = computeAreaStats(d.rect); }
+                    else { tool.area = null; tool.areaStats = null; }
+                } else {
+                    tool.area = r;
+                    tool.areaStats = computeAreaStats(r);
+                }
+            }
+            updateMeasurePanel();
+            redrawOverlay();
+        });
+        if (el.profileCanvas) {
+            const pc = el.profileCanvas;
+            pc.addEventListener('wheel', (e) => {
+                const d = chart.data, g = chart.geom;
+                if (!d || !g || d.N === 0) return;
+                const rect = pc.getBoundingClientRect();
+                const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+                if (!isProfileYAxisHit(mx, my, g)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                zoomProfileYAt(d, g, my, e.deltaY < 0 ? 1 / 1.18 : 1.18, chart);
+                renderProfileChart();
+            }, { passive: false });
+            pc.addEventListener('dblclick', (e) => {
+                const d = chart.data, g = chart.geom;
+                if (!d || !g) return;
+                const rect = pc.getBoundingClientRect();
+                const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+                if (!isProfileYAxisHit(mx, my, g)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                chart.yView = null;
+                renderProfileChart();
+            });
+            pc.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                const d = chart.data, g = chart.geom;
+                if (!d || !g || d.N === 0 || !chartHasMeasures()) return;
+                const rect = pc.getBoundingClientRect();
+                const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+                if (isProfileYAxisHit(mx, my, g)) return;
+                const mark = markMeasurePointer(chart.layouts, mx, my);
+                if (mark && mark.part === 'delete') {
+                    e.preventDefault();
+                    chart.suppressClick = true;
+                    if (mark.key === 'draft') chart.measurePts = [];
+                    else if (typeof mark.key === 'number') chart.measureSets.splice(mark.key, 1);
+                    chart.hoverMeasure = null;
+                    chart.hoverIndex = null;
+                    if (el.profileTip) el.profileTip.classList.remove('show');
+                    renderProfileChart();
+                    redrawOverlay();
+                    return;
+                }
+                const hit = profileMeasureHitHandle(mx, my, chart);
+                if (!hit) return;
+                e.preventDefault();
+                chart.measureDrag = { setKey: hit.setKey, ptIndex: hit.ptIndex, moved: false, pointerId: e.pointerId };
+                chart.hoverIndex = null;
+                chart.hoverMeasure = null;
+                try { pc.setPointerCapture(e.pointerId); } catch (_) {}
+                pc.style.cursor = 'grabbing';
+                if (el.profileTip) el.profileTip.classList.remove('show');
+            });
+            pc.addEventListener('pointermove', (e) => {
+                const drag = chart.measureDrag;
+                if (!drag || drag.pointerId !== e.pointerId) return;
+                const d = chart.data, g = chart.geom;
+                if (!d || !g || d.N === 0) return;
+                const rect = pc.getBoundingClientRect();
+                const idx = profileChartNearestIndex(e.clientX - rect.left, e.clientY - rect.top, chart);
+                if (idx == null) return;
+                if (profileMeasureSetEndpoint(drag.setKey, drag.ptIndex, idx, chart)) {
+                    drag.moved = true;
+                    renderProfileChart();
+                    redrawOverlay();
+                }
+                pc.style.cursor = 'grabbing';
+            });
+            const endDrag = (e) => {
+                const drag = chart.measureDrag;
+                if (!drag) return;
+                if (e && drag.pointerId !== e.pointerId) return;
+                if (drag.moved) chart.suppressClick = true;
+                chart.measureDrag = null;
+                try { if (e) pc.releasePointerCapture(e.pointerId); } catch (_) {}
+                renderProfileChart();
+                redrawOverlay();
+            };
+            pc.addEventListener('pointerup', endDrag);
+            pc.addEventListener('pointercancel', endDrag);
+            pc.addEventListener('click', (e) => {
+                if (chart.suppressClick) { chart.suppressClick = false; return; }
+                if (!chart.measureMode) return;
+                const d = chart.data, g = chart.geom;
+                if (!d || !g || d.N === 0) return;
+                const rect = pc.getBoundingClientRect();
+                const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+                if (isProfileYAxisHit(mx, my, g)) return;
+                if (profileMeasureHitHandle(mx, my, chart)) return;
+                const idx = profileChartPickIndex(mx, my, chart);
+                if (idx == null) return;
+                if (chart.measureSets.length >= PROFILE_MEASURE_MAX_SETS) {
+                    chart.measureMode = false;
+                    renderProfileChart();
+                    showToast(t('profileMeasureMaxSets', PROFILE_MEASURE_MAX_SETS), 'info');
+                    return;
+                }
+                chart.measurePts.push(idx);
+                if (chart.measurePts.length >= 2) {
+                    chart.measureSets.push({ pts: chart.measurePts.slice(0, 2) });
+                    chart.measurePts = [];
+                    chart.measureMode = false;
+                }
+                chart.hoverIndex = null;
+                renderProfileChart();
+                redrawOverlay();
+                if (chart.measureMode) updateEditorMeasureTip(e);
+                else if (el.profileTip) el.profileTip.classList.remove('show');
+            });
+            pc.addEventListener('mousemove', (e) => {
+                if (chart.measureDrag) return;
+                const d = chart.data, g = chart.geom;
+                if (!d || !g || d.N === 0) return;
+                const rect = pc.getBoundingClientRect();
+                const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+                if (isProfileYAxisHit(mx, my, g)) {
+                    pc.style.cursor = 'ns-resize';
+                    chart.hoverIndex = null;
+                    chart.hoverMeasure = null;
+                    if (el.profileTip) el.profileTip.classList.remove('show');
+                    renderProfileChart();
+                    redrawOverlay();
+                    return;
+                }
+                const mark = markMeasurePointer(chart.layouts, mx, my);
+                const prev = chart.hoverMeasure;
+                const same = prev && mark && prev.key === mark.key && prev.part === mark.part;
+                if (mark) {
+                    chart.hoverMeasure = mark;
+                    pc.style.cursor = mark.part === 'delete' ? 'pointer' : (profileMeasureHitHandle(mx, my, chart) ? 'grab' : 'default');
+                    chart.hoverIndex = null;
+                    if (el.profileTip) el.profileTip.classList.remove('show');
+                    if (!same) { renderProfileChart(); redrawOverlay(); }
+                    return;
+                }
+                if (prev) chart.hoverMeasure = null;
+                if (profileMeasureHitHandle(mx, my, chart)) {
+                    pc.style.cursor = 'grab';
+                    chart.hoverIndex = null;
+                    if (el.profileTip) el.profileTip.classList.remove('show');
+                    renderProfileChart();
+                    redrawOverlay();
+                    return;
+                }
+                pc.style.cursor = '';
+                if (chart.measureMode) {
+                    const idx = profileChartPickIndex(mx, my, chart);
+                    chart.hoverIndex = idx;
+                    renderProfileChart();
+                    redrawOverlay();
+                    if (idx != null) updateEditorMeasureTip(e);
+                    else if (el.profileTip) el.profileTip.classList.remove('show');
+                    return;
+                }
+                let frac = (mx - g.padL) / g.plotW;
+                if (frac < 0) frac = 0; else if (frac > 1) frac = 1;
+                const idx = nearestDistIndex(d.dist, frac * d.distPx);
+                chart.hoverIndex = idx;
+                renderProfileChart();
+                const distLabel = d.scatter ? t('profileAxisDistWorld') : t('profileAxisDist');
+                showEditorChartTip(e,
+                    '<div><span class="k">' + distLabel + ':</span>' + formatValue(d.dist[idx]) + '</div>' +
+                    '<div><span class="k">' + t('valueLabel') + ':</span>' + formatValue(d.vals[idx]) + '</div>');
+            });
+            pc.addEventListener('mouseleave', () => {
+                if (chart.measureDrag) return;
+                chart.hoverIndex = null;
+                chart.hoverMeasure = null;
+                if (el.profileTip) el.profileTip.classList.remove('show');
+                pc.style.cursor = '';
+                renderProfileChart();
+                redrawOverlay();
+            });
+        }
+        syncMode(tool.mode);
+    }
 
     /* =====================================================================
      *  影像編輯：方形 / 圓形裁切、互動式刪除雜點（直方圖雙標籤）
@@ -826,8 +1861,16 @@ function createImageView(ids, options) {
             if (!el.scatterGridTip && scatterGridTip) el.scatterGridTip = scatterGridTip;
         }
         if (el.btnClear) el.btnClear.disabled = !has;
-        if (el.cropApply) el.cropApply.disabled = !(has && st.edit.cropMode && st.edit.cropSel);
-        if (el.cropCancel) el.cropCancel.disabled = !(has && st.edit.cropMode);
+        const cropOn = !!(has && st.edit.cropMode);
+        if (el.cropActions) {
+            const wasHidden = el.cropActions.hidden;
+            el.cropActions.hidden = !cropOn;
+            if (wasHidden !== el.cropActions.hidden && typeof layoutEdToolbar === 'function') {
+                layoutEdToolbar();
+            }
+        }
+        if (el.cropApply) el.cropApply.disabled = !(cropOn && st.edit.cropSel);
+        if (el.cropCancel) el.cropCancel.disabled = !cropOn;
         if (el.segLevelApply) el.segLevelApply.disabled = !(has && st.edit.segLevel && !st.edit.segLevelBusy && !st.edit.segLevelTuneBusy && st.edit.segLevelResult);
         if (el.segLevelCancel) el.segLevelCancel.disabled = !(has && st.edit.segLevel);
         if (el.segLevelShowBounds) {
@@ -894,6 +1937,7 @@ function createImageView(ids, options) {
         el.status.textContent = t('statusIdle');
         if (el.fileInput) el.fileInput.value = '';
         if (el.btnClear) el.btnClear.disabled = true;
+        if (st.clearTools) st.clearTools();
         if (editing) updateEditButtons();
         syncPointSizeControls();
         showToast(t('statusCleared'), 'info');
@@ -5807,6 +6851,7 @@ function createImageView(ids, options) {
         canUseCalc: () => !!st.dataset && !isScatter(st.dataset),
         applyCalc,
         getDataset: () => st.dataset ? cloneDatasetForTransfer(st.dataset) : null,
+        getFilename: () => (st.dataset && st.dataset.filename) ? st.dataset.filename : '',
         getDatasetSignature: () => st.dataset ? getDatasetSignature(st.dataset) : null,
         getLastEditStep: () => st.edit.lastEditStep,
         clearLastEditStep: () => { setLastEditStep(null); },
@@ -5835,6 +6880,7 @@ function createImageView(ids, options) {
                 el.btnClear.title = t('btnClearTitle');
                 el.btnClear.setAttribute('aria-label', t('btnClearTitle'));
             }
+            if (st.syncToolLang) st.syncToolLang();
             if (editing) updateEditButtons();
         },
         clearData,
@@ -5845,6 +6891,17 @@ function createImageView(ids, options) {
 const editorView = createImageView({
     viewer: 'edViewer', canvas: 'edCanvas', placeholder: 'edPlaceholder',
     zoomIndicator: 'edZoomIndicator', zoomHint: 'edZoomHint',
+    cursorToolbar: 'edCursorToolbar', clearMarks: 'edClearMarks',
+    valueIndicator: 'edValueIndicator',
+    modeIndicator: 'edModeIndicator', modeIndicatorLabel: 'edModeIndicatorLabel',
+    overlay: 'edOverlay',
+    profilePanel: 'edProfilePanel', profileCanvas: 'edProfileCanvas',
+    profileMeta: 'edProfileMeta', profileTip: 'edProfileTip', profileClear: 'edProfileClear',
+    profileBandWrap: 'edProfileBandWrap', profileBand: 'edProfileBand',
+    profileChartStyleWrap: 'edProfileChartStyleWrap',
+    profileMeasureBtn: 'edProfileMeasureBtn', profileMeasureClearBtn: 'edProfileMeasureClearBtn',
+    measurePanel: 'edMeasurePanel', measureTitle: 'edMeasureTitle',
+    measureMeta: 'edMeasureMeta', measureClear: 'edMeasureClear',
     dropIcon: 'edDropIcon', dropText: 'edDropText',
     fileInput: 'edFileInput', colormap: 'edColormap',
     btnSave: 'edBtnSave', saveFormat: 'edSaveFormat', saveFormatItem: 'edSaveFormatItem',
@@ -5855,7 +6912,8 @@ const editorView = createImageView({
     cbValLo: 'edCbValLo', cbValHi: 'edCbValHi', cbReset: 'edCbReset',
     zMin: 'edZMin', zMax: 'edZMax',
     pointSizeAdjust: 'edPointSizeAdjust', pointSizeSlider: 'edPointSizeSlider', pointSizeVal: 'edPointSizeVal',
-    cropRect: 'edCropRect', cropCircle: 'edCropCircle', cropApply: 'edCropApply',
+    cropRect: 'edCropRect', cropCircle: 'edCropCircle',
+    cropActions: 'edCropActions', cropApply: 'edCropApply',
     cropCancel: 'edCropCancel', cropOverlay: 'edCropOverlay', cropShape: 'edCropShape',
     cropHint: 'edCropHint', denoise: 'edDenoise', scatterGrid: 'edScatterGrid',
     scatterGridTip: 'edScatterGridTip',

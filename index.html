@@ -29,6 +29,16 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- 檢視／編輯互相切換時的暫時詢問（不擋畫面，逾時淡出） -->
+<div class="cross-load-prompt" id="crossLoadPrompt" role="dialog" aria-labelledby="crossLoadPromptText" aria-hidden="true" hidden>
+    <p class="cross-load-prompt-text" id="crossLoadPromptText"></p>
+    <div class="cross-load-prompt-actions">
+        <button type="button" id="crossLoadYes" data-i18n="crossLoadYes">是</button>
+        <button type="button" class="btn-secondary" id="crossLoadNo" data-i18n="crossLoadNo">否</button>
+    </div>
+    <div class="cross-load-timer" aria-hidden="true"><span id="crossLoadTimerBar"></span></div>
+</div>
+
 <!-- 視窗一：點雲檢視器 -->
 <div class="page active" id="pageViewer" data-page="viewer">
 
@@ -99,7 +109,7 @@
                         <path d="M15 11V8a2 2 0 1 1 4 0v5a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-2"/>
                     </svg>
                 </button>
-                <button type="button" data-cursor="inspect" data-i18n-title="cursorInspectTitle" data-i18n-aria="cursorInspectTitle" title="數值模式：顯示鼠標位置的像素數值" aria-label="數值模式：顯示鼠標位置的像素數值">
+                <button type="button" data-cursor="inspect" data-i18n-title="cursorInspectTitle" data-i18n-aria="cursorInspectTitle" title="數值模式：顯示鼠標位置的像素數值 · 中鍵拖曳平移" aria-label="數值模式：顯示鼠標位置的像素數值 · 中鍵拖曳平移">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
                         <circle cx="12" cy="12" r="2.5"/>
                         <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
@@ -452,7 +462,7 @@
                                 </svg>
                             </button>
                         </div>
-                        <div class="ctrl-group ed-crop-actions" id="edCropActions">
+                        <div class="ctrl-group ed-crop-actions" id="edCropActions" hidden>
                             <button type="button" id="edCropApply" data-i18n="cropApplyBtn" disabled>套用</button>
                             <button type="button" id="edCropCancel" data-i18n="cropCancel" disabled>取消</button>
                         </div>
@@ -554,6 +564,126 @@
                 點選上方「讀取檔案」按鈕，或將 .bcrf / .asc / .tif / .pcd / .txt / .bmp / .png / .jpg 檔案拖曳到此處
             </div>
             <canvas id="edCanvas" style="display:none;"></canvas>
+            <canvas id="edOverlay" class="overlay"></canvas>
+            <div class="value-indicator" id="edValueIndicator"></div>
+            <div class="mode-indicator" id="edModeIndicator">
+                <span class="mi-dot" aria-hidden="true"></span>
+                <span class="mi-label" id="edModeIndicatorLabel"></span>
+            </div>
+            <div class="viewer-cursor-toolbar" id="edCursorToolbar" role="toolbar" data-i18n-aria="cursorToolbarLabel" aria-label="檢視工具">
+                <button type="button" data-cursor="pan" class="active" data-i18n-title="cursorPanTitle" data-i18n-aria="cursorPanTitle" title="拖曳模式：可平移圖片" aria-label="拖曳模式：可平移圖片">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M7 11V7.5a2 2 0 1 1 4 0V11"/>
+                        <path d="M11 11V6.5a2 2 0 1 1 4 0V11"/>
+                        <path d="M15 11V8a2 2 0 1 1 4 0v5a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-2"/>
+                    </svg>
+                </button>
+                <button type="button" data-cursor="inspect" data-i18n-title="cursorInspectTitle" data-i18n-aria="cursorInspectTitle" title="數值模式：顯示鼠標位置的像素數值 · 中鍵拖曳平移" aria-label="數值模式：顯示鼠標位置的像素數值 · 中鍵拖曳平移">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="2.5"/>
+                        <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
+                    </svg>
+                </button>
+                <button type="button" data-cursor="profile" data-i18n-title="cursorProfileTitle" data-i18n-aria="cursorProfileTitle" title="剖面模式：拉一條剖面線，可拖曳端點或線段調整位置" aria-label="剖面模式：拉一條剖面線，可拖曳端點或線段調整位置">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 18h18"/>
+                        <path d="M4 16 8 11 12 14 16 7 20 10"/>
+                        <path d="M12 4v14" stroke-dasharray="2.5 2.5"/>
+                    </svg>
+                </button>
+                <button type="button" data-cursor="measure" data-i18n-title="cursorMeasureTitle" data-i18n-aria="cursorMeasureTitle" title="距離測量：拖曳兩點量測距離，可拖曳端點調整" aria-label="距離測量：拖曳兩點量測距離，可拖曳端點調整">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <circle cx="6" cy="18" r="2" fill="currentColor" stroke="none"/>
+                        <circle cx="18" cy="6" r="2" fill="currentColor" stroke="none"/>
+                        <path d="M8 16 16 8"/>
+                        <path d="M10 14l2-2M13 11l2-2"/>
+                    </svg>
+                </button>
+                <button type="button" data-cursor="area" data-i18n-title="cursorAreaTitle" data-i18n-aria="cursorAreaTitle" title="區域統計：拖曳矩形框選區域，顯示數值統計" aria-label="區域統計：拖曳矩形框選區域，顯示數值統計">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <rect x="5" y="6" width="14" height="13" rx="1" stroke-dasharray="4 3"/>
+                        <path d="M5 6h14M5 19h14M5 6v13M19 6v13" opacity="0.45"/>
+                    </svg>
+                </button>
+                <span class="viewer-cursor-toolbar-sep" aria-hidden="true"></span>
+                <button type="button" id="edClearMarks" class="viewer-clear-marks-btn" data-i18n-title="cursorClearMarksTitle" data-i18n-aria="cursorClearMarksTitle" title="清除圖上所有量測標記" aria-label="清除圖上所有量測標記">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M17 3.5 10.8 13.2"/>
+                        <path d="M7.6 11.8 14.4 16.1"/>
+                        <path d="M8.4 12.3 4.2 19"/>
+                        <path d="M9.8 13.2 6.4 20.2"/>
+                        <path d="M11.2 14.1 8.8 20.8"/>
+                        <path d="M12.6 15 11.4 21"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="profile-panel" id="edProfilePanel">
+                <div class="profile-head">
+                    <span class="profile-title" data-i18n="profileTitle">剖面</span>
+                    <span class="profile-meta" id="edProfileMeta"></span>
+                    <label class="profile-band" id="edProfileBandWrap" style="display:none;">
+                        <span data-i18n="profileBand">帶寬</span>
+                        <input type="number" id="edProfileBand" step="any" min="0" />
+                    </label>
+                    <div class="profile-chart-style" id="edProfileChartStyleWrap" style="display:none;" role="group" data-i18n-aria="profileChartStyleTitle">
+                        <div class="profile-icon-group profile-chart-toggle">
+                            <button type="button" data-profile-chart="line" data-i18n-title="profileChartLineTitle" title="折線圖">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M4 19h16"/>
+                                    <path d="M5 15l4-5 4 3 5-8 4 4"/>
+                                </svg>
+                            </button>
+                            <button type="button" data-profile-chart="dots" data-i18n-title="profileChartDotsTitle" title="散點圖">
+                                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <circle cx="6" cy="16" r="1.8"/>
+                                    <circle cx="10" cy="10" r="1.8"/>
+                                    <circle cx="14" cy="14" r="1.8"/>
+                                    <circle cx="18" cy="7" r="1.8"/>
+                                    <circle cx="8" cy="6" r="1.8"/>
+                                    <circle cx="16" cy="18" r="1.8"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button" class="profile-icon-btn profile-measure-btn" id="edProfileMeasureBtn" style="display:none;" data-i18n-title="profileMeasureTitle" title="剖面測量：按一下後點選兩點量測一組（最多 5 組）">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="6" cy="17" r="2" fill="currentColor" stroke="none"/>
+                            <circle cx="18" cy="7" r="2" fill="currentColor" stroke="none"/>
+                            <path d="M8.5 15.5 L15.5 8.5"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="profile-icon-btn profile-measure-clear-btn" id="edProfileMeasureClearBtn" style="display:none;" data-i18n-title="profileMeasureClearTitle" title="清除剖面測量" disabled>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M17 3.5 10.8 13.2"/>
+                            <path d="M7.6 11.8 14.4 16.1"/>
+                            <path d="M8.4 12.3 4.2 19"/>
+                            <path d="M9.8 13.2 6.4 20.2"/>
+                            <path d="M11.2 14.1 8.8 20.8"/>
+                            <path d="M12.6 15 11.4 21"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="profile-clear profile-icon-btn" id="edProfileClear" data-i18n-title="profileClearTitle" data-i18n-aria="profileClearTitle" title="清除剖面" aria-label="清除剖面">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                            <path d="M6 6l12 12M18 6L6 18"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="profile-plot">
+                    <canvas id="edProfileCanvas"></canvas>
+                    <div class="profile-tip" id="edProfileTip"></div>
+                </div>
+            </div>
+            <div class="measure-panel" id="edMeasurePanel">
+                <div class="profile-head">
+                    <span class="profile-title" id="edMeasureTitle" data-i18n="measureTitle">測量</span>
+                    <span class="profile-meta" id="edMeasureMeta"></span>
+                    <button type="button" class="profile-clear profile-icon-btn" id="edMeasureClear" data-i18n-title="measureClearTitle" data-i18n-aria="measureClearTitle" title="清除測量" aria-label="清除測量">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                            <path d="M6 6l12 12M18 6L6 18"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
             <div class="zoom-hint" id="edZoomHint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
             <div class="zoom-indicator" id="edZoomIndicator">100%</div>
             <div class="crop-overlay" id="edCropOverlay">

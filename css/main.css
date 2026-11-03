@@ -459,6 +459,67 @@
     }
     .toast.info { background: #4f8cff; }
 
+    /* 檢視／編輯切換時的暫時詢問：只佔角落，沒有遮罩 */
+    .cross-load-prompt {
+        position: fixed;
+        left: 20px;
+        bottom: 20px;
+        z-index: 1200;
+        width: min(320px, calc(100vw - 40px));
+        margin: 0;
+        padding: 14px 14px 0;
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+        opacity: 0;
+        transform: translateY(8px);
+        pointer-events: none;
+        /* 失去 .show 時走這段：慢慢淡出 */
+        transition: opacity 1.4s ease, transform 1.4s ease;
+    }
+    .cross-load-prompt.show {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+        /* 加上 .show 時走這段：很快出現，避免剛切頁時還看不見 */
+        transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+    .cross-load-prompt-text {
+        margin: 0 0 12px;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+    .cross-load-prompt-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    .cross-load-prompt-actions button {
+        padding: 6px 16px;
+        font-size: 13px;
+    }
+    .cross-load-timer {
+        height: 3px;
+        margin: 0 -14px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 0 0 10px 10px;
+        overflow: hidden;
+    }
+    .cross-load-timer > span {
+        display: block;
+        height: 100%;
+        width: 100%;
+        background: var(--accent);
+        transform-origin: left center;
+        transform: scaleX(1);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .cross-load-prompt { transition-duration: 0.2s; }
+    }
+
     #canvas, #edCanvas, #anCanvas, #ovCanvasA, #ovCanvasB {
         position: absolute;
         top: 0;
@@ -917,7 +978,16 @@
     }
 
     /* ??????????? */
-    #canvas.inspect-mode { cursor: crosshair; }
+    #canvas.inspect-mode,
+    #edCanvas.inspect-mode { cursor: crosshair; }
+    #canvas.inspect-mode.grabbing,
+    #edCanvas.inspect-mode.grabbing,
+    #edCanvas.profile-mode.grabbing,
+    #edCanvas.measure-mode.grabbing,
+    #edCanvas.area-mode.grabbing { cursor: grabbing; }
+    #edCanvas.profile-mode,
+    #edCanvas.measure-mode,
+    #edCanvas.area-mode { cursor: crosshair; }
 
     /* ???????? */
     .value-indicator {
@@ -1121,13 +1191,15 @@
         position: relative;
         width: 100%;
     }
-    #profileCanvas {
+    #profileCanvas,
+    #edProfileCanvas {
         display: block;
         width: 100%;
         height: 160px;
     }
     .profile-plot.measure-mode,
-    .profile-plot.measure-mode #profileCanvas {
+    .profile-plot.measure-mode #profileCanvas,
+    .profile-plot.measure-mode #edProfileCanvas {
         cursor: crosshair;
     }
     .profile-measure-btn.active {
@@ -1572,7 +1644,8 @@
     .ed-crop-toggle button.btn-secondary:hover:not(:disabled) { background: transparent; color: var(--text); }
     .ed-crop-toggle button:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    /* ?????? */
+    /* 裁切套用／取消：僅在啟用方形或圓形裁切時顯示 */
+    .ed-crop-actions[hidden] { display: none !important; }
     .ed-crop-actions button {
         background: #3a3a4a;
         color: var(--text);
@@ -1872,7 +1945,43 @@
     #edViewer.scatter-grid-active #edZoomHint,
     #edViewer.scatter-grid-active #edZoomIndicator,
     #edViewer.scatter-grid-active #edCropOverlay,
-    #edViewer.scatter-grid-active #edDropHint {
+    #edViewer.scatter-grid-active #edDropHint,
+    #edViewer.seg-level-active .viewer-cursor-toolbar,
+    #edViewer.seg-level-active .mode-indicator,
+    #edViewer.seg-level-active .value-indicator,
+    #edViewer.seg-level-active .overlay,
+    #edViewer.seg-level-active .profile-panel,
+    #edViewer.seg-level-active .measure-panel,
+    #edViewer.seg-skew-active .viewer-cursor-toolbar,
+    #edViewer.seg-skew-active .mode-indicator,
+    #edViewer.seg-skew-active .value-indicator,
+    #edViewer.seg-skew-active .overlay,
+    #edViewer.seg-skew-active .profile-panel,
+    #edViewer.seg-skew-active .measure-panel,
+    #edViewer.median-filter-active .viewer-cursor-toolbar,
+    #edViewer.median-filter-active .mode-indicator,
+    #edViewer.median-filter-active .value-indicator,
+    #edViewer.median-filter-active .overlay,
+    #edViewer.median-filter-active .profile-panel,
+    #edViewer.median-filter-active .measure-panel,
+    #edViewer.nan-patch-active .viewer-cursor-toolbar,
+    #edViewer.nan-patch-active .mode-indicator,
+    #edViewer.nan-patch-active .value-indicator,
+    #edViewer.nan-patch-active .overlay,
+    #edViewer.nan-patch-active .profile-panel,
+    #edViewer.nan-patch-active .measure-panel,
+    #edViewer.roi-level-active .viewer-cursor-toolbar,
+    #edViewer.roi-level-active .mode-indicator,
+    #edViewer.roi-level-active .value-indicator,
+    #edViewer.roi-level-active .overlay,
+    #edViewer.roi-level-active .profile-panel,
+    #edViewer.roi-level-active .measure-panel,
+    #edViewer.scatter-grid-active .viewer-cursor-toolbar,
+    #edViewer.scatter-grid-active .mode-indicator,
+    #edViewer.scatter-grid-active .value-indicator,
+    #edViewer.scatter-grid-active .overlay,
+    #edViewer.scatter-grid-active .profile-panel,
+    #edViewer.scatter-grid-active .measure-panel {
         display: none !important;
     }
     #edViewer.seg-level-active .seg-level-panel#edSegLevelPanel,

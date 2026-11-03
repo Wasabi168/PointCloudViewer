@@ -97,6 +97,10 @@ function applyLanguage(lang) {
     if (viewerCursorToolbar) {
         viewerCursorToolbar.setAttribute('aria-label', t('cursorToolbarLabel'));
     }
+    const edCursorToolbar = document.getElementById('edCursorToolbar');
+    if (edCursorToolbar) {
+        edCursorToolbar.setAttribute('aria-label', t('cursorToolbarLabel'));
+    }
 
     // 語言切換按鈕的 active 狀態
     document.querySelectorAll('#langToggle button').forEach(b => {
@@ -186,6 +190,7 @@ function applyLanguage(lang) {
     if (typeof editorView !== 'undefined' && editorView && editorView.syncLang) {
         editorView.syncLang();
     }
+    if (typeof syncCrossLoadPrompt === 'function') syncCrossLoadPrompt();
     if (typeof AnalysisView !== 'undefined' && AnalysisView && AnalysisView.syncLang) {
         AnalysisView.syncLang();
     }
