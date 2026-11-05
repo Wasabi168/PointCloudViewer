@@ -1948,8 +1948,12 @@ const AnalysisView = (() => {
     function toolSubtitleKey(tool) {
         if (tool === 'roughness') return 'anToolRoughness';
         if (tool === 'overlay') return 'anToolOverlay';
+        if (tool === 'bump') return 'anToolBump';
         return 'anToolProfile';
     }
+
+    const AN_TOOLS = ['roughness', 'profile', 'overlay', 'bump'];
+    const bumpModule = () => (typeof BumpAnalysis !== 'undefined' ? BumpAnalysis : null);
 
     function updateHeaderSubtitle() {
         if (!el.subtitle) return;
@@ -1959,7 +1963,7 @@ const AnalysisView = (() => {
     }
 
     function setTool(tool) {
-        if (tool !== 'roughness' && tool !== 'profile' && tool !== 'overlay') return;
+        if (!AN_TOOLS.includes(tool)) return;
         st.tool = tool;
         document.querySelectorAll('.an-nav-item[data-an-tool]').forEach((b) => {
             b.classList.toggle('active', b.getAttribute('data-an-tool') === tool);
@@ -1967,7 +1971,13 @@ const AnalysisView = (() => {
         if (el.panelRoughness) el.panelRoughness.hidden = tool !== 'roughness';
         if (el.panelProfile) el.panelProfile.hidden = tool !== 'profile';
         if (el.panelOverlay) el.panelOverlay.hidden = tool !== 'overlay';
-        if (el.main) el.main.classList.toggle('an-tool-overlay', tool === 'overlay');
+        if (el.main) {
+            el.main.classList.toggle('an-tool-overlay', tool === 'overlay');
+            el.main.classList.toggle('an-tool-bump', tool === 'bump');
+        }
+        // Bump 分析：整個工作區與側欄換成 BumpCop 版面
+        const bump = bumpModule();
+        if (bump) bump.setActive(tool === 'bump');
         updateHeaderSubtitle();
 
         // 離開時關閉對應互動模式
@@ -2578,7 +2588,7 @@ const AnalysisView = (() => {
             btn.addEventListener('click', () => {
                 if (btn.disabled) return;
                 const tool = btn.getAttribute('data-an-tool');
-                if (tool === 'roughness' || tool === 'profile' || tool === 'overlay') setTool(tool);
+                if (AN_TOOLS.includes(tool)) setTool(tool);
             });
         });
 
@@ -2613,7 +2623,9 @@ const AnalysisView = (() => {
         }
         if (opts.refit !== false) {
             requestAnimationFrame(() => {
-                if (st.tool === 'overlay' && typeof OverlayAnalysis !== 'undefined') {
+                if (st.tool === 'bump' && bumpModule()) {
+                    bumpModule().refit();
+                } else if (st.tool === 'overlay' && typeof OverlayAnalysis !== 'undefined') {
                     OverlayAnalysis.refit();
                 } else if (st.dataset) {
                     fitImage();
@@ -2633,6 +2645,10 @@ const AnalysisView = (() => {
     }
 
     function refit() {
+        if (st.tool === 'bump' && bumpModule()) {
+            bumpModule().refit();
+            return;
+        }
         if (st.tool === 'overlay' && typeof OverlayAnalysis !== 'undefined') {
             OverlayAnalysis.refit();
             return;
@@ -2644,6 +2660,13 @@ const AnalysisView = (() => {
 
     function syncLang() {
         updateHeaderSubtitle();
+        // Bump 分析子頁的字串由其模組自行更新（無論目前是否顯示）
+        if (bumpModule()) bumpModule().syncLang();
+        if (st.tool === 'bump') {
+            const collapsed = el.main && el.main.classList.contains('an-nav-collapsed');
+            syncNavToggleLabel(!!collapsed);
+            return;
+        }
         if (st.tool === 'overlay' && typeof OverlayAnalysis !== 'undefined') {
             OverlayAnalysis.syncLang();
             const collapsed = el.main && el.main.classList.contains('an-nav-collapsed');

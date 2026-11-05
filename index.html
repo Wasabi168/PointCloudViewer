@@ -1,10 +1,11 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8" />
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231e1e28'/%3E%3Cpath d='M4 26 L16 20 L28 26' fill='none' stroke='%233a3a4a' stroke-width='1.2' stroke-linecap='round'/%3E%3Cpath d='M8 26 L16 17 L24 26' fill='none' stroke='%233a3a4a' stroke-width='0.8' opacity='0.55'/%3E%3Ccircle cx='8' cy='16' r='1.6' fill='%233a6fd4'/%3E%3Ccircle cx='10' cy='22' r='1.8' fill='%234f8cff' opacity='0.9'/%3E%3Ccircle cx='13' cy='14' r='2' fill='%236aa1ff'/%3E%3Ccircle cx='16' cy='18' r='2.2' fill='%236aa1ff'/%3E%3Ccircle cx='19' cy='11' r='2.4' fill='%236aa1ff'/%3E%3Ccircle cx='22' cy='21' r='1.8' fill='%234f8cff'/%3E%3Ccircle cx='24' cy='15' r='1.7' fill='%234f8cff' opacity='0.85'/%3E%3C/svg%3E" />
 <title data-i18n-title>CloudMap</title>
 <link rel="stylesheet" href="css/main.css" />
+<link rel="stylesheet" href="css/bump.css" />
 </head>
 <body>
 
@@ -1307,6 +1308,7 @@
                 <button type="button" class="an-nav-item active" data-an-tool="profile" data-i18n="anToolProfile">輪廓粗糙度 (Ra)</button>
                 <button type="button" class="an-nav-item" data-an-tool="roughness" data-i18n="anToolRoughness">表面粗糙度 (Sa)</button>
                 <button type="button" class="an-nav-item" data-an-tool="overlay" data-i18n="anToolOverlay">疊圖分析</button>
+                <button type="button" class="an-nav-item" data-an-tool="bump" data-i18n="anToolBump">Bump分析</button>
             </div>
         </nav>
 
@@ -1554,6 +1556,566 @@
                 </div>
             </div>
         </div>
+
+        <!-- ===== Bump 分析（移植自 BumpCop：分析 / 疊圖分析 兩個子頁） ===== -->
+        <div id="bcRoot">
+            <nav class="bc-subtabs" role="tablist" data-i18n-aria="bc.subtabsLabel" aria-label="Bump 分析子頁">
+                <button type="button" class="bc-subtab active" data-bc-page="bcPageInspect" role="tab" aria-selected="true" data-i18n="bc.subInspect">分析</button>
+                <button type="button" class="bc-subtab" data-bc-page="bcPageOverlay" role="tab" aria-selected="false" data-i18n="bc.tabOverlay">疊圖分析</button>
+            </nav>
+<div class="bc-page active" id="bcPageInspect">
+<header class="bc-top">
+    <h1>
+        <span data-i18n="bc.subInspect">分析</span>
+        <span class="muted" id="bcFileLabel"></span>
+    </h1>
+    <div class="bc-controls">
+        <label class="bc-ctrl-field bc-ctrl-field--colormap">
+            <span data-i18n="bc.labelColormap">色彩：</span>
+            <select id="bcColormap">
+                <option value="viridis">Viridis</option>
+                <option value="jet" selected>Jet</option>
+                <option value="hot">Hot</option>
+                <option value="gray">Gray</option>
+                <option value="inferno">Inferno</option>
+                <option value="bwr">BWR</option>
+            </select>
+        </label>
+        <label class="bc-icon-btn bc-file-btn" data-i18n-title="bc.btnOpen" data-i18n-aria="bc.btnOpen" title="開啟檔案" aria-label="開啟檔案">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 19a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/>
+                <path d="M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9l-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2z"/>
+            </svg>
+            <input type="file" id="bcFileInput" accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.csv,.bmp,.png,.jpg,.jpeg" />
+        </label>
+        <button type="button" class="bc-icon-btn" id="bcBtnClear" data-i18n-title="bc.btnClear" data-i18n-aria="bc.btnClear" title="清除" aria-label="清除">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 7h16"/>
+                <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                <path d="M6 7l1 13a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/>
+                <path d="M10 11v5"/>
+                <path d="M14 11v5"/>
+            </svg>
+        </button>
+        <button type="button" class="bc-info-btn" id="bcBtnInfo" data-i18n-title="bc.infoBtn" data-i18n-aria="bc.infoBtn">i</button>
+    </div>
+</header>
+
+<ol class="stepper" id="bcStepper">
+    <li><button type="button" class="step active" data-step="0" data-i18n="bc.stepLoad">載入</button></li>
+    <li><button type="button" class="step" data-step="1" data-i18n="bc.stepDenoise">刪除雜點</button></li>
+    <li><button type="button" class="step" data-step="2" data-i18n="bc.stepBump">識別 Bump</button></li>
+    <li><button type="button" class="step" data-step="3" data-i18n="bc.stepDonut">基底對照</button></li>
+    <li><button type="button" class="step" data-step="4" data-i18n="bc.stepResult">計算結果</button></li>
+</ol>
+
+<main class="bc-workspace">
+    <div class="viewer-col">
+        <div class="bc-viewer" id="bcViewer">
+            <div class="bc-placeholder" id="bcPlaceholder" data-i18n="bc.placeholder">開啟或拖曳高度圖檔案</div>
+            <div class="drop-veil" id="bcDropVeil" hidden>
+                <div id="bcDropText" data-i18n="bc.dropSupported">放開以載入檔案</div>
+            </div>
+            <div class="stage" id="bcStageSingle" hidden>
+                <canvas id="bcCanvas"></canvas>
+                <canvas id="bcProfileOverlay"></canvas>
+            </div>
+            <div class="stage compare" id="bcStageCompare" hidden>
+                <div class="pane">
+                    <span data-i18n="bc.paneBump">Bump</span>
+                    <canvas id="bcCanvasBump"></canvas>
+                    <canvas id="bcProfileOverlayBump" class="pane-overlay"></canvas>
+                </div>
+                <div class="pane">
+                    <span data-i18n="bc.paneBase">基底 Donut</span>
+                    <canvas id="bcCanvasBase"></canvas>
+                    <canvas id="bcProfileOverlayBase" class="pane-overlay"></canvas>
+                </div>
+            </div>
+            <div class="bc-viewer-cursor-toolbar" id="bcViewerTools" hidden>
+                <button type="button" id="bcBtnPan" class="active" data-i18n-title="bc.cursorPanTitle" data-i18n-aria="bc.cursorPanTitle" title="拖曳平移" aria-label="拖曳平移">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M7 11V7.5a2 2 0 1 1 4 0V11"/>
+                        <path d="M11 11V6.5a2 2 0 1 1 4 0V11"/>
+                        <path d="M15 11V8a2 2 0 1 1 4 0v5a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-2"/>
+                    </svg>
+                </button>
+                <button type="button" id="bcBtnInspect" data-i18n-title="bc.cursorInspectTitle" data-i18n-aria="bc.cursorInspectTitle" title="顯示數值：游標顯示目前像素的 Z" aria-label="顯示數值：游標顯示目前像素的 Z">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="2.5"/>
+                        <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
+                    </svg>
+                </button>
+                <button type="button" id="bcBtnMeasure" data-i18n-title="bc.cursorMeasureTitle" data-i18n-aria="bc.cursorMeasureTitle" title="距離測量：拖曳兩點量測長度，可拖曳端點或線段調整" aria-label="距離測量：拖曳兩點量測長度，可拖曳端點或線段調整">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <circle cx="6" cy="18" r="2" fill="currentColor" stroke="none"/>
+                        <circle cx="18" cy="6" r="2" fill="currentColor" stroke="none"/>
+                        <path d="M8 16 16 8"/>
+                        <path d="M10 14l2-2M13 11l2-2"/>
+                    </svg>
+                </button>
+                <button type="button" id="bcBtnStep" data-i18n-title="bc.stepHeightTitle" data-i18n-aria="bc.stepHeightTitle" title="量階高：在圖上拖一條剖面線，再於剖面圖點兩點量階高" aria-label="量階高：在圖上拖一條剖面線，再於剖面圖點兩點量階高">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 18h18"/>
+                        <path d="M4 16 8 11 12 14 16 7 20 10"/>
+                        <path d="M12 4v14" stroke-dasharray="2.5 2.5"/>
+                    </svg>
+                </button>
+                <span class="bc-viewer-cursor-toolbar-sep" aria-hidden="true"></span>
+                <button type="button" id="bcBtnMeasureClear" data-i18n-title="bc.measureClearTitle" data-i18n-aria="bc.measureClearTitle" title="清除測量與剖面" aria-label="清除測量與剖面">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6L6 18"/>
+                    </svg>
+                </button>
+                <button type="button" id="bcBtnFocusClear" data-i18n-title="bc.focusClearTitle" data-i18n-aria="bc.focusClearTitle" title="清除定位標記" aria-label="清除定位標記" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="4.5"/>
+                        <path d="M12 3.5v3.2M12 17.3v3.2M3.5 12h3.2M17.3 12h3.2"/>
+                        <path d="M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="bc-value-indicator" id="bcValueIndicator"></div>
+            <div class="bc-measure-panel" id="bcMeasurePanel" hidden>
+                <div class="measure-title" data-i18n="bc.measureTitle">測量</div>
+                <div class="measure-meta" id="bcMeasureMeta"></div>
+            </div>
+            <div class="minimap" id="bcMinimap" hidden>
+                <button type="button" class="fold-bar" id="bcMinimapFold" aria-expanded="true" aria-controls="bcMinimapCanvas" title="收合縮圖" aria-label="收合縮圖">
+                    <span class="fold-bar-title" data-i18n="bc.minimapTitle">縮圖</span>
+                    <svg class="fold-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 14.5 12 8.5l6 6"/>
+                    </svg>
+                </button>
+                <canvas id="bcMinimapCanvas" data-i18n-aria="bc.minimapLabel" aria-label="整張圖與目前視野，拖曳方框可移動視野"></canvas>
+            </div>
+            <div class="layer-panel" id="bcLayerPanel" hidden>
+                <button type="button" class="fold-bar" id="bcLayerFold" aria-expanded="true" aria-controls="bcLayerBody" title="收合顯示選項" aria-label="收合顯示選項">
+                    <span class="layer-title" data-i18n="bc.layerTitle">顯示</span>
+                    <svg class="fold-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 14.5 12 8.5l6 6"/>
+                    </svg>
+                </button>
+                <div class="layer-body" id="bcLayerBody">
+                    <label><input type="checkbox" id="bcLayerBump" checked /><span data-i18n="bc.layerBump">Bump</span></label>
+                    <label><input type="checkbox" id="bcLayerDonut" /><span data-i18n="bc.layerDonut">基底 Donut</span></label>
+                    <label class="residual-toggle" id="bcResidualToggle">
+                        <input type="checkbox" id="bcShowResiduals" />
+                        <span data-i18n="bc.residualToggle">顯示頂點位置</span>
+                    </label>
+                    <label class="height-extreme-toggle" id="bcHeightExtremeToggle">
+                        <input type="checkbox" id="bcShowHeightExtremes" />
+                        <span data-i18n="bc.heightExtremeToggle">標記最高 / 最低 H</span>
+                    </label>
+                    <label class="bump-detail-toggle" id="bcBumpDetailToggle" data-i18n-title="bc.bumpDetailToggleTitle" title="在圖下方顯示目前選擇的 Bump 詳細數值">
+                        <input type="checkbox" id="bcShowBumpDetail" />
+                        <span data-i18n="bc.bumpDetailToggle">Bump 詳細資料</span>
+                    </label>
+                    <label class="raw-extreme-toggle" id="bcLayerRawExtreme" hidden>
+                        <input type="checkbox" id="bcShowRawExtremes" />
+                        <span id="bcRawExtremeLabel" data-i18n="bc.rawExtremeToggle">標記最高 / 最低球高</span>
+                    </label>
+                    <label class="raw-filtered-toggle" id="bcLayerRawFiltered" hidden data-i18n-title="bc.layerRawFilteredTitle" title="顯示被左右界線濾掉的圓點">
+                        <input type="checkbox" id="bcShowRawFiltered" />
+                        <span data-i18n="bc.layerRawFiltered">過濾的圓點</span>
+                    </label>
+                    <div class="layer-title layer-split" data-i18n="bc.layerFiltered">濾掉的點</div>
+                    <label><input type="checkbox" id="bcLayerDenoise" /><span data-i18n="bc.layerDenoise">刪除雜點</span></label>
+                    <label><input type="checkbox" id="bcLayerRejected" /><span data-i18n="bc.layerRejected">識別 Bump</span></label>
+                </div>
+            </div>
+            <button type="button" class="peek-btn" id="bcBtnPeek" hidden data-i18n-title="bc.peekOriginalTitle" title="切換識別前的圖與識別結果" aria-pressed="false">看原圖</button>
+            <div class="peek-badge" id="bcPeekBadge" hidden data-i18n="bc.peekBadge">識別前</div>
+            <div class="load-progress" id="bcLoadProgress" hidden>
+                <div class="load-progress-bar" id="bcLoadProgressBar"></div>
+            </div>
+            <div class="result-view-tabs" id="bcResultViewTabs" hidden role="tablist">
+                <button type="button" role="tab" class="active" data-result-view="map" aria-selected="true" data-i18n="bc.resultViewMap">總圖</button>
+                <button type="button" role="tab" data-result-view="h" aria-selected="false" data-i18n="bc.resultViewH">H圖</button>
+                <button type="button" role="tab" data-result-view="raw" aria-selected="false" data-i18n="bc.resultViewRaw">球高圖</button>
+                <button type="button" role="tab" data-result-view="donut" aria-selected="false" data-i18n="bc.resultViewDonut">Donut 中位數圖</button>
+            </div>
+            <div class="load-progress-label" id="bcLoadProgressLabel" hidden role="status" aria-live="polite">
+                <span class="load-progress-spinner" id="bcLoadProgressSpinner" hidden aria-hidden="true"></span>
+                <span id="bcLoadProgressText"></span>
+            </div>
+        </div>
+        <div class="bc-profile-panel" id="bcProfilePanel" hidden>
+            <div class="bc-profile-head">
+                <span class="bc-profile-title" data-i18n="bc.profileTitle">剖面</span>
+                <span class="bc-profile-meta" id="bcProfileMeta"></span>
+                <div class="profile-chart-toggle" id="bcProfileChartStyle" role="group" data-i18n-aria="bc.profileChartStyleTitle" aria-label="剖面圖樣式">
+                    <button type="button" data-profile-chart="line" class="active" data-i18n-title="bc.profileChartLineTitle" data-i18n-aria="bc.profileChartLineTitle" title="折線圖" aria-label="折線圖" aria-pressed="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M4 19h16"/>
+                            <path d="M5 15l4-5 4 3 5-8 4 4"/>
+                        </svg>
+                    </button>
+                    <button type="button" data-profile-chart="dots" data-i18n-title="bc.profileChartDotsTitle" data-i18n-aria="bc.profileChartDotsTitle" title="散點圖" aria-label="散點圖" aria-pressed="false">
+                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <circle cx="6" cy="16" r="1.8"/>
+                            <circle cx="10" cy="10" r="1.8"/>
+                            <circle cx="14" cy="14" r="1.8"/>
+                            <circle cx="18" cy="7" r="1.8"/>
+                            <circle cx="8" cy="6" r="1.8"/>
+                            <circle cx="16" cy="18" r="1.8"/>
+                        </svg>
+                    </button>
+                </div>
+                <button type="button" class="bc-profile-icon-btn" id="bcProfileMeasureBtn" data-i18n-title="bc.profileMeasureTitle" title="量階高：按一下後在剖面圖點兩個點（最多 5 組）" aria-label="量階高">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="6" cy="17" r="2" fill="currentColor" stroke="none"/>
+                        <circle cx="18" cy="7" r="2" fill="currentColor" stroke="none"/>
+                        <path d="M8.5 15.5 15.5 8.5"/>
+                    </svg>
+                </button>
+                <button type="button" class="bc-profile-icon-btn" id="bcProfileMeasureClearBtn" data-i18n-title="bc.profileMeasureClearTitle" title="清除階高測量" aria-label="清除階高測量" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6L6 18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="bc-profile-plot" id="bcProfilePlot">
+                <canvas id="bcProfileCanvas"></canvas>
+                <div class="bc-profile-tip" id="bcProfileTip"></div>
+            </div>
+        </div>
+        <div class="bc-hist-panel" id="bcHistPanel" hidden>
+            <div class="bc-hist-head">
+                <strong data-i18n="bc.denoiseTitle">數值分布統計</strong>
+                <span id="bcHistStats"></span>
+                <span>
+                    <button type="button" class="tool-btn" id="bcBtnAuto" data-i18n="bc.denoiseAuto">自動</button>
+                    <button type="button" class="tool-btn" id="bcBtnDenoiseCancel" data-i18n="bc.denoiseCancel">取消</button>
+                </span>
+            </div>
+            <div class="hist-wrap" id="bcHistWrap">
+                <canvas id="bcHistCanvas"></canvas>
+                <div class="bc-hist-handle" id="bcHistLo"><span id="bcHistValLo"></span></div>
+                <div class="bc-hist-handle" id="bcHistHi"><span id="bcHistValHi"></span></div>
+                <div class="hist-tip" id="bcHistTip" hidden></div>
+            </div>
+            <div class="bc-hist-axis">
+                <span id="bcHistMin"></span>
+                <span data-i18n="bc.denoiseAxis">數值</span>
+                <span id="bcHistMax"></span>
+            </div>
+        </div>
+        <div class="bc-hist-panel" id="bcRawHistPanel" hidden>
+            <button type="button" class="fold-bar" id="bcRawHistFold" aria-expanded="true" aria-controls="bcRawHistBody" title="收合球高分布" aria-label="收合球高分布">
+                <span class="fold-bar-title" data-i18n="bc.rawHistTitle">球高分布</span>
+                <span id="bcRawHistStats"></span>
+                <svg class="fold-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M6 14.5 12 8.5l6 6"/>
+                </svg>
+            </button>
+            <div id="bcRawHistBody">
+                <div class="hist-wrap" id="bcRawHistWrap">
+                    <canvas id="bcRawHistCanvas"></canvas>
+                    <div class="bc-hist-handle" id="bcRawHistLo"><span id="bcRawHistValLo"></span></div>
+                    <div class="bc-hist-handle" id="bcRawHistHi"><span id="bcRawHistValHi"></span></div>
+                    <div class="hist-tip" id="bcRawHistTip" hidden></div>
+                </div>
+                <div class="bc-hist-axis">
+                    <span id="bcRawHistMin"></span>
+                    <span id="bcRawHistAxisLabel" data-i18n="bc.rawHistAxis">球高</span>
+                    <span id="bcRawHistMax"></span>
+                </div>
+            </div>
+        </div>
+        <div class="bc-hist-panel" id="bcBumpDetailPanel" hidden>
+            <button type="button" class="fold-bar" id="bcBumpDetailFold" aria-expanded="true" aria-controls="bcBumpDetailBody" title="收合 Bump 詳細資料" aria-label="收合 Bump 詳細資料">
+                <span class="fold-bar-title" data-i18n="bc.bumpDetailTitle">Bump 詳細資料</span>
+                <span id="bcBumpDetailStats"></span>
+                <svg class="fold-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M6 14.5 12 8.5l6 6"/>
+                </svg>
+            </button>
+            <div id="bcBumpDetailBody">
+                <p class="bump-detail-empty" id="bcBumpDetailEmpty" hidden></p>
+                <div id="bcBumpDetailContent" hidden>
+                    <div class="bump-detail-summary">
+                        <div>
+                            <span class="k" data-i18n="bc.bumpDetailApex">頂點 Z</span>
+                            <span class="v" id="bcBumpDetailApexValue"></span>
+                        </div>
+                        <div>
+                            <span class="k" data-i18n="bc.bumpDetailBase" data-i18n-title="bc.bumpDetailBaseTitle" title="ΔZ = 頂點 Z − 這個基底 Z">ΔZ 基底 Z</span>
+                            <span class="v" id="bcBumpDetailBaseValue"></span>
+                        </div>
+                        <div>
+                            <span class="k" data-i18n="bc.bumpDetailMedian">Donut 中位數</span>
+                            <span class="v" id="bcBumpDetailMedianValue"></span>
+                        </div>
+                    </div>
+                    <div class="bump-detail-cols">
+                        <section>
+                            <h3 id="bcBumpDetailZTitle"></h3>
+                            <div class="bump-detail-list" id="bcBumpDetailZ"></div>
+                        </section>
+                        <section>
+                            <h3 id="bcBumpDetailDonutTitle"></h3>
+                            <div class="bump-detail-list" id="bcBumpDetailDonut"></div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <aside class="bc-side">
+        <div class="side-body">
+        <section data-side="0">
+            <h2 data-i18n="bc.stepLoad">載入</h2>
+            <p data-i18n="bc.loadHint">初始資料是一整片晶圓的 Z 高度圖。一次載入一個檔案（支援檢視器的所有格式）。</p>
+        </section>
+        <section data-side="1" hidden>
+            <h2 data-i18n="bc.stepDenoise">刪除雜點</h2>
+            <p data-i18n="bc.denoiseHint">拖曳左右界線，留下包含所有 Bump 的高度。界線外的像素會變成 NaN。</p>
+        </section>
+        <section data-side="2" hidden>
+            <h2 data-i18n="bc.stepBump">識別 Bump</h2>
+            <p data-i18n="bc.contourHint">以上一步留下的連通輪廓為準。外接矩形的兩邊分別落在長度與寬度範圍內就保留，方向不拘，其餘變成 NaN。請先把基底壓成 NaN，讓每一顆 Bump 分開。</p>
+            <label>
+                <span data-i18n="bc.lengthLabel">長度範圍 (pixel)</span>
+                <span class="range-row">
+                    <input type="number" id="bcLengthMin" min="1" step="1" value="8" />
+                    <span>~</span>
+                    <input type="number" id="bcLengthMax" min="1" step="1" value="11" />
+                </span>
+            </label>
+            <label>
+                <span data-i18n="bc.widthLabel">寬度範圍 (pixel)</span>
+                <span class="range-row">
+                    <input type="number" id="bcWidthMin" min="1" step="1" value="8" />
+                    <span>~</span>
+                    <input type="number" id="bcWidthMax" min="1" step="1" value="11" />
+                </span>
+            </label>
+            <label>
+                <span data-i18n="bc.isolationLabel">隔離距離 (pixel)</span>
+                <input type="number" id="bcIsolationPx" min="0" step="1" value="0" />
+            </label>
+            <p data-i18n="bc.isolationHint">輪廓到其他非 NaN 像素的距離必須大於這個值才保留。上下左右與斜向都算 1 pixel。設為 0 表示不檢查。</p>
+            <label>
+                <span data-i18n="bc.noiseLabel">雜點上限 (pixel)</span>
+                <input type="number" id="bcNoiseMax" min="0" step="1" value="0" />
+            </label>
+            <p data-i18n="bc.noiseHint">隔離時略過像素數不超過這個值的鄰近輪廓。設為 0 表示每個非 NaN 都計入。</p>
+            <button type="button" class="nav-btn primary" id="bcBtnIdentify" data-i18n="bc.btnIdentify">識別 Bump</button>
+            <p id="bcBumpCount"></p>
+            <p data-i18n="bc.measureHint">距離測量：按右側量尺，按住左鍵拖曳兩點；可拖曳端點或線段調整，中鍵拖曳平移。</p>
+            <p data-i18n="bc.peekHint">識別完成後，按「看原圖」切換到識別前的圖，再按一次回到識別結果。</p>
+        </section>
+        <section data-side="3" hidden>
+            <h2 data-i18n="bc.stepDonut">基底對照</h2>
+            <p data-i18n="bc.donutHint">環帶從 Bump 輪廓往外量。基底高度取自載入時的原圖，左為 Bump，右為基底。</p>
+            <label>
+                <span data-i18n="bc.donutLabel">Donut 寬度 (pixel)</span>
+                <input type="number" id="bcDonutWidth" min="1" step="1" value="4" />
+            </label>
+            <label>
+                <span data-i18n="bc.outlierLabel">離群過濾</span>
+                <select id="bcOutlier">
+                    <option value="sigma" data-i18n="bc.outlierSigma">標準差</option>
+                    <option value="ransac" data-i18n="bc.outlierRansac">RANSAC</option>
+                    <option value="none" data-i18n="bc.outlierNone">不過濾</option>
+                </select>
+            </label>
+        </section>
+        <section data-side="4" hidden>
+            <h2 data-i18n="bc.stepResult">計算結果</h2>
+            <label id="bcDotSizeField" hidden>
+                <span class="dot-size-head">
+                    <span data-i18n="bc.dotSizeLabel">圓點大小</span>
+                    <span id="bcDotSizeValue">1.0×</span>
+                </span>
+                <input type="range" id="bcDotSize" min="0.4" max="4" step="0.1" value="1" data-i18n-title="bc.dotSizeTitle" title="調整 H 圖、球高圖與 Donut 中位數圖的圓點大小" />
+            </label>
+            <p data-i18n="bc.stepHeightHint">量階高：按右側剖面，在圖上拖一條線。剖面沿目前畫面上看得到的高度取值。再到剖面圖按測量，點兩個點，就會標出距離與階高。</p>
+            <div class="result-grid" id="bcResultBox" hidden>
+                <div><span data-i18n="bc.resultPv">共面性 PV</span><strong data-k="pv"></strong></div>
+                <div><span data-i18n="bc.resultMean">平均真實高度</span><strong data-k="mean"></strong></div>
+                <div><span data-i18n="bc.resultTilt">最大傾角</span><strong data-k="tilt"></strong></div>
+                <div><span data-i18n="bc.resultInliers">基底內點</span><strong data-k="inliers"></strong></div>
+                <div><span data-i18n="bc.resultBumps">Bump 數</span><strong data-k="bumps"></strong></div>
+            </div>
+            <div class="result-table-bar" id="bcResultTableBar" hidden>
+                <p class="result-focus-hint" id="bcResultFocusHint" data-i18n="bc.focusBumpHint">點一列，圖會移到該顆 Bump。右側按鈕可清除定位標記。</p>
+                <button type="button" class="tool-btn" id="bcBtnExportCsv" data-i18n="bc.btnExportCsv" data-i18n-title="bc.btnExportCsvTitle" title="把計算結果表格存成 CSV">輸出 CSV</button>
+            </div>
+            <div class="table-wrap">
+                <div class="result-head-clip"><table id="bcResultHead"></table></div>
+                <div class="result-scroll" id="bcResultScroll"><table id="bcResultTable"></table></div>
+            </div>
+        </section>
+        </div>
+        <div class="colorbar-bar" id="bcColorbarBar" hidden>
+            <div class="colorbar-head">
+                <strong id="bcColorbarTitle" data-i18n="bc.sideColorbar">色階 (Z 值)</strong>
+                <div class="colorbar-actions">
+                    <button type="button" class="bc-cb-reset" id="bcCbFitView" data-i18n="bc.colorbarFitView" data-i18n-title="bc.colorbarFitViewTitle">依視圖</button>
+                    <button type="button" class="bc-cb-reset" id="bcCbReset" data-i18n="bc.colorbarReset">重設色階範圍</button>
+                </div>
+            </div>
+            <div class="colorbar-scale">
+                <div class="bc-colorbar-track" id="bcColorbarTrack">
+                    <canvas id="bcColorbarCanvas" width="320" height="14"></canvas>
+                    <div class="bc-cb-handle" id="bcCbHandleLo">
+                        <span class="bc-cb-handle-val" id="bcCbValLo"></span>
+                    </div>
+                    <div class="bc-cb-handle" id="bcCbHandleHi">
+                        <span class="bc-cb-handle-val" id="bcCbValHi"></span>
+                    </div>
+                </div>
+                <div class="bc-minmax">
+                    <span class="bc-mm-item mm-lo">
+                        <span class="bc-mm-label" data-i18n="bc.zMinLabel">最小值 (Min)</span>
+                        <span class="bc-mm-val" id="bcZMin">-</span>
+                    </span>
+                    <span class="bc-mm-item bc-mm-hi">
+                        <span class="bc-mm-label" data-i18n="bc.zMaxLabel">最大值 (Max)</span>
+                        <span class="bc-mm-val" id="bcZMax">-</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="nav-row">
+            <button type="button" class="nav-btn" id="bcBtnPrev" data-i18n="bc.btnPrev">上一步</button>
+            <button type="button" class="nav-btn primary" id="bcBtnNext" data-i18n="bc.btnNext">下一步</button>
+        </div>
+    </aside>
+</main>
+</div>
+
+<div class="bc-page" id="bcPageOverlay">
+<header class="bc-top">
+    <h1><span data-i18n="bc.tabOverlay">疊圖分析</span></h1>
+    <div class="bc-controls">
+        <label class="bc-ctrl-field bc-ctrl-field--colormap">
+            <span data-i18n="bc.labelColormap">色彩：</span>
+            <select id="bcOverlayColormap">
+                <option value="viridis">Viridis</option>
+                <option value="jet" selected>Jet</option>
+                <option value="hot">Hot</option>
+                <option value="gray">Gray</option>
+                <option value="inferno">Inferno</option>
+                <option value="bwr">BWR</option>
+            </select>
+        </label>
+        <button type="button" class="bc-icon-btn" id="bcOverlayClear" data-i18n-title="bc.overlayClearTitle" data-i18n-aria="bc.overlayClearTitle" title="清除正面、背面與疊圖結果" aria-label="清除正面、背面與疊圖結果" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 7h16"/>
+                <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                <path d="M6 7l1 13a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/>
+                <path d="M10 11v5"/>
+                <path d="M14 11v5"/>
+            </svg>
+        </button>
+        <button type="button" class="bc-info-btn" id="bcOverlayBtnInfo" data-i18n-title="bc.infoBtn" data-i18n-aria="bc.infoBtn">i</button>
+    </div>
+</header>
+<ol class="stepper">
+    <li><button type="button" class="step active" id="bcOverlayStepLoad" data-i18n="bc.overlayStepLoad">載入</button></li>
+    <li><button type="button" class="step" id="bcOverlayStepResult" data-i18n="bc.overlayStepResult" disabled>疊圖結果</button></li>
+</ol>
+<main class="bc-workspace">
+    <div class="viewer-col overlay-viewer-col">
+        <div class="overlay-progress" id="bcOverlayProgress" hidden>
+            <div class="overlay-progress-bar" id="bcOverlayProgressBar"></div>
+        </div>
+        <div class="overlay-board" id="bcOverlayLoad"></div>
+        <div class="overlay-board" id="bcOverlayResult" hidden></div>
+    </div>
+    <aside class="bc-side">
+        <section id="bcOverlaySideLoad">
+            <h2 data-i18n="bc.overlayStepLoad">載入</h2>
+            <p data-i18n="bc.overlayLoadHint">左邊載入正面、右邊載入背面。需要的話先按左右鏡像，讓兩邊的穿孔方位一致，再開始分析。分析會用三個圓穿孔對位，只把對得上的 bump 高度相加。</p>
+            <p id="bcOverlayStatus"></p>
+            <button type="button" class="nav-btn primary" id="bcOverlayStart" data-i18n="bc.overlayStart" disabled>開始疊圖分析</button>
+        </section>
+        <section id="bcOverlaySideResult" hidden>
+            <h2 data-i18n="bc.overlayStepResult">疊圖結果</h2>
+            <label id="bcOverlayDotSizeField">
+                <span class="dot-size-head">
+                    <span data-i18n="bc.dotSizeLabel">圓點大小</span>
+                    <span id="bcOverlayDotSizeValue">1.0×</span>
+                </span>
+                <input type="range" id="bcOverlayDotSize" min="0.4" max="4" step="0.1" value="1" data-i18n-title="bc.overlayDotSizeTitle" title="調整正面、背面與相加圖上的圓點大小" />
+            </label>
+            <p data-i18n="bc.overlayProfileHint">量階高：在任一張圖拖一條線，三張圖會畫上同一條線。每張圖下方各自有剖面，可在剖面上點兩個點量階高。線段和階高標記旁的小叉可移除該項。</p>
+            <div class="result-grid" id="bcOverlayStats"></div>
+        </section>
+        <div id="bcOverlayMeasureReadout" hidden></div>
+    </aside>
+</main>
+</div>
+
+<div class="modal" id="bcInfoDialog" hidden>
+    <div class="modal-card bc-info-card">
+        <h2 data-i18n="bc.infoTitle">關於與說明</h2>
+        <div class="bc-info-body">
+            <p data-i18n="bc.infoLead">分析分頁處理單張高度圖，格式與點雲檢視器相同。流程是刪除雜點、找出每一顆 Bump、取出周圍的 Donut 基底，再去掉晶圓翹曲，得到各顆的真實高度與共面性。</p>
+            <h3 data-i18n="bc.infoStepsTitle">五個步驟</h3>
+            <ul>
+                <li data-i18n="bc.infoStepLoad">載入：一次開啟一張高度圖，也可以把檔案拖進畫面。</li>
+                <li data-i18n="bc.infoStepDenoise">刪除雜點：在高度分布上拖左右界線，留下包含 Bump 的高度；也可按自動，依分布帶入一組界線。界線外的高度在後續步驟視為無效，原始檔案不會被改寫。</li>
+                <li data-i18n="bc.infoStepBump">識別 Bump：以上一步留下的連通輪廓為準。外接矩形的長與寬都落在設定範圍內就保留，方向不拘，其餘視為無效。隔離距離要求輪廓與其他有效像素分開；雜點上限可讓隔離時略過太小的鄰近輪廓。設為 0 表示不做該項檢查。</li>
+                <li data-i18n="bc.infoStepDonut">基底對照：Donut 從 Bump 輪廓往外量，寬度以 pixel 計，高度取自載入時的原圖。畫面左邊是 Bump，右邊是基底。離群過濾可選標準差、RANSAC 或不過濾，用來決定哪些基底點參與後面的曲面擬合。</li>
+                <li data-i18n="bc.infoStepResult">計算結果：用留下的基底點擬合一張全域二次曲面，再計算每一顆 Bump 的高度。至少需要 3 顆 Bump，過濾後的基底點至少 6 點。</li>
+            </ul>
+            <h3 data-i18n="bc.infoValuesTitle">每一顆的數值</h3>
+            <ul>
+                <li data-i18n="bc.infoValueDz">ΔZ：頂點 Z 減去全域曲面在該頂點的高度。</li>
+                <li data-i18n="bc.infoValueH">H：去翹曲後的真實高度，等於 ΔZ × cos(傾角)。</li>
+                <li data-i18n="bc.infoValueRaw">球高：頂點 Z 減去該顆 Donut 的中位 Z。</li>
+                <li data-i18n="bc.infoValueGap">球高 − ΔZ：球高與 ΔZ 的差。正值表示曲面高於旁邊的 Donut。</li>
+                <li data-i18n="bc.infoValuePv">共面性 PV：各顆 H 扣掉最佳平面後，殘差的最大值減最小值。側欄同時列出平均真實高度、最大傾角、參與擬合的基底點數與 Bump 數。傾角是全域曲面在該顆頂點的傾斜角度，殘差是該顆 H 相對最佳平面的偏差。</li>
+            </ul>
+            <h3 data-i18n="bc.infoViewsTitle">看結果與量測</h3>
+            <p data-i18n="bc.infoViews">計算完成後可切換總圖、H 圖、球高圖與 Donut 中位數圖。後三張以圓點表示每一顆，可用分布圖的左右界線篩選，並標記最高與最低。點表格一列會把圖移到該顆 Bump，結果可輸出 CSV。圖上可平移、讀數值、量距離與量階高；剖面沿目前畫面上看得到的高度取值。右鍵可把整張圖或目前視野存成 BCRF 或 ASC。</p>
+        </div>
+        <button type="button" class="nav-btn" id="bcInfoClose" data-i18n="bc.infoClose">關閉</button>
+    </div>
+</div>
+
+<div class="modal" id="bcOverlayInfoDialog" hidden>
+    <div class="modal-card bc-info-card">
+        <h2 data-i18n="bc.infoTitle">關於與說明</h2>
+        <div class="bc-info-body">
+            <p data-i18n="bc.overlayInfoLead">疊圖分析把同一片的正面與背面高度圖對在一起，只把對得上的 Bump 高度相加。格式與點雲檢視器相同，兩張圖的像素數可以不同。</p>
+            <h3 data-i18n="bc.overlayInfoStepsTitle">怎麼對位</h3>
+            <ul>
+                <li data-i18n="bc.overlayInfoStepLoad">左邊載入正面、右邊載入背面，可拖曳檔案，或按該圖標題欄的資料夾開啟。標題欄的垃圾桶只清除這一側，上方垃圾桶一次清除兩邊。圖上的 Bump 需要是分開的有效區域，並要有可辨認的圓形穿孔。</li>
+                <li data-i18n="bc.overlayInfoStepMirror">若左右方向相反，先按左右鏡像，讓兩邊的穿孔方位一致。鏡像只用於這次分析，不改原始檔案。</li>
+                <li data-i18n="bc.overlayInfoStepAlign">開始分析後，各自把連在一起的有效像素當成一顆 Bump，面積明顯偏小的會略過，並找出最大的三個圓穿孔。再用這三個孔做旋轉與平移對位，不縮放，也不另外鏡像。孔對得上但 Bump 重疊太低時，請先鏡像再分析。</li>
+                <li data-i18n="bc.overlayInfoStepPair">對位後，把距離夠近的正面與背面 Bump 配成唯一的一對。相加高度是兩顆 Bump 有效像素的平均 Z 相加。對不上的顆數會分開統計。</li>
+            </ul>
+            <h3 data-i18n="bc.overlayInfoResultTitle">三張圖與統計</h3>
+            <p data-i18n="bc.overlayInfoResult">結果有三張同步的圖：正面、對齊到正面座標的背面，以及相加圖。相加圖只畫出配對成功的 Bump。三張圖都以圓點表示每一顆，顏色對應該顆高度；相加圖的顏色是相加高度。側欄列出配對顆數、只有正面、只有背面、正面與背面顆數、旋轉角、孔心殘差、Bump 重疊率、配對距離、節距、圓盤直徑，以及相加高度的中位數、5%–95% 與最小／最大。</p>
+            <h3 data-i18n="bc.overlayInfoMeasureTitle">量測</h3>
+            <p data-i18n="bc.overlayInfoMeasure">三張圖的平移、縮放、距離測量與剖面線同步。在任一張圖拖一條剖面，三張圖會畫上同一條線；每張圖下方的剖面可各自點兩個點量階高。線段和階高標記旁的小叉可移除該項。可標記最高與最低，並調整圓點大小。</p>
+        </div>
+        <button type="button" class="nav-btn" id="bcOverlayInfoClose" data-i18n="bc.infoClose">關閉</button>
+    </div>
+</div>
+
+<div class="bc-ctx-menu" id="bcImageMenu" hidden role="menu">
+    <div class="ctx-group">
+        <div class="ctx-label" data-i18n="bc.saveFull">儲存當前整張圖</div>
+        <div class="ctx-formats">
+            <button type="button" data-save="full" data-fmt="bcrf" data-i18n="bc.saveFormatBcrf">BCRF</button>
+            <button type="button" data-save="full" data-fmt="asc" data-i18n="bc.saveFormatAsc">ASC</button>
+        </div>
+    </div>
+    <div class="ctx-group">
+        <div class="ctx-label" data-i18n="bc.saveView">儲存當前視圖</div>
+        <div class="ctx-formats">
+            <button type="button" data-save="view" data-fmt="bcrf" data-i18n="bc.saveFormatBcrf">BCRF</button>
+            <button type="button" data-save="view" data-fmt="asc" data-i18n="bc.saveFormatAsc">ASC</button>
+        </div>
+    </div>
+</div>
+        </div><!-- /#bcRoot -->
 
         <aside class="side an-side">
             <h2 data-i18n="sideProgress">進度</h2>
@@ -2643,6 +3205,10 @@
 <script src="js/batch-edit.js"></script>
 <script src="js/roughness.js"></script>
 <script src="js/overlay-analysis.js"></script>
+<script src="js/bump-engine.js"></script>
+<script src="js/bump-inspection.js"></script>
+<script src="js/bump-overlay.js"></script>
+<script src="js/bump-analysis.js"></script>
 <script src="js/analysis-ui.js"></script>
 <script src="js/info-dialog.js"></script>
 <script src="js/app.js"></script>

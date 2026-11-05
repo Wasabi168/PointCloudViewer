@@ -22,6 +22,19 @@ const PREFS_DEFAULTS = {
     csvXunit: 'mm',
     csvYunit: 'mm',
     csvZunit: 'um',
+    // Bump 分析（移植自 BumpCop）
+    bcLengthMin: 8,
+    bcLengthMax: 11,
+    bcWidthMin: 8,
+    bcWidthMax: 11,
+    bcIsolationPx: 0,
+    bcNoiseMax: 0,
+    bcDonutWidth: 4,
+    bcOutlier: 'sigma',
+    bcColormap: 'jet',
+    bcProfileChartStyle: 'line',
+    bcDotScale: 1,
+    bcSubTab: 'inspect',
 };
 
 let userPrefs = (() => {

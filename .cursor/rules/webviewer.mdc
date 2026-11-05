@@ -13,7 +13,8 @@ alwaysApply: false
 | 路徑 | 用途 |
 |------|------|
 | `index.html` | HTML 骨架與 `<script>` 載入順序（勿在此寫邏輯） |
-| `css/main.css` | 全部樣式 |
+| `css/main.css` | 全部樣式（Bump 分析除外） |
+| `css/bump.css` | Bump 分析樣式（全部限定在 `#bcRoot` 之下，避免與主樣式衝突） |
 | `js/*.js` | 依功能拆分的 JavaScript 模組 |
 
 ## JS 載入順序（不可任意調換）
@@ -38,8 +39,12 @@ alwaysApply: false
 17. `batch-edit.js` — 批次編輯頁
 18. `roughness.js` — 表面粗糙度演算（Sa/Sq 等）
 19. `overlay-analysis.js` — 疊圖分析（雙圖同步視埠／剖線／剖面圖）
-20. `analysis-ui.js` — 點雲分析頁
-21. `app.js` — 頁面切換與啟動初始化
+20. `bump-engine.js` — Bump 分析運算引擎（`BumpEngine`：Bump 識別、共面性、正反面疊圖；移植自 BumpCop 的 Python 後端）
+21. `bump-inspection.js` — Bump 分析「分析」子頁 UI（五步流程；DOM id 以 `bc` 前綴，i18n 鍵以 `bc.` 前綴）
+22. `bump-overlay.js` — Bump 分析「疊圖分析」子頁 UI
+23. `bump-analysis.js` — `BumpAnalysis`：子頁切換、關於對話框、與 `AnalysisView` 的整合
+24. `analysis-ui.js` — 點雲分析頁
+25. `app.js` — 頁面切換與啟動初始化
 
 ## 編輯慣例
 
@@ -64,4 +69,6 @@ alwaysApply: false
 - 點雲分析／粗糙度 → `roughness.js`、`analysis-ui.js`、`overlay-analysis.js`
   - 區域參數（Sa/Sq…）與輪廓參數（Ra/Rq…）
   - 疊圖分析（雙圖同步比較）
+- Bump 分析（點雲分析頁的「Bump分析」導覽項）→ `bump-engine.js`（演算法）、`bump-inspection.js`（分析子頁）、`bump-overlay.js`（疊圖分析子頁）、`bump-analysis.js`（整合）、`css/bump.css`
+  - HTML 位於 `index.html` 的 `#bcRoot`；所有 id 皆以 `bc` 前綴、CSS 選擇器皆以 `#bcRoot` 開頭、翻譯鍵皆以 `bc.` 開頭
 - 翻譯字串 → `i18n.js`
