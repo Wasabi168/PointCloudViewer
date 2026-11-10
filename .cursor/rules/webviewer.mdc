@@ -24,8 +24,9 @@ alwaysApply: false
 3. `file-parse.js` — 讀檔解析
 4. `file-export.js` — 寫檔輸出
 5. `segment-level.js` — 自動分區水平校正演算法
-6. `segment-skew.js` — 自動分區錯位校正演算法
-7. `median-filter.js` — 中值濾波後處理
+6. `uni-level.js` — 單向水平校正演算法
+7. `segment-skew.js` — 自動分區錯位校正演算法
+8. `median-filter.js` — 中值濾波後處理
 8. `batch-pipeline.js` — 批次編輯步驟管線
 8. `colormap.js` — 色彩映射
 9. `render.js` — 2D canvas 繪製
@@ -63,6 +64,7 @@ alwaysApply: false
 - 批次轉檔 → `batch-convert.js`
 - 批次編輯流程 → `batch-edit.js`、`batch-pipeline.js`、`batch-file-manager.js`
 - 自動分區水平校正 → `segment-level.js`、`image-view.js`
+- 單向水平校正 → `uni-level.js`、`image-view.js`
 - 擇區水平校正 → `batch-pipeline.js`（`analyzeRoiLeveling`）、`image-view.js`
 - 自動分區錯位校正 → `segment-skew.js`、`image-view.js`
 - 中值濾波 → `median-filter.js`、`image-view.js`

@@ -746,92 +746,159 @@ if (supportsSavePicker) {
     if (saveFormatItem) saveFormatItem.style.display = 'none';
 }
 
-/** 實際產生檔案並更新 UI（picker 與 fallback 兩條路徑共用） */
-async function runSaveJob(format, writeFn, fullName) {
-    btnSave.disabled = true;
-    setBusy(btnSave, true);
-    btnSave.title = t('btnSaving');
-    btnSave.setAttribute('aria-label', t('btnSaving'));
-    setProgress(0);
-    statusEl.textContent = t('statusSaving', fullName);
+/** 實際產生檔案並更新 UI（工具列按鈕與圖片右鍵選單共用） */
+async function saveViewerDataset(dataset, extra) {
+    extra = extra || {};
+    if (!dataset) {
+        showToast(t('toastNoData'), 'error');
+        return;
+    }
+    const range = effectiveColorRange(extra.colorDataset || dataset);
+    let began = false;
     try {
-        await writeFn();
-        statusEl.textContent = t('statusSaved', fullName);
-        showToast(t('toastSaved', fullName), 'info');
+        const result = await commitDatasetSave(dataset, {
+            preferred: saveFormatSelect ? saveFormatSelect.value : 'bcrf',
+            onProgress: setProgress,
+            nameSuffix: extra.nameSuffix || '',
+            visual: {
+                liveCanvas: document.getElementById('canvas'),
+                cmap: cmapSelect.value,
+                cmin: extra.cmin != null ? extra.cmin : range.cmin,
+                crange: extra.crange != null ? extra.crange : range.crange,
+                viewCrop: !!extra.viewCrop,
+                bitmapCanvas: extra.bitmapCanvas || null,
+                bitmapViewport: extra.bitmapViewport || null,
+            },
+            onBegin(fullName) {
+                began = true;
+                btnSave.disabled = true;
+                setBusy(btnSave, true);
+                btnSave.title = t('btnSaving');
+                btnSave.setAttribute('aria-label', t('btnSaving'));
+                setProgress(0);
+                statusEl.textContent = t('statusSaving', fullName);
+            },
+        });
+        if (!result || result.cancelled) return;
+        if (result.rejected) {
+            showToast(t('savePcdScatter'), 'info');
+            return;
+        }
+        statusEl.textContent = t('statusSaved', result.fullName);
+        showToast(t('toastSaved', result.fullName), 'info');
     } catch (err) {
         console.error(err);
         statusEl.textContent = t('statusSaveFailed', err.message);
         showToast(t('statusSaveFailed', err.message), 'error');
     } finally {
         hideProgress();
-        btnSave.disabled = false;
-        setBusy(btnSave, false);
-        btnSave.title = t('btnSave');
-        btnSave.setAttribute('aria-label', t('btnSave'));
+        if (began) {
+            btnSave.disabled = false;
+            setBusy(btnSave, false);
+            btnSave.title = t('btnSave');
+            btnSave.setAttribute('aria-label', t('btnSave'));
+        }
     }
 }
 
-btnSave.addEventListener('click', async () => {
+function saveViewerFromMenu(kind) {
     if (!currentDataset) {
         showToast(t('toastNoData'), 'error');
         return;
     }
-
-    const preferred = saveFormatSelect.value;
-    const allowed = getAllowedSaveFormats(currentDataset);
-    const base = stripExt(currentDataset.filename || 'image');
-
-    // ---- 支援 File System Access API：用原生「另存新檔」視窗，格式在視窗下方選 ----
-    if (supportsSavePicker) {
-        // 預設選中的格式：使用者偏好；若該格式不適用此資料集則退回第一個可用格式
-        const defaultFormat = allowed.includes(preferred) ? preferred : allowed[0];
-        let handle;
-        try {
-            handle = await window.showSaveFilePicker({
-                suggestedName: `${base}.${formatToExt(defaultFormat)}`,
-                types: buildPickerTypes(allowed, defaultFormat),
-            });
-        } catch (err) {
-            if (err && err.name === 'AbortError') return;   // 使用者取消
-            // 其他錯誤（例如非安全環境）→ 退回傳統下載
-            console.warn('showSaveFilePicker 失敗，改用下載方式：', err);
-            return fallbackSave(defaultFormat, base);
-        }
-
-        // 依使用者在視窗中實際選定的副檔名決定輸出格式
-        const chosenExt = getExt(handle.name);
-        const format = extToFormat(chosenExt) || defaultFormat;
-        if (!allowed.includes(format)) {
-            showToast(t('savePcdScatter'), 'info');
+    const range = effectiveColorRange(currentDataset);
+    let target = currentDataset;
+    const extra = { cmin: range.cmin, crange: range.crange, colorDataset: currentDataset };
+    if (kind === 'view') {
+        const canvas = document.getElementById('canvas');
+        const cropped = cropDatasetToVisible(
+            currentDataset,
+            canvas,
+            viewerEl,
+            isPcdScatterDataset(currentDataset) ? scatterView : null,
+        );
+        if (!cropped) {
+            showToast(t('imgSaveViewEmpty'), 'error');
             return;
         }
-        const fullName = handle.name || `${base}.${formatToExt(format)}`;
-
-        await runSaveJob(format, async () => {
-            const blob = await buildSaveBlob(currentDataset, format, setProgress);
-            const writable = await handle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-        }, fullName);
-        return;
+        target = cropped;
+        extra.nameSuffix = '_view';
+        extra.viewCrop = cropped !== currentDataset;
     }
+    saveViewerDataset(target, extra);
+}
 
-    // ---- 不支援時的 fallback：沿用工具列選單的格式直接下載 ----
-    fallbackSave(preferred, base);
-});
+btnSave.addEventListener('click', () => saveViewerFromMenu('full'));
 
 if (btnClear) btnClear.addEventListener('click', clearViewerData);
 
-/** 傳統下載（不支援 showSaveFilePicker 的瀏覽器） */
-function fallbackSave(format, base) {
-    const allowed = getAllowedSaveFormats(currentDataset);
-    if (!allowed.includes(format)) {
-        showToast(t('savePcdScatter'), 'info');
-        return;
-    }
-    const fullName = `${base}.${formatToExt(format)}`;
-    return runSaveJob(format, () => saveAs(currentDataset, format, setProgress), fullName);
+const IMAGE_CTX_SKIP = 'button, a, input, select, textarea, label, .profile-panel, .measure-panel, .viewer-cursor-toolbar, .hist-panel, .point-size-adjust, .seg-level-profile, .seg-level-profile-wrap, .seg-level-cbar, .seg-level-pane-head, .seg-level-tune';
+
+function isViewerImageContextTarget(event, root) {
+    const node = event.target;
+    if (!(node instanceof Element) || !root || !root.contains(node)) return false;
+    if (node.closest(IMAGE_CTX_SKIP)) return false;
+    if (node.closest('.seg-level-compare')) return false;
+    return true;
 }
+
+let imageSaveMenuAction = null;
+
+function closeImageSaveMenu() {
+    const menu = document.getElementById('imageSaveMenu');
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    imageSaveMenuAction = null;
+}
+
+function openImageSaveMenu(x, y, action) {
+    const menu = document.getElementById('imageSaveMenu');
+    if (!menu) return;
+    imageSaveMenuAction = action;
+    menu.hidden = false;
+    const margin = 8;
+    let left = x + 2;
+    let top = y + 2;
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    const rect = menu.getBoundingClientRect();
+    if (left + rect.width > window.innerWidth - margin) left = window.innerWidth - rect.width - margin;
+    if (top + rect.height > window.innerHeight - margin) top = window.innerHeight - rect.height - margin;
+    menu.style.left = Math.max(margin, left) + 'px';
+    menu.style.top = Math.max(margin, top) + 'px';
+}
+
+function bindImageSaveMenu() {
+    const menu = document.getElementById('imageSaveMenu');
+    if (!menu || menu.dataset.bound) return;
+    menu.dataset.bound = '1';
+    menu.addEventListener('contextmenu', (e) => e.preventDefault());
+    menu.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-save]');
+        if (!btn || !menu.contains(btn)) return;
+        const kind = btn.getAttribute('data-save');
+        const action = imageSaveMenuAction;
+        closeImageSaveMenu();
+        if (action) action(kind);
+    });
+    document.addEventListener('pointerdown', (e) => {
+        if (menu.hidden || menu.contains(e.target)) return;
+        closeImageSaveMenu();
+    }, true);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeImageSaveMenu();
+    });
+    window.addEventListener('wheel', () => closeImageSaveMenu(), { capture: true, passive: true });
+}
+
+bindImageSaveMenu();
+
+viewerEl.addEventListener('contextmenu', (e) => {
+    if (!currentDataset || view3dActive) return;
+    if (!isViewerImageContextTarget(e, viewerEl)) return;
+    e.preventDefault();
+    openImageSaveMenu(e.clientX, e.clientY, saveViewerFromMenu);
+});
 
 window.addEventListener('resize', () => {
     if (typeof Viewer3D !== 'undefined' && Viewer3D.isActive()) Viewer3D.onResize();

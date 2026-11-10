@@ -1484,7 +1484,7 @@ const BumpOverlay = (() => {
                     '</button>' +
                 '</div>' +
                 '<button type="button" class="bc-profile-icon-btn overlay-profile-pick" data-i18n-title="bc.profileMeasureTitle" data-i18n-aria="bc.profileMeasureTitle" title="量階高" aria-label="量階高">' +
-                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="17" r="2" fill="currentColor" stroke="none"/><circle cx="18" cy="7" r="2" fill="currentColor" stroke="none"/><path d="M8.5 15.5 15.5 8.5"/></svg>' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18h18"/><path d="M4 16 8 11 12 14 16 7 20 10"/><path d="M12 4v14" stroke-dasharray="2.5 2.5"/></svg>' +
                 '</button>' +
                 '<button type="button" class="bc-profile-icon-btn overlay-profile-clear" data-i18n-title="bc.profileMeasureClearTitle" data-i18n-aria="bc.profileMeasureClearTitle" title="清除階高測量" aria-label="清除階高測量" disabled>' +
                     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
@@ -2763,7 +2763,7 @@ const BumpOverlay = (() => {
         return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="2.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>';
     }
     function measureIcon() {
-        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="6" cy="18" r="2" fill="currentColor" stroke="none"/><circle cx="18" cy="6" r="2" fill="currentColor" stroke="none"/><path d="M8 16 16 8"/></svg>';
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8.5" width="18" height="8" rx="1.25"/><path d="M7 8.5v2.6M10.5 8.5v4M14 8.5v2.6M17.5 8.5v4"/></svg>';
     }
     function stepIcon() {
         return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"/><path d="M4 16 8 11 12 14 16 7 20 10"/><path d="M12 4v14" stroke-dasharray="2.5 2.5"/></svg>';

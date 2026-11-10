@@ -124,11 +124,9 @@
                     </svg>
                 </button>
                 <button type="button" data-cursor="measure" data-i18n-title="cursorMeasureTitle" data-i18n-aria="cursorMeasureTitle" title="距離測量：拖曳兩點量測距離，可拖曳端點調整" aria-label="距離測量：拖曳兩點量測距離，可拖曳端點調整">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
-                        <circle cx="6" cy="18" r="2" fill="currentColor" stroke="none"/>
-                        <circle cx="18" cy="6" r="2" fill="currentColor" stroke="none"/>
-                        <path d="M8 16 16 8"/>
-                        <path d="M10 14l2-2M13 11l2-2"/>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="8.5" width="18" height="8" rx="1.25"/>
+                        <path d="M7 8.5v2.6M10.5 8.5v4M14 8.5v2.6M17.5 8.5v4"/>
                     </svg>
                 </button>
                 <button type="button" data-cursor="area" data-i18n-title="cursorAreaTitle" data-i18n-aria="cursorAreaTitle" title="區域統計：拖曳矩形框選區域，顯示數值統計" aria-label="區域統計：拖曳矩形框選區域，顯示數值統計">
@@ -239,11 +237,9 @@
                 </svg>
             </button>
             <button type="button" data-cursor="measure" data-i18n-title="cursorMeasureTitle" title="兩點距離測量">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
-                    <circle cx="6" cy="18" r="2" fill="currentColor" stroke="none"/>
-                    <circle cx="18" cy="6" r="2" fill="currentColor" stroke="none"/>
-                    <path d="M8 16 16 8"/>
-                    <path d="M10 14l2-2M13 11l2-2"/>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="8.5" width="18" height="8" rx="1.25"/>
+                    <path d="M7 8.5v2.6M10.5 8.5v4M14 8.5v2.6M17.5 8.5v4"/>
                 </svg>
             </button>
             <button type="button" data-cursor="area" data-i18n-title="cursorAreaTitle" title="區域統計">
@@ -295,9 +291,9 @@
                 </div>
                 <button type="button" class="profile-icon-btn profile-measure-btn" id="profileMeasureBtn" style="display:none;" data-i18n-title="profileMeasureTitle" title="剖面測量：按一下後點選兩點量測一組（最多 5 組）">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <circle cx="6" cy="17" r="2" fill="currentColor" stroke="none"/>
-                        <circle cx="18" cy="7" r="2" fill="currentColor" stroke="none"/>
-                        <path d="M8.5 15.5 L15.5 8.5"/>
+                        <path d="M3 18h18"/>
+                        <path d="M4 16 8 11 12 14 16 7 20 10"/>
+                        <path d="M12 4v14" stroke-dasharray="2.5 2.5"/>
                     </svg>
                 </button>
                 <button type="button" class="profile-icon-btn profile-measure-clear-btn" id="profileMeasureClearBtn" style="display:none;" data-i18n-title="profileMeasureClearTitle" title="清除剖面測量" disabled>
@@ -493,6 +489,9 @@
                     <span class="ed-toolbar-label" data-i18n="toolGroupCalib">校正</span>
                     <button type="button" id="edGlobalLevel" data-i18n="globalLevel" data-i18n-title="globalLevelTitle">全域水平校正</button>
                     <span class="ed-tool-tip-host">
+                        <button type="button" id="edUniLevel" data-i18n="uniLevel" data-i18n-title="uniLevelTitle">單向水平校正</button>
+                    </span>
+                    <span class="ed-tool-tip-host">
                         <button type="button" id="edRoiLevel" data-i18n="roiLevel" data-i18n-title="roiLevelTitle">擇區水平校正</button>
                     </span>
                     <span class="ed-tool-tip-host">
@@ -593,11 +592,9 @@
                     </svg>
                 </button>
                 <button type="button" data-cursor="measure" data-i18n-title="cursorMeasureTitle" data-i18n-aria="cursorMeasureTitle" title="距離測量：拖曳兩點量測距離，可拖曳端點調整" aria-label="距離測量：拖曳兩點量測距離，可拖曳端點調整">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
-                        <circle cx="6" cy="18" r="2" fill="currentColor" stroke="none"/>
-                        <circle cx="18" cy="6" r="2" fill="currentColor" stroke="none"/>
-                        <path d="M8 16 16 8"/>
-                        <path d="M10 14l2-2M13 11l2-2"/>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="8.5" width="18" height="8" rx="1.25"/>
+                        <path d="M7 8.5v2.6M10.5 8.5v4M14 8.5v2.6M17.5 8.5v4"/>
                     </svg>
                 </button>
                 <button type="button" data-cursor="area" data-i18n-title="cursorAreaTitle" data-i18n-aria="cursorAreaTitle" title="區域統計：拖曳矩形框選區域，顯示數值統計" aria-label="區域統計：拖曳矩形框選區域，顯示數值統計">
@@ -648,9 +645,9 @@
                     </div>
                     <button type="button" class="profile-icon-btn profile-measure-btn" id="edProfileMeasureBtn" style="display:none;" data-i18n-title="profileMeasureTitle" title="剖面測量：按一下後點選兩點量測一組（最多 5 組）">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="6" cy="17" r="2" fill="currentColor" stroke="none"/>
-                            <circle cx="18" cy="7" r="2" fill="currentColor" stroke="none"/>
-                            <path d="M8.5 15.5 L15.5 8.5"/>
+                            <path d="M3 18h18"/>
+                            <path d="M4 16 8 11 12 14 16 7 20 10"/>
+                            <path d="M12 4v14" stroke-dasharray="2.5 2.5"/>
                         </svg>
                     </button>
                     <button type="button" class="profile-icon-btn profile-measure-clear-btn" id="edProfileMeasureClearBtn" style="display:none;" data-i18n-title="profileMeasureClearTitle" title="清除剖面測量" disabled>
@@ -703,6 +700,138 @@
             <div class="drop-hint" id="edDropHint">
                 <div class="icon" id="edDropIcon">&#x2B07;</div>
                 <div id="edDropText" data-i18n="dropSupported">放開以載入檔案</div>
+            </div>
+            <div class="seg-level-panel" id="edUniLevelPanel" aria-hidden="true">
+                <div class="seg-level-head">
+                    <div class="seg-level-title-wrap">
+                        <span class="seg-level-mode-badge" data-i18n="uniLevelModeName">單向水平校正模式</span>
+                        <button type="button" class="info-btn seg-level-info-btn" id="edUniLevelInfo" data-i18n-title="uniLevelInfoBtnTitle" data-i18n-aria="uniLevelInfoBtnTitle" title="單向水平校正說明" aria-label="單向水平校正說明">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true">
+                                <circle cx="12" cy="7" r="1.75" fill="currentColor" stroke="none"/>
+                                <path d="M12 11v8"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="seg-level-config" id="edUniLevelConfig" aria-hidden="true">
+                        <div class="seg-level-config-item">
+                            <span data-i18n="uniLevelLineLabel">校正線</span>
+                            <div class="cursor-toggle" id="edUniLevelLineToggle" role="group" data-i18n-aria="uniLevelLineLabel" aria-label="校正線">
+                                <button type="button" id="edUniLevelLineH" class="active" aria-pressed="true" data-i18n="uniLevelLineHorizontal" data-i18n-title="uniLevelLineHorizontalTitle" title="沿左右取一列，校正整張圖的左右傾斜">水平校正線</button>
+                                <button type="button" id="edUniLevelLineV" aria-pressed="false" data-i18n="uniLevelLineVertical" data-i18n-title="uniLevelLineVerticalTitle" title="沿上下取一欄，校正整張圖的上下傾斜">垂直校正線</button>
+                            </div>
+                        </div>
+                        <label class="seg-level-config-item" for="edUniLevelK">
+                            <span id="edUniLevelSlopeLabel">X 斜率 µm/mm</span>
+                            <input type="number" id="edUniLevelK" step="0.001" data-i18n-title="uniLevelSlopeHint" title="拖曳左側校正線會依該線高度重新計算斜率；也可在此修改後按 Enter" />
+                        </label>
+                        <button type="button" id="edUniLevelKReset" class="btn-secondary btn-small" data-i18n="uniLevelSlopeReset" data-i18n-title="uniLevelSlopeResetTitle">重設斜率</button>
+                    </div>
+                    <div class="seg-level-actions">
+                        <button type="button" id="edUniLevelApply" data-i18n="uniLevelApply" data-i18n-title="uniLevelApplyTitle">套用</button>
+                        <button type="button" id="edUniLevelCancel" class="btn-secondary" data-i18n="uniLevelCancel" data-i18n-title="uniLevelCancelTitle">取消</button>
+                    </div>
+                </div>
+                <div class="seg-level-compare" id="edUniLevelCompare">
+                    <div class="seg-level-pane">
+                        <div class="seg-level-pane-head">
+                            <span class="seg-level-pane-label" data-i18n="uniLevelBefore">校正前</span>
+                            <label class="seg-level-bounds-toggle seg-level-probe-toggle">
+                                <input type="checkbox" id="edUniLevelShowProbeBefore" checked />
+                                <span data-i18n="uniLevelShowProbe">顯示校正線</span>
+                            </label>
+                        </div>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap">
+                                <canvas id="edUniLevelBefore"></canvas>
+                            </div>
+                            <div class="seg-level-cbar" data-pane="before">
+                                <span class="seg-level-cbar-end seg-level-cbar-end-hi"></span>
+                                <div class="seg-level-cbar-track">
+                                    <canvas id="edUniLevelBeforeCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                    <div class="seg-level-cbar-handle is-hi" data-which="hi">
+                                        <span class="seg-level-cbar-val" id="edUniLevelBeforeCbHi"></span>
+                                    </div>
+                                    <div class="seg-level-cbar-handle is-lo" data-which="lo">
+                                        <span class="seg-level-cbar-val" id="edUniLevelBeforeCbLo"></span>
+                                    </div>
+                                </div>
+                                <span class="seg-level-cbar-end seg-level-cbar-end-lo"></span>
+                                <div class="seg-level-cbar-actions">
+                                    <button type="button" class="seg-level-cbar-btn" data-act="fit" data-i18n-title="segLevelColorFitTitle" data-i18n-aria="segLevelColorFitTitle" title="將色階兩端設為目前畫面裡的資料最小與最大值" aria-label="將色階兩端設為目前畫面裡的資料最小與最大值">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M4 9V4h5"/>
+                                            <path d="M15 4h5v5"/>
+                                            <path d="M20 15v5h-5"/>
+                                            <path d="M9 20H4v-5"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" class="seg-level-cbar-btn" data-act="reset" data-i18n-title="segLevelColorResetTitle" data-i18n-aria="segLevelColorResetTitle" title="色階恢復為這張圖的全部資料範圍" aria-label="色階恢復為這張圖的全部資料範圍">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M3 12a9 9 0 1 0 3-6.7"/>
+                                            <path d="M3 4v5h5"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="seg-level-profile-wrap">
+                            <canvas id="edUniLevelBeforeProfile" class="seg-level-profile" aria-hidden="true"></canvas>
+                        </div>
+                    </div>
+                    <div class="seg-level-pane seg-level-pane-after">
+                        <div class="seg-level-pane-head">
+                            <span class="seg-level-pane-label" data-i18n="uniLevelAfter">校正後</span>
+                            <label class="seg-level-bounds-toggle seg-level-probe-toggle">
+                                <input type="checkbox" id="edUniLevelShowProbeAfter" checked />
+                                <span data-i18n="uniLevelShowProbe">顯示校正線</span>
+                            </label>
+                        </div>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap">
+                                <canvas id="edUniLevelAfter"></canvas>
+                                <div class="seg-level-update-badge" id="edUniLevelUpdateBadge" hidden></div>
+                            </div>
+                            <div class="seg-level-cbar" data-pane="after">
+                                <span class="seg-level-cbar-end seg-level-cbar-end-hi"></span>
+                                <div class="seg-level-cbar-track">
+                                    <canvas id="edUniLevelAfterCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                    <div class="seg-level-cbar-handle is-hi" data-which="hi">
+                                        <span class="seg-level-cbar-val" id="edUniLevelAfterCbHi"></span>
+                                    </div>
+                                    <div class="seg-level-cbar-handle is-lo" data-which="lo">
+                                        <span class="seg-level-cbar-val" id="edUniLevelAfterCbLo"></span>
+                                    </div>
+                                </div>
+                                <span class="seg-level-cbar-end seg-level-cbar-end-lo"></span>
+                                <div class="seg-level-cbar-actions">
+                                    <button type="button" class="seg-level-cbar-btn" data-act="fit" data-i18n-title="segLevelColorFitTitle" data-i18n-aria="segLevelColorFitTitle" title="將色階兩端設為目前畫面裡的資料最小與最大值" aria-label="將色階兩端設為目前畫面裡的資料最小與最大值">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M4 9V4h5"/>
+                                            <path d="M15 4h5v5"/>
+                                            <path d="M20 15v5h-5"/>
+                                            <path d="M9 20H4v-5"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" class="seg-level-cbar-btn" data-act="reset" data-i18n-title="segLevelColorResetTitle" data-i18n-aria="segLevelColorResetTitle" title="色階恢復為這張圖的全部資料範圍" aria-label="色階恢復為這張圖的全部資料範圍">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M3 12a9 9 0 1 0 3-6.7"/>
+                                            <path d="M3 4v5h5"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="seg-level-profile-wrap">
+                            <canvas id="edUniLevelAfterProfile" class="seg-level-profile" aria-hidden="true"></canvas>
+                        </div>
+                        <div class="seg-level-tune-busy" id="edUniLevelBusy" aria-hidden="true">
+                            <div class="seg-level-tune-busy-card">
+                                <div class="seg-level-spinner" aria-hidden="true"></div>
+                                <span class="seg-level-tune-busy-text" id="edUniLevelBusyText" data-i18n="uniLevelUpdating">正在更新預覽…</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="seg-level-panel" id="edRoiLevelPanel" aria-hidden="true">
                 <div class="seg-level-head">
@@ -825,27 +954,67 @@
                     </div>
                 </div>
                 <div class="seg-level-tune" id="edSegLevelTune" aria-hidden="true">
-                    <div class="seg-level-tune-head">
-                        <span class="seg-level-tune-title" data-i18n="segLevelTuneTitle">傾斜微調</span>
-                        <span class="seg-level-tune-hint" id="edSegLevelTuneHint" data-i18n="segLevelTuneHint">全圖各帶共用同一斜率，調整後右側結果圖與折線圖會即時更新</span>
-                        <button type="button" id="edSegLevelTuneReset" class="btn-secondary btn-small" data-i18n="segLevelTuneReset" data-i18n-title="segLevelTuneResetTitle">重設斜率</button>
+                    <div class="seg-level-tune-col">
+                        <div class="seg-level-tune-head">
+                            <span class="seg-level-tune-title" data-i18n="segLevelTuneTitle">斜率微調</span>
+                            <span class="seg-level-tune-hint" id="edSegLevelTuneHint" data-i18n="segLevelTuneHint">全圖各帶共用同一斜率，調整後右側結果圖與折線圖會即時更新</span>
+                            <button type="button" id="edSegLevelTuneReset" class="btn-secondary btn-small" data-i18n="segLevelTuneReset" data-i18n-title="segLevelTuneResetTitle">重設斜率</button>
+                        </div>
+                        <div class="seg-level-tune-control">
+                            <label class="seg-level-tune-slope" id="edSegLevelTuneSlopeLabel" for="edSegLevelTuneK">Y 斜率 µm/mm</label>
+                            <input type="number" id="edSegLevelTuneK" step="0.01" />
+                        </div>
                     </div>
-                    <div class="seg-level-tune-control">
-                        <label class="seg-level-tune-slope" id="edSegLevelTuneSlopeLabel" for="edSegLevelTuneK">Y 斜率 µm/mm</label>
-                        <input type="number" id="edSegLevelTuneK" step="0.01" />
+                    <div class="seg-level-band-offsets" id="edSegLevelBandOffsets">
+                        <div class="seg-level-band-offsets-head">
+                            <span class="seg-level-tune-title" data-i18n="segLevelBandOffsetTitle">各帶高度微調</span>
+                            <span class="seg-level-band-offset-hint" data-i18n="segLevelBandOffsetHint">自動墊高之後再整帶加減。正值墊高、負值降低，按 Enter 更新右側結果</span>
+                            <button type="button" id="edSegLevelBandOffsetReset" class="btn-secondary btn-small" data-i18n="segLevelBandOffsetReset" data-i18n-title="segLevelBandOffsetResetTitle">重設高度</button>
+                        </div>
+                        <div class="seg-level-band-offset-list" id="edSegLevelBandOffsetList"></div>
                     </div>
                 </div>
                 <div class="seg-level-compare" id="edSegLevelCompare">
                     <div class="seg-level-pane">
-                        <span class="seg-level-pane-label" data-i18n="segLevelBefore">校正前</span>
+                        <div class="seg-level-pane-head">
+                            <span class="seg-level-pane-label" data-i18n="segLevelBefore">校正前</span>
+                            <label class="seg-level-bounds-toggle seg-level-probe-toggle">
+                                <input type="checkbox" id="edSegLevelShowProbeBefore" checked />
+                                <span data-i18n="segLevelShowProbe">顯示校正線</span>
+                            </label>
+                        </div>
                         <div class="seg-level-image-row">
                             <div class="seg-level-canvas-wrap">
                                 <canvas id="edSegLevelBefore"></canvas>
                             </div>
-                            <div class="seg-level-cbar" aria-hidden="false">
-                                <span class="seg-level-cbar-val" id="edSegLevelBeforeCbHi"></span>
-                                <canvas id="edSegLevelBeforeCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
-                                <span class="seg-level-cbar-val" id="edSegLevelBeforeCbLo"></span>
+                            <div class="seg-level-cbar" data-pane="before">
+                                <span class="seg-level-cbar-end seg-level-cbar-end-hi"></span>
+                                <div class="seg-level-cbar-track">
+                                    <canvas id="edSegLevelBeforeCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                    <div class="seg-level-cbar-handle is-hi" data-which="hi">
+                                        <span class="seg-level-cbar-val" id="edSegLevelBeforeCbHi"></span>
+                                    </div>
+                                    <div class="seg-level-cbar-handle is-lo" data-which="lo">
+                                        <span class="seg-level-cbar-val" id="edSegLevelBeforeCbLo"></span>
+                                    </div>
+                                </div>
+                                <span class="seg-level-cbar-end seg-level-cbar-end-lo"></span>
+                                <div class="seg-level-cbar-actions">
+                                    <button type="button" class="seg-level-cbar-btn" data-act="fit" data-i18n-title="segLevelColorFitTitle" data-i18n-aria="segLevelColorFitTitle" title="將色階兩端設為目前畫面裡的資料最小與最大值" aria-label="將色階兩端設為目前畫面裡的資料最小與最大值">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M4 9V4h5"/>
+                                            <path d="M15 4h5v5"/>
+                                            <path d="M20 15v5h-5"/>
+                                            <path d="M9 20H4v-5"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" class="seg-level-cbar-btn" data-act="reset" data-i18n-title="segLevelColorResetTitle" data-i18n-aria="segLevelColorResetTitle" title="色階恢復為這張圖的全部資料範圍" aria-label="色階恢復為這張圖的全部資料範圍">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M3 12a9 9 0 1 0 3-6.7"/>
+                                            <path d="M3 4v5h5"/>
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="seg-level-profile-wrap">
@@ -853,15 +1022,46 @@
                         </div>
                     </div>
                     <div class="seg-level-pane seg-level-pane-after">
-                        <span class="seg-level-pane-label" data-i18n="segLevelAfter">校正後</span>
+                        <div class="seg-level-pane-head">
+                            <span class="seg-level-pane-label" data-i18n="segLevelAfter">校正後</span>
+                            <label class="seg-level-bounds-toggle seg-level-probe-toggle">
+                                <input type="checkbox" id="edSegLevelShowProbeAfter" checked />
+                                <span data-i18n="segLevelShowProbe">顯示校正線</span>
+                            </label>
+                        </div>
                         <div class="seg-level-image-row">
                             <div class="seg-level-canvas-wrap">
                                 <canvas id="edSegLevelAfter"></canvas>
+                                <div class="seg-level-update-badge" id="edSegLevelUpdateBadge" hidden></div>
                             </div>
-                            <div class="seg-level-cbar" aria-hidden="false">
-                                <span class="seg-level-cbar-val" id="edSegLevelAfterCbHi"></span>
-                                <canvas id="edSegLevelAfterCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
-                                <span class="seg-level-cbar-val" id="edSegLevelAfterCbLo"></span>
+                            <div class="seg-level-cbar" data-pane="after">
+                                <span class="seg-level-cbar-end seg-level-cbar-end-hi"></span>
+                                <div class="seg-level-cbar-track">
+                                    <canvas id="edSegLevelAfterCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                    <div class="seg-level-cbar-handle is-hi" data-which="hi">
+                                        <span class="seg-level-cbar-val" id="edSegLevelAfterCbHi"></span>
+                                    </div>
+                                    <div class="seg-level-cbar-handle is-lo" data-which="lo">
+                                        <span class="seg-level-cbar-val" id="edSegLevelAfterCbLo"></span>
+                                    </div>
+                                </div>
+                                <span class="seg-level-cbar-end seg-level-cbar-end-lo"></span>
+                                <div class="seg-level-cbar-actions">
+                                    <button type="button" class="seg-level-cbar-btn" data-act="fit" data-i18n-title="segLevelColorFitTitle" data-i18n-aria="segLevelColorFitTitle" title="將色階兩端設為目前畫面裡的資料最小與最大值" aria-label="將色階兩端設為目前畫面裡的資料最小與最大值">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M4 9V4h5"/>
+                                            <path d="M15 4h5v5"/>
+                                            <path d="M20 15v5h-5"/>
+                                            <path d="M9 20H4v-5"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" class="seg-level-cbar-btn" data-act="reset" data-i18n-title="segLevelColorResetTitle" data-i18n-aria="segLevelColorResetTitle" title="色階恢復為這張圖的全部資料範圍" aria-label="色階恢復為這張圖的全部資料範圍">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M3 12a9 9 0 1 0 3-6.7"/>
+                                            <path d="M3 4v5h5"/>
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="seg-level-profile-wrap">
@@ -1196,6 +1396,8 @@
             </div>
             <div class="hist-canvas-wrap" id="edHistWrap">
                 <canvas id="edHistCanvas"></canvas>
+                <div class="hist-hover-line" id="edHistHoverLine" hidden></div>
+                <div class="hist-tip" id="edHistTip" hidden></div>
                 <div class="hist-handle" id="edHistHandleLo"><span class="hist-handle-val" id="edHistValLo"></span></div>
                 <div class="hist-handle" id="edHistHandleHi"><span class="hist-handle-val" id="edHistValHi"></span></div>
             </div>
@@ -1207,12 +1409,21 @@
         </div>
       </div>
 
-        <aside class="side">
-            <h2 data-i18n="sideProgress">進度</h2>
+        <aside class="side" id="edSide">
+            <div class="side-head">
+                <h2 data-i18n="sideProgress">進度</h2>
+                <button type="button" id="edSideToggle" class="side-toggle" aria-expanded="false" data-i18n-title="segLevelSideExpand" data-i18n-aria="segLevelSideExpand" title="展開進度" aria-label="展開進度">
+                    <svg class="side-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M14 6l-6 6 6 6"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="side-body">
             <div class="progress" id="edProgress"><div class="progress-bar" id="edProgressBar"></div></div>
             <div class="status" id="edStatus">尚未載入檔案</div>
             <div class="bfm-mount" id="edBfmMount" hidden></div>
 
+            <div class="ed-side-colorbar">
             <h2 style="margin-top:20px;" data-i18n="sideColorbar">色階 (Z 值)</h2>
             <div class="colorbar-adjust">
                 <div class="colorbar-track" id="edColorbarTrack">
@@ -1236,6 +1447,7 @@
                 </div>
                 <button type="button" class="cb-reset" id="edCbReset" data-i18n="colorbarReset">重設色階範圍</button>
             </div>
+            </div>
 
             <div class="point-size-adjust" id="edPointSizeAdjust" hidden>
                 <h2 data-i18n="sidePointSize">點大小</h2>
@@ -1247,6 +1459,7 @@
 
             <h2 style="margin-top:20px;" data-i18n="sideInfo">檔案資訊</h2>
             <div id="edInfoList"></div>
+            </div>
         </aside>
     </main>
 </div><!-- /#pageEditor -->
@@ -1427,9 +1640,9 @@
                             </div>
                             <button type="button" class="profile-icon-btn profile-measure-btn" id="ovMeasureBtnA" data-i18n-title="profileMeasureTitle" title="剖面測量：按一下後點選兩點量測一組（最多 5 組）">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <circle cx="6" cy="17" r="2" fill="currentColor" stroke="none"/>
-                                    <circle cx="18" cy="7" r="2" fill="currentColor" stroke="none"/>
-                                    <path d="M8.5 15.5 L15.5 8.5"/>
+                                    <path d="M3 18h18"/>
+                                    <path d="M4 16 8 11 12 14 16 7 20 10"/>
+                                    <path d="M12 4v14" stroke-dasharray="2.5 2.5"/>
                                 </svg>
                             </button>
                             <button type="button" class="profile-icon-btn profile-measure-clear-btn" id="ovMeasureClearA" data-i18n-title="profileMeasureClearTitle" title="清除剖面測量" disabled>
@@ -1527,9 +1740,9 @@
                             </div>
                             <button type="button" class="profile-icon-btn profile-measure-btn" id="ovMeasureBtnB" data-i18n-title="profileMeasureTitle" title="剖面測量：按一下後點選兩點量測一組（最多 5 組）">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <circle cx="6" cy="17" r="2" fill="currentColor" stroke="none"/>
-                                    <circle cx="18" cy="7" r="2" fill="currentColor" stroke="none"/>
-                                    <path d="M8.5 15.5 L15.5 8.5"/>
+                                    <path d="M3 18h18"/>
+                                    <path d="M4 16 8 11 12 14 16 7 20 10"/>
+                                    <path d="M12 4v14" stroke-dasharray="2.5 2.5"/>
                                 </svg>
                             </button>
                             <button type="button" class="profile-icon-btn profile-measure-clear-btn" id="ovMeasureClearB" data-i18n-title="profileMeasureClearTitle" title="清除剖面測量" disabled>
@@ -1647,11 +1860,9 @@
                     </svg>
                 </button>
                 <button type="button" id="bcBtnMeasure" data-i18n-title="bc.cursorMeasureTitle" data-i18n-aria="bc.cursorMeasureTitle" title="距離測量：拖曳兩點量測長度，可拖曳端點或線段調整" aria-label="距離測量：拖曳兩點量測長度，可拖曳端點或線段調整">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
-                        <circle cx="6" cy="18" r="2" fill="currentColor" stroke="none"/>
-                        <circle cx="18" cy="6" r="2" fill="currentColor" stroke="none"/>
-                        <path d="M8 16 16 8"/>
-                        <path d="M10 14l2-2M13 11l2-2"/>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="8.5" width="18" height="8" rx="1.25"/>
+                        <path d="M7 8.5v2.6M10.5 8.5v4M14 8.5v2.6M17.5 8.5v4"/>
                     </svg>
                 </button>
                 <button type="button" id="bcBtnStep" data-i18n-title="bc.stepHeightTitle" data-i18n-aria="bc.stepHeightTitle" title="量階高：在圖上拖一條剖面線，再於剖面圖點兩點量階高" aria-label="量階高：在圖上拖一條剖面線，再於剖面圖點兩點量階高">
@@ -1764,9 +1975,9 @@
                 </div>
                 <button type="button" class="bc-profile-icon-btn" id="bcProfileMeasureBtn" data-i18n-title="bc.profileMeasureTitle" title="量階高：按一下後在剖面圖點兩個點（最多 5 組）" aria-label="量階高">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <circle cx="6" cy="17" r="2" fill="currentColor" stroke="none"/>
-                        <circle cx="18" cy="7" r="2" fill="currentColor" stroke="none"/>
-                        <path d="M8.5 15.5 15.5 8.5"/>
+                        <path d="M3 18h18"/>
+                        <path d="M4 16 8 11 12 14 16 7 20 10"/>
+                        <path d="M12 4v14" stroke-dasharray="2.5 2.5"/>
                     </svg>
                 </button>
                 <button type="button" class="bc-profile-icon-btn" id="bcProfileMeasureClearBtn" data-i18n-title="bc.profileMeasureClearTitle" title="清除階高測量" aria-label="清除階高測量" disabled>
@@ -2774,7 +2985,7 @@
     </header>
 
     <main>
-        <div class="batch-workspace">
+        <div class="batch-workspace" id="batchWorkspace">
             <div class="batch-drop" id="batchDropZone">
                 <div class="batch-drop-icon" id="batchDropIcon">&#x2B07;</div>
                 <div class="batch-drop-title" data-i18n="batchDropTitle">拖曳多個檔案到此處</div>
@@ -2828,27 +3039,6 @@
             <div class="ctrl-group">
                 <button type="button" id="batchEditBtnOpenBatch" class="btn-secondary" data-i18n="batchEditBtnOpenBatch">開啟批次檔</button>
             </div>
-            <span class="ctrl-sep" aria-hidden="true"></span>
-            <div class="ctrl-group">
-                <label class="ctrl-field">
-                    <span data-i18n="labelSaveFormat">儲存格式：</span>
-                    <select id="batchEditSaveFormat">
-                        <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
-                        <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
-                        <option value="txt"  data-i18n="saveFormat.txt">TXT (x y z 座標)</option>
-                        <option value="pcd"  data-i18n="saveFormat.pcd">PCD (點雲)</option>
-                        <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
-                        <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
-                        <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
-                        <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
-                    </select>
-                </label>
-                <button type="button" id="batchEditBtnRun" class="toolbar-icon-btn" data-i18n-title="batchEditBtnRun" data-i18n-aria="batchEditBtnRun" title="執行批次編輯" aria-label="執行批次編輯" disabled>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/>
-                    </svg>
-                </button>
-            </div>
         </div>
     </header>
 
@@ -2864,7 +3054,10 @@
                     <span><span data-i18n="batchEditFileList">檔案清單</span> · <strong id="batchEditFileCount">0</strong></span>
                     <button type="button" id="batchEditBtnDownloadAll" class="btn-secondary batch-edit-download-all" data-i18n="batchEditDownloadAll" disabled>下載全部</button>
                 </div>
-                <ul class="batch-file-list" id="batchEditFileList" data-empty="尚未加入任何檔案"></ul>
+                <div class="batch-edit-result-scroll" id="batchEditResultScroll">
+                    <div class="batch-edit-colhead" id="batchEditColHead" hidden></div>
+                    <ul class="batch-file-list" id="batchEditFileList" data-empty="尚未加入任何檔案"></ul>
+                </div>
             </div>
         </div>
 
@@ -2873,7 +3066,30 @@
             <div class="status" id="batchEditBatchInfo" data-i18n="batchEditNoBatchFile">尚未開啟批次檔</div>
             <div class="batch-file-badge" id="batchEditBatchBadge" style="display:none;"></div>
 
-            <h2 style="margin-top:20px;" data-i18n="sideProgress">進度</h2>
+            <div class="batch-edit-run" id="batchEditRunBox">
+                <label class="batch-edit-format">
+                    <span data-i18n="labelSaveFormat">儲存格式：</span>
+                    <select id="batchEditSaveFormat">
+                        <option value="bcrf" data-i18n="saveFormat.bcrf" selected>BCRF (原始資料)</option>
+                        <option value="asc"  data-i18n="saveFormat.asc">ASC (文字資料)</option>
+                        <option value="txt"  data-i18n="saveFormat.txt">TXT (x y z 座標)</option>
+                        <option value="pcd"  data-i18n="saveFormat.pcd">PCD (點雲)</option>
+                        <option value="tiff" data-i18n="saveFormat.tiff">TIFF (float32 原始資料)</option>
+                        <option value="bmp"  data-i18n="saveFormat.bmp">BMP (灰階)</option>
+                        <option value="png"  data-i18n="saveFormat.png">PNG (彩色畫面)</option>
+                        <option value="jpg"  data-i18n="saveFormat.jpg">JPG (灰階)</option>
+                    </select>
+                </label>
+                <button type="button" id="batchEditBtnRun" class="batch-edit-run-btn" data-i18n-title="batchEditBtnRun" data-i18n-aria="batchEditBtnRun" title="執行批次編輯" aria-label="執行批次編輯" aria-describedby="batchEditRunHint" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/>
+                    </svg>
+                    <span data-i18n="batchEditBtnRun">執行批次編輯</span>
+                </button>
+                <p class="batch-edit-run-hint" id="batchEditRunHint" data-i18n="batchEditRunHintIdle">加入檔案並開啟批次檔後，即可在此執行</p>
+            </div>
+
+            <h2 data-i18n="sideProgress">進度</h2>
             <div class="progress" id="batchEditProgress"><div class="progress-bar" id="batchEditProgressBar"></div></div>
             <div class="status" id="batchEditStatus" data-i18n="batchEditStatusIdle">尚未加入檔案</div>
             <div class="bfm-mount bfm-mount--pinned" id="batchEditBfmMount"></div>
@@ -2938,6 +3154,44 @@
     <input type="file" id="bfmFileInput" accept=".wbatch,.json" hidden />
 </div>
 
+<!-- 單向水平校正說明 modal -->
+<div class="info-overlay" id="uniLevelInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="uniLevelInfoTitle">
+    <div class="info-panel info-panel--wide">
+        <div class="info-header">
+            <h3 id="uniLevelInfoTitle" data-i18n="uniLevelInfoTitle">單向水平校正說明</h3>
+            <button type="button" class="info-close" id="uniLevelInfoCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body">
+            <section class="info-section">
+                <h4 data-i18n="roiLevelInfoPurposeHeading">功能目的</h4>
+                <p data-i18n="uniLevelInfoPurposeText">只用一個方向去掉整張圖的傾斜。在校正前影像放一條水平或垂直校正線，依線上的高度擬合斜率，再對全圖扣除該方向的傾斜。</p>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="roiLevelInfoWorkflowHeading">操作流程</h4>
+                <ol class="info-steps">
+                    <li data-i18n="uniLevelInfoStep1">載入高度圖後，點選工具列「單向水平校正」進入此模式。</li>
+                    <li data-i18n="uniLevelInfoStep2">點「水平校正線」或「垂直校正線」立刻切換。水平線用來校正左右傾斜，垂直線用來校正上下傾斜。</li>
+                    <li data-i18n="uniLevelInfoStep3">拖曳左側校正線到要取樣的位置。系統依該線的高度值擬合斜率，並把校正後的全圖顯示在右側。</li>
+                    <li data-i18n="uniLevelInfoStep4">下方折線圖顯示校正線上的高度與擬合直線。可在斜率欄修改數值後按 Enter，或按「重設斜率」回到該線的擬合結果。</li>
+                    <li data-i18n="uniLevelInfoStep5">確認結果後按「套用」寫入資料並離開；按「取消」則放棄預覽。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="roiLevelInfoPrincipleHeading">演算法原理</h4>
+                <ol class="info-steps">
+                    <li data-i18n="uniLevelInfoPrinciple1">取樣：水平校正線取單一列（沿 X），垂直校正線取單一欄（沿 Y）。</li>
+                    <li data-i18n="uniLevelInfoPrinciple2">斜率：對線上有效高度做 1D 最小平方擬合 z = k·t + c，t 為相對影像中心的物理距離（mm），k 的單位為 µm/mm。</li>
+                    <li data-i18n="uniLevelInfoPrinciple3">全圖套用：只扣除這個方向的傾斜。水平校正線對每個像素扣除 k×(x−中心)×dx；垂直校正線扣除 k×(y−中心)×dy。另一個方向與截距保持不變。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="roiLevelInfoNoteHeading">注意事項</h4>
+                <p data-i18n="uniLevelInfoNoteText">僅適用於規則網格高度圖；散布點雲不支援。校正線上至少需要 2 個有效點。一次只校正一個方向；若兩個方向都要去除，可分別套用一次水平校正線與一次垂直校正線。</p>
+            </section>
+        </div>
+    </div>
+</div>
+
 <!-- 擇區水平校正說明 modal -->
 <div class="info-overlay" id="roiLevelInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="roiLevelInfoTitle">
     <div class="info-panel info-panel--wide">
@@ -2992,7 +3246,7 @@
                 <ol class="info-steps">
                     <li data-i18n="segLevelInfoStep1">載入高度圖後，點選工具列「分區水平校正」進入此模式。</li>
                     <li data-i18n="segLevelInfoStep2">系統自動分析分割方向與等份數，並顯示校正前後對照與中央剖面折線圖。</li>
-                    <li data-i18n="segLevelInfoStep3">可調整「分割方向」「等份數」，或於「傾斜微調」修改共用斜率後按 Enter 更新預覽。</li>
+                    <li data-i18n="segLevelInfoStep3">可調整「分割方向」「等份數」，或於「斜率微調」修改共用斜率後按 Enter 更新預覽。</li>
                     <li data-i18n="segLevelInfoStep4">勾選「顯示分割線」可疊加等分邊界；影像與剖面圖支援滾輪縮放、拖曳平移、雙擊還原。</li>
                     <li data-i18n="segLevelInfoStep5">確認結果後按「套用」寫入資料並離開；按「取消」則放棄預覽、還原原始資料。</li>
                 </ol>
@@ -3183,11 +3437,17 @@
     </div>
 </div>
 
+<div class="ctx-menu" id="imageSaveMenu" hidden role="menu">
+    <button type="button" class="ctx-menu-item" role="menuitem" data-save="full" data-i18n="imgSaveFull">儲存整張圖</button>
+    <button type="button" class="ctx-menu-item" role="menuitem" data-save="view" data-i18n="imgSaveView">儲存當前視圖</button>
+</div>
+
 <script src="js/i18n.js"></script>
 <script src="js/prefs.js"></script>
 <script src="js/file-parse.js"></script>
 <script src="js/file-export.js"></script>
 <script src="js/segment-level.js"></script>
+<script src="js/uni-level.js"></script>
 <script src="js/segment-skew.js"></script>
 <script src="js/median-filter.js"></script>
 <script src="js/nan-patch.js"></script>

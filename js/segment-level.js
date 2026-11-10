@@ -1,17 +1,22 @@
 /**
  * 自動分區水平校正（傳統演算法）
  * 依賴：file-parse.js (yieldToMain, LARGE_PIXEL_THRESHOLD)
- * 匯出（全域）：analyzeSegmentLeveling(), analyzeSegmentLevelingAsync(), analyzeSegmentLevelingWithParams(), analyzeSegmentLevelingWithParamsAsync(),
- *   segLevelBoundaryOptionsForDirection(), segLevelMaxValidBandCount(), segLevelComputeBandFits(), segLevelFitProfileBandsFromSplits()
+ * 匯出（全域）：analyzeSegmentLeveling(), analyzeSegmentLevelingAsync(), analyzeSegmentLevelingWithParams(), analyzeSegmentLevelingWithParamsAsync(), planSegmentLeveling(), applySegmentLevelPlan(),
+ *   segLevelBoundaryOptionsForDirection(), segLevelMaxValidBandCount(), segLevelComputeBandFits(), segLevelFitProfileBandsFromSplits(),
+ *   segLevelExtractProfileAt(), segLevelSharedSlopeFromProfile()
  */
 /* =========================================================================
  *  自動分區水平校正：剖面偵測方向與帶數，邊界為純幾何等分
- *  - 水平分割：各帶擬合 Y 斜率後取平均為共用 k，各帶以帶中心扣除傾斜，再墊高對齊最高帶
- *  - 垂直分割：各帶擬合 X 斜率後取平均為共用 k，各帶以帶中心扣除傾斜，再墊高對齊最高帶
+ *  - 水平分割：取一條垂直剖線（預設正中間），各帶擬合該線的 Y 斜率後取平均為共用 k
+ *  - 垂直分割：取一條水平剖線（預設正中間），各帶擬合該線的 X 斜率後取平均為共用 k
+ *  - 各帶以帶中心扣除這個共用傾斜，再墊高對齊最高帶
  * ========================================================================= */
 
 /** @typedef {'horizontal' | 'vertical'} SegmentDirection */
 /** horizontal = 水平分割線（切成上下帶）；vertical = 垂直分割線（切成左右帶） */
+
+/** 手動等份數上限。自動偵測的峰間距仍是軸長的 1/8，不跟著這個上限放寬。 */
+const SEG_LEVEL_MAX_EQUAL_BANDS = 20;
 
 function segLevelYield() {
     if (typeof yieldToMain === 'function') return yieldToMain();
@@ -946,7 +951,7 @@ function segLevelComputeBandFits(data, width, height, direction, boundaries, sca
     return fits;
 }
 
-/** 各帶分別 1D 擬合斜率，取有效帶 k 的算術平均作為共用斜率 */
+/** 各帶全體像素的 1D 斜率算術平均（校正不使用；共用 k 改由剖線計算） */
 function segLevelAverageBandSlopes(data, width, height, direction, boundaries, scale) {
     const fits = segLevelComputeBandFits(data, width, height, direction, boundaries, scale);
     if (!fits.length) return null;
@@ -977,7 +982,7 @@ function segLevelFitProfileBands(vals, boundaries, scale) {
     return segLevelFitProfileBandsFromSplits(vals, splits, scale);
 }
 
-/** 依 splits 對剖面折線各帶獨立 1D 擬合（與校正共用 k 無關，純顯示用） */
+/** 依 splits 對剖面折線各帶獨立 1D 擬合。校正前剖線各帶 k 的平均即為共用斜率。 */
 function segLevelFitProfileBandsFromSplits(vals, splits, scale) {
     if (!vals || !vals.length || !splits || splits.length < 2 || !Number.isFinite(scale)) return [];
     const fits = [];
@@ -991,16 +996,67 @@ function segLevelFitProfileBandsFromSplits(vals, splits, scale) {
     return fits;
 }
 
+/** 剖線索引：水平分割為欄（X），垂直分割為列（Y）。省略時用正中間。 */
+function segLevelClampProfileIndex(width, height, direction, index) {
+    const len = direction === 'horizontal' ? width : height;
+    const max = Math.max(0, len - 1);
+    const fallback = len >> 1;
+    let i = Number.isFinite(index) ? Math.round(index) : fallback;
+    if (i < 0) i = 0;
+    if (i > max) i = max;
+    return i;
+}
+
+/** 抽出一條剖線。水平分割取單一欄，垂直分割取單一列。 */
+function segLevelExtractProfileAt(data, width, height, direction, index) {
+    const horizontal = direction === 'horizontal';
+    const n = horizontal ? height : width;
+    const vals = new Array(n);
+    if (horizontal) {
+        const x = segLevelClampProfileIndex(width, height, direction, index);
+        for (let y = 0; y < height; y++) vals[y] = data[y * width + x];
+    } else {
+        const y = segLevelClampProfileIndex(width, height, direction, index);
+        const rowBase = y * width;
+        for (let x = 0; x < width; x++) vals[x] = data[rowBase + x];
+    }
+    return vals;
+}
+
 /**
- * 建立分區校正計畫（邊界、各帶平均共用斜率等），供預覽與手動微調重用
+ * 剖線上各帶斜率的算術平均，作為全圖共用 k。
+ * 與預覽折線圖各帶標籤是同一組擬合。
  */
-function planSegmentLeveling(ds, direction, boundaries) {
+function segLevelSharedSlopeFromProfile(data, width, height, direction, boundaries, scale, profileIndex) {
+    if (!Number.isFinite(scale)) return null;
+    const probeIndex = segLevelClampProfileIndex(width, height, direction, profileIndex);
+    const vals = segLevelExtractProfileAt(data, width, height, direction, probeIndex);
+    const fits = segLevelFitProfileBands(vals, boundaries, scale);
+    if (!fits.length) return null;
+    let sumK = 0;
+    for (const f of fits) sumK += f.k;
+    const axisLen = direction === 'horizontal' ? height : width;
+    return {
+        k: sumK / fits.length,
+        center: (axisLen - 1) * 0.5,
+        probeIndex,
+        bandCount: fits.length,
+    };
+}
+
+/**
+ * 建立分區校正計畫（邊界、剖線共用斜率等），供預覽與手動微調重用
+ * @param {number} [profileIndex] 剖線位置；省略時為正中間
+ */
+function planSegmentLeveling(ds, direction, boundaries, profileIndex) {
     const { data, width, height, header } = ds;
     const { dx, dy } = segLevelPhysicalScale(header, width, height);
     const axisLen = direction === 'horizontal' ? height : width;
     const splits = [0, ...boundaries, axisLen];
     const axisScale = direction === 'horizontal' ? dy : dx;
-    const sharedTilt = segLevelAverageBandSlopes(data, width, height, direction, boundaries, axisScale);
+    const sharedTilt = segLevelSharedSlopeFromProfile(
+        data, width, height, direction, boundaries, axisScale, profileIndex,
+    );
     return {
         direction,
         boundaries: boundaries.slice(),
@@ -1010,12 +1066,25 @@ function planSegmentLeveling(ds, direction, boundaries) {
     };
 }
 
+/** 自動墊高之後，依各帶高度調整再整帶平移。正值墊高，負值降低。 */
+function segLevelApplyBandOffsets(out, width, height, direction, boundaries, offsets) {
+    if (!offsets || !offsets.length) return;
+    const axisLen = direction === 'horizontal' ? height : width;
+    const splits = [0, ...(boundaries || []), axisLen];
+    const bandCount = splits.length - 1;
+    for (let si = 0; si < bandCount; si++) {
+        const delta = Number(offsets[si]);
+        if (!Number.isFinite(delta) || Math.abs(delta) < 1e-9) continue;
+        segLevelShiftBandRange(out, width, height, direction, splits[si], splits[si + 1], delta);
+    }
+}
+
 /**
  * 依計畫與共用斜率 k（µm/mm）自原始資料重算校正結果
  * @param {number} [kValue] 共用斜率；省略時用 plan.sharedTilt.k
  * @param {Float32Array} [outBuf] 重用輸出緩衝（微調時避免反覆配置）
  */
-function applySegmentLevelPlan(sourceData, width, height, plan, kValue, outBuf) {
+function applySegmentLevelPlan(sourceData, width, height, plan, kValue, outBuf, bandOffsets) {
     const { direction, axisScale, boundaries, sharedTilt } = plan;
     const out = (outBuf && outBuf.length === sourceData.length)
         ? outBuf
@@ -1025,6 +1094,7 @@ function applySegmentLevelPlan(sourceData, width, height, plan, kValue, outBuf) 
     const k = Number.isFinite(kValue) ? kValue : sharedTilt.k;
     segLevelSubtractAxisPerBand(out, width, height, direction, boundaries, axisScale, k);
     segLevelAlignBandsToHighest(out, width, height, direction, boundaries);
+    segLevelApplyBandOffsets(out, width, height, direction, boundaries, bandOffsets);
     return out;
 }
 
@@ -1055,6 +1125,9 @@ async function applySegmentLevelPlanAsync(sourceData, width, height, plan, kValu
     } else {
         segLevelAlignBandsToHighest(out, width, height, direction, boundaries);
     }
+    if (isCancelled && isCancelled()) return null;
+    const bandOffsets = options && options.bandOffsets;
+    segLevelApplyBandOffsets(out, width, height, direction, boundaries, bandOffsets);
     return out;
 }
 
@@ -1090,23 +1163,19 @@ function segLevelCountValid(data) {
     return n;
 }
 
-/** 依分割方向回傳軸長與邊界驗證參數 */
+/** 依分割方向回傳軸長與手動等份的邊界驗證參數 */
 function segLevelBoundaryOptionsForDirection(width, height, direction) {
     const horizontal = direction === 'horizontal';
     const axisLen = horizontal ? height : width;
-    const minDist = horizontal
-        ? Math.max(20, Math.floor(height / 8))
-        : Math.max(20, Math.floor(width / 8));
-    const edgeMargin = horizontal
-        ? Math.max(2, Math.floor(height * 0.02))
-        : Math.max(2, Math.floor(width * 0.02));
+    const minDist = Math.max(20, Math.floor(axisLen / SEG_LEVEL_MAX_EQUAL_BANDS));
+    const edgeMargin = Math.max(2, Math.floor(axisLen * 0.02));
     return { axisLen, minDist, edgeMargin };
 }
 
-/** 在等分約束下，此軸最多可切幾帶 */
+/** 在等分約束下，此軸最多可切幾帶（不超過手動等份上限） */
 function segLevelMaxValidBandCount(axisLen, minDist, edgeMargin) {
     let max = 1;
-    for (let bands = 2; bands <= 32; bands++) {
+    for (let bands = 2; bands <= SEG_LEVEL_MAX_EQUAL_BANDS; bands++) {
         const boundaries = segLevelEqualBoundaryIndices(axisLen, bands);
         if (segLevelValidateEqualBoundaries(boundaries, axisLen, minDist, edgeMargin)) max = bands;
         else break;
@@ -1202,7 +1271,7 @@ async function analyzeSegmentLevelingWithParamsAsync(ds, direction, segmentCount
 }
 
 /**
- * 分析並產生分區校正預覽資料（同步，供批次管線使用）
+ * 分析並產生分區校正預覽資料（同步）。批次在步驟沒有方向與邊界時才用這條自動路徑。
  */
 function analyzeSegmentLeveling(ds) {
     if (!ds || ds.type === 'pcd-scatter') {

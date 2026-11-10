@@ -205,7 +205,8 @@ function batchPointInNormRect(px, py, r, circle) {
     return dx * dx + dy * dy <= 1;
 }
 
-const DENOISE_HIST_BINS = 96;
+/** 數值分布統計的分箱數：編輯器直方圖與自動刪除雜點共用 */
+const DENOISE_HIST_BINS = 256;
 
 /** 建立數值直方圖（供自動刪除雜點統計用） */
 function buildValueHistogram(vals, vmin, vmax) {
@@ -257,6 +258,23 @@ function computeAutoDenoiseFracs(vals, vmin, vmax) {
     hi = Math.min(1, Math.max(MIN_GAP, hi));
     if (hi - lo < MIN_GAP) { lo = 0; hi = 1; }
     return { lo, hi };
+}
+
+function batchApplyUniLevel(ds, step) {
+    if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
+    if (!ds || !ds.data || !(ds.width > 1) || !(ds.height > 1)) return { ok: false, reason: 'invalid' };
+    const lineDir = step && step.lineDir === 'vertical' ? 'vertical' : 'horizontal';
+    const k = Number(step && step.k);
+    if (!Number.isFinite(k) || typeof uniLevelApply !== 'function' || typeof uniLevelAxisScale !== 'function') {
+        return { ok: false, reason: 'invalid' };
+    }
+    batchEnsureFloatPixels(ds);
+    const scale = uniLevelAxisScale(ds.header, ds.width, ds.height, lineDir);
+    const axisLen = lineDir === 'horizontal' ? ds.width : ds.height;
+    const center = (axisLen - 1) * 0.5;
+    ds.data = uniLevelApply(ds.data, ds.width, ds.height, lineDir, scale, k, center, null);
+    batchRefreshRange(ds);
+    return { ok: true };
 }
 
 function batchApplyGlobalLevel(ds) {
@@ -545,8 +563,62 @@ function batchApplyCrop(ds, step) {
     return { ok: true };
 }
 
-function batchApplySegmentLevel(ds) {
+/** 讀出分區水平校正步驟裡使用者確認過的參數。缺方向或邊界時回傳 null，改走自動分析。 */
+function batchReadSegmentLevelStep(step) {
+    if (!step || step.type !== 'segmentLevel') return null;
+    const direction = step.direction === 'vertical' ? 'vertical'
+        : (step.direction === 'horizontal' ? 'horizontal' : '');
+    if (!direction) return null;
+    const boundaries = Array.isArray(step.boundaries)
+        ? step.boundaries.map((n) => Math.round(Number(n))).filter((n) => Number.isFinite(n))
+        : [];
+    if (!boundaries.length) return null;
+    const tiltRaw = Number(step.tiltK);
+    const bandOffsets = Array.isArray(step.bandOffsets)
+        ? step.bandOffsets.map((v) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : 0;
+        })
+        : [];
+    return {
+        direction,
+        boundaries,
+        tiltK: Number.isFinite(tiltRaw) ? tiltRaw : null,
+        bandOffsets,
+    };
+}
+
+function batchSegmentLevelBoundariesFit(boundaries, axisLen) {
+    if (!boundaries.length || !(axisLen >= 3)) return false;
+    let prev = 0;
+    for (let i = 0; i < boundaries.length; i++) {
+        const idx = boundaries[i];
+        if (idx <= prev || idx >= axisLen) return false;
+        prev = idx;
+    }
+    return true;
+}
+
+function batchApplySegmentLevel(ds, step) {
     if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
+    const recorded = batchReadSegmentLevelStep(step);
+    if (recorded && typeof planSegmentLeveling === 'function' && typeof applySegmentLevelPlan === 'function') {
+        const { width, height } = ds;
+        const axisLen = recorded.direction === 'horizontal' ? height : width;
+        if (!batchSegmentLevelBoundariesFit(recorded.boundaries, axisLen)) {
+            return { ok: false, reason: 'invalid' };
+        }
+        const plan = planSegmentLeveling(ds, recorded.direction, recorded.boundaries);
+        const k = recorded.tiltK != null
+            ? recorded.tiltK
+            : (plan.sharedTilt && Number.isFinite(plan.sharedTilt.k) ? plan.sharedTilt.k : null);
+        if (k == null) return { ok: false, reason: 'insufficient' };
+        if (!plan.sharedTilt) plan.sharedTilt = { k };
+        batchEnsureFloatPixels(ds);
+        ds.data = applySegmentLevelPlan(ds.data, width, height, plan, k, null, recorded.bandOffsets);
+        batchRefreshRange(ds);
+        return { ok: true };
+    }
     const analysis = analyzeSegmentLeveling(ds);
     if (!analysis.ok) return { ok: false, reason: analysis.reason || 'insufficient' };
     batchEnsureFloatPixels(ds);
@@ -628,8 +700,9 @@ function batchApplyStep(ds, step) {
     switch (step.type) {
         case 'invertZ': return batchApplyInvertZ(ds);
         case 'globalLevel': return batchApplyGlobalLevel(ds);
+        case 'uniLevel': return batchApplyUniLevel(ds, step);
         case 'roiLevel': return batchApplyRoiLevel(ds, step);
-        case 'segmentLevel': return batchApplySegmentLevel(ds);
+        case 'segmentLevel': return batchApplySegmentLevel(ds, step);
         case 'segmentSkew': return batchApplySegmentSkew(ds, step);
         case 'denoise': return batchApplyDenoiseFromStep(ds, step);
         case 'medianFilter': return batchApplyMedianFilter(ds, step.kernelSize);
@@ -663,15 +736,68 @@ function batchApplyPipeline(ds, steps) {
     return { ok: true, dataset: out };
 }
 
+function bfmFmtSlope(k) {
+    if (!Number.isFinite(k)) return '—';
+    if (Math.abs(k) < 0.01) return k.toFixed(4);
+    return (Math.round(k * 1000) / 1000).toFixed(3);
+}
+
+function bfmFmtOffset(v) {
+    if (!Number.isFinite(v) || Math.abs(v) < 5e-4) return '0';
+    return (Math.round(v * 1000) / 1000).toString();
+}
+
+/** 分區水平校正步驟的簡短列示與懸停完整參數。參數不足時回傳 null。 */
+function segmentLevelStepInfo(step) {
+    if (!step || step.type !== 'segmentLevel') return null;
+    const hasDir = step.direction === 'vertical' || step.direction === 'horizontal';
+    const boundaries = Array.isArray(step.boundaries)
+        ? step.boundaries.filter((n) => Number.isFinite(Number(n))).map((n) => Math.round(Number(n)))
+        : [];
+    const offsets = Array.isArray(step.bandOffsets) ? step.bandOffsets.map((v) => Number(v)) : [];
+    const k = Number(step.tiltK);
+    const hasK = Number.isFinite(k);
+    if (!hasDir && !boundaries.length && !offsets.length && !hasK) return null;
+
+    const direction = step.direction === 'vertical' ? 'vertical' : 'horizontal';
+    const count = boundaries.length ? boundaries.length + 1 : offsets.length;
+    const dirLabel = direction === 'vertical' ? t('segLevelDirVertical') : t('segLevelDirHorizontal');
+    const dirShort = direction === 'vertical' ? t('bfmSegLevelDirVertical') : t('bfmSegLevelDirHorizontal');
+    const kText = hasK ? bfmFmtSlope(k) : '';
+    const brief = hasK
+        ? t('bfmSegLevelBrief', dirShort, count || '—', kText)
+        : t('bfmSegLevelBriefNoSlope', dirShort, count || '—');
+    const chips = [];
+    const n = count || offsets.length;
+    for (let i = 0; i < n; i++) {
+        const v = Number.isFinite(offsets[i]) ? offsets[i] : 0;
+        chips.push('#' + (i + 1) + ' ' + bfmFmtOffset(v));
+    }
+    return {
+        brief,
+        rows: [
+            { label: t('segLevelDirLabel'), value: dirLabel },
+            { label: t('segLevelCountLabel'), value: String(count || '—') },
+            { label: t('bfmSegLevelSlopeLabel'), value: hasK ? (kText + ' µm/mm') : '—' },
+            { label: t('segLevelBandOffsetTitle'), chips: chips.length ? chips : ['—'] },
+            { label: t('bfmSegLevelBounds'), value: boundaries.length ? (boundaries.join(', ') + ' px') : '—' },
+        ],
+    };
+}
+
 function describeBatchStep(step) {
     if (!step) return '';
     switch (step.type) {
         case 'invertZ': return t('bfmStepInvertZ');
         case 'globalLevel': return t('bfmStepGlobalLevel');
+        case 'uniLevel': {
+            const line = step.lineDir === 'vertical' ? t('bfmUniLevelLineVertical') : t('bfmUniLevelLineHorizontal');
+            return t('bfmStepUniLevel', line, bfmFmtSlope(Number(step.k)));
+        }
         case 'roiLevel': return t('bfmStepRoiLevel');
         case 'segmentLevel': return t('bfmStepSegmentLevel');
         case 'segmentSkew': {
-            const dir = step.direction === 'vertical' ? t('segSkewDirVertical') : t('segSkewDirHorizontal');
+            const dir = step.direction === 'vertical' ? t('bfmSegSkewDirVertical') : t('bfmSegSkewDirHorizontal');
             return t('bfmStepSegmentSkew', dir, step.segmentCount, step.shiftPx);
         }
         case 'denoise':

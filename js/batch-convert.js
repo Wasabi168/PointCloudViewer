@@ -12,6 +12,7 @@
     const batchBtnConvert = document.getElementById('batchBtnConvert');
     const batchSaveFormat = document.getElementById('batchSaveFormat');
     const batchPreviewEnable = document.getElementById('batchPreviewEnable');
+    const batchWorkspace = document.getElementById('batchWorkspace');
     const batchDropZone = document.getElementById('batchDropZone');
     const batchDropIcon = document.getElementById('batchDropIcon');
     const batchFileList = document.getElementById('batchFileList');
@@ -22,7 +23,7 @@
     const batchAddLabel = batchFileInput && batchFileInput.closest('label.file-btn');
     const supportsDirPicker = (typeof window.showDirectoryPicker === 'function');
 
-    if (!batchFileInput || !batchDropZone) return;
+    if (!batchFileInput || !batchDropZone || !batchWorkspace) return;
 
     applySelectPref(batchSaveFormat, 'batchSaveFormat');
 
@@ -355,35 +356,35 @@
         return false;
     }
 
-    batchDropZone.addEventListener('dragenter', (e) => {
+    batchWorkspace.addEventListener('dragenter', (e) => {
         if (!batchDragHasFiles(e)) return;
         e.preventDefault();
         batchDragDepth++;
-        batchDropZone.classList.remove('drag-reject');
-        batchDropZone.classList.add('drag-over');
+        batchWorkspace.classList.remove('drag-reject');
+        batchWorkspace.classList.add('drag-over');
         if (batchDropIcon) batchDropIcon.innerHTML = '&#x2B07;';
     });
 
-    batchDropZone.addEventListener('dragover', (e) => {
+    batchWorkspace.addEventListener('dragover', (e) => {
         if (!batchDragHasFiles(e)) return;
         e.preventDefault();
         if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     });
 
-    batchDropZone.addEventListener('dragleave', (e) => {
+    batchWorkspace.addEventListener('dragleave', (e) => {
         if (!batchDragHasFiles(e)) return;
         batchDragDepth--;
         if (batchDragDepth <= 0) {
             batchDragDepth = 0;
-            batchDropZone.classList.remove('drag-over', 'drag-reject');
+            batchWorkspace.classList.remove('drag-over', 'drag-reject');
         }
     });
 
-    batchDropZone.addEventListener('drop', (e) => {
+    batchWorkspace.addEventListener('drop', (e) => {
         if (!batchDragHasFiles(e)) return;
         e.preventDefault();
         batchDragDepth = 0;
-        batchDropZone.classList.remove('drag-over', 'drag-reject');
+        batchWorkspace.classList.remove('drag-over', 'drag-reject');
         if (e.dataTransfer && e.dataTransfer.files) addBatchFiles(e.dataTransfer.files);
     });
 

@@ -214,6 +214,7 @@ function applyLanguage(lang) {
     if (typeof BatchFileManager !== 'undefined' && BatchFileManager.refreshLastEditHint) {
         BatchFileManager.refreshLastEditHint();
     }
+    if (typeof refreshBatchEditLang === 'function') refreshBatchEditLang();
 
     // 語系切換後按鈕文字寬度改變，需重新計算工具列收納
     requestAnimationFrame(() => {

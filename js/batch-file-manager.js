@@ -112,7 +112,68 @@ const BatchFileManager = (() => {
         updateLastEditHint();
     }
 
+    let stepTipEl = null;
+
+    function hideStepTip() {
+        if (stepTipEl) stepTipEl.classList.remove('show');
+    }
+
+    function ensureStepTip() {
+        if (stepTipEl) return stepTipEl;
+        stepTipEl = document.createElement('div');
+        stepTipEl.className = 'bfm-step-tip';
+        stepTipEl.setAttribute('role', 'tooltip');
+        document.body.appendChild(stepTipEl);
+        return stepTipEl;
+    }
+
+    function fillStepTip(rows) {
+        const tip = ensureStepTip();
+        tip.replaceChildren();
+        rows.forEach((row) => {
+            const line = document.createElement('div');
+            line.className = 'bfm-step-tip-row' + (row.chips ? ' is-block' : '');
+            const key = document.createElement('span');
+            key.className = 'k';
+            key.textContent = row.label;
+            line.appendChild(key);
+            if (row.chips) {
+                const chips = document.createElement('div');
+                chips.className = 'bfm-step-tip-chips';
+                row.chips.forEach((text) => {
+                    const chip = document.createElement('span');
+                    chip.textContent = text;
+                    chips.appendChild(chip);
+                });
+                line.appendChild(chips);
+            } else {
+                const value = document.createElement('span');
+                value.className = 'v';
+                value.textContent = row.value;
+                line.appendChild(value);
+            }
+            tip.appendChild(line);
+        });
+        return tip;
+    }
+
+    function showStepTip(anchor, rows) {
+        const tip = fillStepTip(rows);
+        tip.classList.add('show');
+        const rect = anchor.getBoundingClientRect();
+        const tipW = tip.offsetWidth;
+        const tipH = tip.offsetHeight;
+        let left = rect.left - tipW - 8;
+        if (left < 8) left = Math.min(rect.right + 8, window.innerWidth - tipW - 8);
+        if (left < 8) left = 8;
+        let top = rect.top;
+        if (top + tipH > window.innerHeight - 8) top = Math.max(8, window.innerHeight - tipH - 8);
+        tip.style.left = left + 'px';
+        tip.style.top = top + 'px';
+    }
+
     function renderSteps() {
+        hideStepTip();
         stepsEl.innerHTML = '';
         if (!currentFile || !currentFile.steps.length) {
             stepsEl.setAttribute('data-empty', t('bfmNoSteps'));
@@ -136,7 +197,19 @@ const BatchFileManager = (() => {
 
             const desc = document.createElement('div');
             desc.className = 'bfm-step-desc';
-            desc.innerHTML = `<strong>${idx + 1}. ${describeBatchStep(step)}</strong>`;
+            const title = document.createElement('strong');
+            title.textContent = (idx + 1) + '. ' + describeBatchStep(step);
+            desc.appendChild(title);
+            if (step && step.type === 'segmentLevel' && typeof segmentLevelStepInfo === 'function') {
+                const info = segmentLevelStepInfo(step);
+                if (info) {
+                    const brief = document.createElement('small');
+                    brief.className = 'bfm-step-brief';
+                    brief.textContent = info.brief;
+                    desc.appendChild(brief);
+                    desc._bfmTip = info.rows;
+                }
+            }
 
             const actions = document.createElement('div');
             actions.className = 'bfm-step-actions';
@@ -224,7 +297,23 @@ const BatchFileManager = (() => {
         if (stepsEl._bfmSortBound) return;
         stepsEl._bfmSortBound = true;
 
+        stepsEl.addEventListener('mouseover', (e) => {
+            if (stepSortState) return;
+            const desc = e.target.closest('.bfm-step-desc');
+            if (!desc || !desc._bfmTip) return;
+            showStepTip(desc, desc._bfmTip);
+        });
+        stepsEl.addEventListener('mouseout', (e) => {
+            const desc = e.target.closest('.bfm-step-desc');
+            if (!desc || !desc._bfmTip) return;
+            const next = e.relatedTarget;
+            if (next && desc.contains(next)) return;
+            hideStepTip();
+        });
+        stepsEl.addEventListener('scroll', hideStepTip);
+
         stepsEl.addEventListener('pointerdown', (e) => {
+            hideStepTip();
             if (!currentFile || stepSortState) return;
             const handle = e.target.closest('.bfm-step-drag-handle');
             if (!handle) return;
@@ -306,6 +395,7 @@ const BatchFileManager = (() => {
     }
 
     function close() {
+        hideStepTip();
         if (pinnedMode) return;
         editorPanelOpen = false;
         syncEditorVisibility();

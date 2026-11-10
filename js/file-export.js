@@ -605,6 +605,309 @@ function getAllowedSaveFormats(dataset) {
     return formats;
 }
 
+/** 視埠與圖片相交的像素範圍（含部分露出的像素） */
+function visibleGridBounds(canvas, viewport, width, height) {
+    if (!canvas || !viewport || width < 1 || height < 1) return null;
+    const canvasRect = canvas.getBoundingClientRect();
+    if (canvasRect.width < 1 || canvasRect.height < 1) return null;
+    const viewRect = viewport.getBoundingClientRect();
+    const viewLeft = viewRect.left + viewport.clientLeft;
+    const viewTop = viewRect.top + viewport.clientTop;
+    const viewRight = viewLeft + viewport.clientWidth;
+    const viewBottom = viewTop + viewport.clientHeight;
+    const left = Math.max(viewLeft, canvasRect.left);
+    const top = Math.max(viewTop, canvasRect.top);
+    const right = Math.min(viewRight, canvasRect.right);
+    const bottom = Math.min(viewBottom, canvasRect.bottom);
+    if (right - left < 0.5 || bottom - top < 0.5) return null;
+    const c0 = Math.max(0, Math.min(width - 1, Math.floor((left - canvasRect.left) / canvasRect.width * width)));
+    const r0 = Math.max(0, Math.min(height - 1, Math.floor((top - canvasRect.top) / canvasRect.height * height)));
+    const c1 = Math.max(c0 + 1, Math.min(width, Math.ceil((right - canvasRect.left) / canvasRect.width * width)));
+    const r1 = Math.max(r0 + 1, Math.min(height, Math.ceil((bottom - canvasRect.top) / canvasRect.height * height)));
+    return { c0, r0, c1, r1 };
+}
+
+/** 裁切高度圖到像素範圍，並按原圖格距改寫長寬與偏移 */
+function cropGridDataset(ds, bounds) {
+    const sw = ds.width | 0;
+    const sh = ds.height | 0;
+    const c0 = bounds.c0 | 0;
+    const r0 = bounds.r0 | 0;
+    const w = (bounds.c1 | 0) - c0;
+    const h = (bounds.r1 | 0) - r0;
+    if (w < 1 || h < 1 || c0 < 0 || r0 < 0 || c0 + w > sw || r0 + h > sh || !ds.data) return null;
+    if (c0 === 0 && r0 === 0 && w === sw && h === sh) return ds;
+    const src = ds.data;
+    const data = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) {
+        const srcOff = (r0 + y) * sw + c0;
+        const dstOff = y * w;
+        if (src.subarray) data.set(src.subarray(srcOff, srcOff + w), dstOff);
+        else for (let x = 0; x < w; x++) data[dstOff + x] = src[srcOff + x];
+    }
+    const out = { ...ds };
+    delete out.canvasEl;
+    out.data = data;
+    out.width = w;
+    out.height = h;
+    const header = { ...(out.header || {}) };
+    const fullXl = parseFloat(header.xlength ?? header['x-length']);
+    const fullYl = parseFloat(header.ylength ?? header['y-length']);
+    const pitchX = sw > 1 && fullXl > 0 ? fullXl / (sw - 1) : 0;
+    const pitchY = sh > 1 && fullYl > 0 ? fullYl / (sh - 1) : 0;
+    if (pitchX) {
+        const xl = pitchX * Math.max(0, w - 1);
+        header.xlength = String(xl);
+        header['x-length'] = String(xl);
+    }
+    if (pitchY) {
+        const yl = pitchY * Math.max(0, h - 1);
+        header.ylength = String(yl);
+        header['y-length'] = String(yl);
+    }
+    const writeOffset = (keys, delta) => {
+        if (!delta) return;
+        let wrote = false;
+        keys.forEach((key) => {
+            if (header[key] == null || header[key] === '') return;
+            const n = parseFloat(header[key]);
+            if (!Number.isFinite(n)) return;
+            header[key] = String(n + delta);
+            wrote = true;
+        });
+        if (!wrote) header[keys[0]] = String(delta);
+    };
+    writeOffset(['xoffset', 'x-offset'], c0 * pitchX);
+    writeOffset(['yoffset', 'y-offset'], r0 * pitchY);
+    header.xpixels = w;
+    header.ypixels = h;
+    header['x-pixels'] = w;
+    header['y-pixels'] = h;
+    out.header = header;
+    return out;
+}
+
+/** 留下世界座標落在矩形內的散布點 */
+function cropScatterDatasetToWorld(dataset, x0, x1, y0, y1) {
+    if (!dataset || dataset.type !== 'pcd-scatter') return null;
+    const xs = dataset.x;
+    const ys = dataset.y;
+    const zs = dataset.z;
+    const n = dataset.pointCount || (zs && zs.length) || 0;
+    if (!xs || !ys || !zs || !n) return null;
+    const loX = Math.min(x0, x1);
+    const hiX = Math.max(x0, x1);
+    const loY = Math.min(y0, y1);
+    const hiY = Math.max(y0, y1);
+    let count = 0;
+    for (let i = 0; i < n; i++) {
+        const x = xs[i];
+        const y = ys[i];
+        if (x >= loX && x <= hiX && y >= loY && y <= hiY) count++;
+    }
+    if (!count) return null;
+    if (count === n) return dataset;
+    const x = new Float32Array(count);
+    const y = new Float32Array(count);
+    const z = new Float32Array(count);
+    let k = 0;
+    let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+    let vmin = Infinity, vmax = -Infinity;
+    for (let i = 0; i < n; i++) {
+        const px = xs[i];
+        const py = ys[i];
+        if (px < loX || px > hiX || py < loY || py > hiY) continue;
+        const pz = zs[i];
+        x[k] = px;
+        y[k] = py;
+        z[k] = pz;
+        if (px < xmin) xmin = px;
+        if (px > xmax) xmax = px;
+        if (py < ymin) ymin = py;
+        if (py > ymax) ymax = py;
+        if (pz < vmin) vmin = pz;
+        if (pz > vmax) vmax = pz;
+        k++;
+    }
+    if (!Number.isFinite(vmin) || !Number.isFinite(vmax)) { vmin = 0; vmax = 1; }
+    if (vmin === vmax) vmax = vmin + 1;
+    const out = { ...dataset };
+    delete out.canvasEl;
+    out.x = x;
+    out.y = y;
+    out.z = z;
+    out.pointCount = count;
+    out.vmin = vmin;
+    out.vmax = vmax;
+    out.bounds = { xmin, xmax, ymin, ymax };
+    if (out.header) out.header = { ...out.header };
+    return out;
+}
+
+/** 依散布視埠的中心與每像素世界長度，裁出目前畫面看得到的點 */
+function cropScatterDatasetToView(dataset, sc) {
+    if (!sc) return null;
+    const sw = sc.screenW;
+    const sh = sc.screenH;
+    const wpp = sc.worldPerPx;
+    if (!(sw > 0) || !(sh > 0) || !(wpp > 0)) return null;
+    const halfW = sw * 0.5;
+    const halfH = sh * 0.5;
+    const x0 = sc.centerX - halfW * wpp;
+    const x1 = sc.centerX + halfW * wpp;
+    const y0 = sc.centerY - halfH * wpp;
+    const y1 = sc.centerY + halfH * wpp;
+    return cropScatterDatasetToWorld(dataset, x0, x1, y0, y1);
+}
+
+/**
+ * 網格化前的散布預覽把整個點雲畫進一張點陣，再以 CSS 縮放。
+ * 把目前看得到的像素換回世界座標矩形。
+ */
+function rasterVisibleWorld(base, canvas, viewport) {
+    const b = base && base.bounds;
+    if (!b || !canvas) return null;
+    const pb = visibleGridBounds(canvas, viewport, canvas.width, canvas.height);
+    if (!pb) return null;
+    const spanX = (b.xmax - b.xmin) || 1;
+    const spanY = (b.ymax - b.ymin) || 1;
+    const denomX = Math.max(1, canvas.width - 1);
+    const denomY = Math.max(1, canvas.height - 1);
+    const xAt = (px) => b.xmin + (px / denomX) * spanX;
+    const yAt = (py) => b.ymax - (py / denomY) * spanY;
+    return {
+        x0: xAt(pb.c0 - 0.5),
+        x1: xAt(pb.c1 - 0.5),
+        y1: yAt(pb.r0 - 0.5),
+        y0: yAt(pb.r1 - 0.5),
+    };
+}
+
+/** 裁成目前視埠看得到的資料。整張都在畫面內時回傳原物件 */
+function cropDatasetToVisible(dataset, canvas, viewport, scatterViewState) {
+    if (!dataset) return null;
+    if (dataset.type === 'pcd-scatter') return cropScatterDatasetToView(dataset, scatterViewState);
+    const bounds = visibleGridBounds(canvas, viewport, dataset.width | 0, dataset.height | 0);
+    if (!bounds) return null;
+    return cropGridDataset(dataset, bounds);
+}
+
+/** 依目前色階把高度圖畫到離屏 canvas，供裁切後的 PNG 使用 */
+function renderColoredGridCanvas(dataset, cmap, cmin, crange) {
+    const width = dataset.width | 0;
+    const height = dataset.height | 0;
+    const data = dataset.data;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, width);
+    canvas.height = Math.max(1, height);
+    const ctx = canvas.getContext('2d');
+    const img = ctx.createImageData(canvas.width, canvas.height);
+    const px = img.data;
+    const lut = buildColormapLut(cmap || 'jet');
+    const min = Number.isFinite(cmin) ? cmin : (Number.isFinite(dataset.vmin) ? dataset.vmin : 0);
+    const range = (Number.isFinite(crange) && crange > 0) ? crange : 1;
+    const n = Math.min(data ? data.length : 0, width * height);
+    for (let i = 0; i < n; i++) {
+        const po = i * 4;
+        const v = data[i];
+        if (!Number.isFinite(v)) {
+            px[po] = px[po + 1] = px[po + 2] = 0;
+            px[po + 3] = 255;
+            continue;
+        }
+        let t = (v - min) / range;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        const lo = ((t * 255) | 0) * 3;
+        px[po] = lut[lo];
+        px[po + 1] = lut[lo + 1];
+        px[po + 2] = lut[lo + 2];
+        px[po + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    return canvas;
+}
+
+/** 把畫面 canvas 上目前看得到的一塊拷成新圖 */
+function cropCanvasBitmap(canvas, viewport) {
+    const bounds = visibleGridBounds(canvas, viewport, canvas.width, canvas.height);
+    if (!bounds) return null;
+    const w = bounds.c1 - bounds.c0;
+    const h = bounds.r1 - bounds.r0;
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    out.getContext('2d').drawImage(canvas, bounds.c0, bounds.r0, w, h, 0, 0, w, h);
+    return out;
+}
+
+async function buildPreparedSaveBlob(dataset, format, onProgress, visual) {
+    visual = visual || {};
+    const scatter = dataset && dataset.type === 'pcd-scatter';
+    const needsCanvas = format === 'png' || (format === 'jpg' && scatter);
+    if (!needsCanvas) return buildSaveBlob(dataset, format, onProgress);
+    let canvas = null;
+    if (scatter && visual.viewCrop && visual.bitmapCanvas) {
+        canvas = cropCanvasBitmap(visual.bitmapCanvas, visual.bitmapViewport);
+    } else if (!scatter && (visual.viewCrop || !(dataset.canvasEl || visual.liveCanvas))) {
+        canvas = renderColoredGridCanvas(dataset, visual.cmap, visual.cmin, visual.crange);
+    } else {
+        canvas = dataset.canvasEl || visual.liveCanvas || null;
+    }
+    const target = canvas ? { ...dataset, canvasEl: canvas } : dataset;
+    return buildSaveBlob(target, format, onProgress);
+}
+
+/**
+ * 與工具列儲存按鈕相同：開啟存檔視窗，由視窗裡的檔案類型決定格式。
+ * 取消回傳 { cancelled: true }；格式不適用回傳 { rejected: true }。
+ */
+async function commitDatasetSave(dataset, opts) {
+    opts = opts || {};
+    const preferred = opts.preferred || 'bcrf';
+    const onProgress = opts.onProgress;
+    const suffix = opts.nameSuffix || '';
+    const visual = opts.visual || {};
+    const allowed = getAllowedSaveFormats(dataset);
+    const base = stripExt(dataset.filename || 'image') + suffix;
+    const produce = (format) => buildPreparedSaveBlob(dataset, format, onProgress, visual);
+    const supportsSavePicker = (typeof window.showSaveFilePicker === 'function');
+
+    if (supportsSavePicker) {
+        const defaultFormat = allowed.includes(preferred) ? preferred : allowed[0];
+        let handle;
+        try {
+            handle = await window.showSaveFilePicker({
+                suggestedName: `${base}.${formatToExt(defaultFormat)}`,
+                types: buildPickerTypes(allowed, defaultFormat),
+            });
+        } catch (err) {
+            if (err && err.name === 'AbortError') return { cancelled: true };
+            console.warn('showSaveFilePicker 失敗，改用下載方式：', err);
+            const fullName = `${base}.${formatToExt(defaultFormat)}`;
+            if (opts.onBegin) opts.onBegin(fullName);
+            triggerDownload(await produce(defaultFormat), fullName);
+            return { fullName };
+        }
+        const dot = String(handle.name || '').lastIndexOf('.');
+        const chosenExt = dot >= 0 ? handle.name.slice(dot + 1) : '';
+        const format = extToFormat(chosenExt) || defaultFormat;
+        if (!allowed.includes(format)) return { rejected: true };
+        const fullName = handle.name || `${base}.${formatToExt(format)}`;
+        if (opts.onBegin) opts.onBegin(fullName);
+        const blob = await produce(format);
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return { fullName };
+    }
+
+    if (!allowed.includes(preferred)) return { rejected: true };
+    const fullName = `${base}.${formatToExt(preferred)}`;
+    if (opts.onBegin) opts.onBegin(fullName);
+    triggerDownload(await produce(preferred), fullName);
+    return { fullName };
+}
+
 /** 建立 showSaveFilePicker 的 types 清單，preferred 格式排在最前面（成為視窗預設選項） */
 function buildPickerTypes(formats, preferred) {
     const ordered = formats.slice();

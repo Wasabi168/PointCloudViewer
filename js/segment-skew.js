@@ -640,7 +640,7 @@ function segSkewBoundaryOptionsForDirection(width, height, direction) {
     }
     const horizontal = direction === 'horizontal';
     const axisLen = horizontal ? height : width;
-    const minDist = Math.max(20, Math.floor(axisLen / 8));
+    const minDist = Math.max(20, Math.floor(axisLen / 20));
     const edgeMargin = Math.max(2, Math.floor(axisLen * 0.02));
     return { axisLen, minDist, edgeMargin };
 }

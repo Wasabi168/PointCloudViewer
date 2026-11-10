@@ -3,6 +3,7 @@
  * 依賴：i18n.js
  * 匯出（全域）：openInfoDialog(), closeInfoDialog(),
  *   openSegLevelInfoDialog(), closeSegLevelInfoDialog(),
+ *   openUniLevelInfoDialog(), closeUniLevelInfoDialog(),
  *   openRoiLevelInfoDialog(), closeRoiLevelInfoDialog(),
  *   openSegSkewInfoDialog(), closeSegSkewInfoDialog(),
  *   openAnLambdaSInfoDialog(), closeAnLambdaSInfoDialog(),
@@ -20,6 +21,9 @@ const infoCloseBtn         = document.getElementById('infoCloseBtn');
 const btnSegLevelInfo      = document.getElementById('edSegLevelInfo');
 const segLevelInfoOverlay  = document.getElementById('segLevelInfoOverlay');
 const segLevelInfoCloseBtn = document.getElementById('segLevelInfoCloseBtn');
+const btnUniLevelInfo      = document.getElementById('edUniLevelInfo');
+const uniLevelInfoOverlay  = document.getElementById('uniLevelInfoOverlay');
+const uniLevelInfoCloseBtn = document.getElementById('uniLevelInfoCloseBtn');
 const btnRoiLevelInfo      = document.getElementById('edRoiLevelInfo');
 const roiLevelInfoOverlay  = document.getElementById('roiLevelInfoOverlay');
 const roiLevelInfoCloseBtn = document.getElementById('roiLevelInfoCloseBtn');
@@ -62,6 +66,14 @@ function openSegLevelInfoDialog() {
 
 function closeSegLevelInfoDialog() {
     if (segLevelInfoOverlay) segLevelInfoOverlay.classList.remove('show');
+}
+
+function openUniLevelInfoDialog() {
+    if (uniLevelInfoOverlay) uniLevelInfoOverlay.classList.add('show');
+}
+
+function closeUniLevelInfoDialog() {
+    if (uniLevelInfoOverlay) uniLevelInfoOverlay.classList.remove('show');
 }
 
 function openRoiLevelInfoDialog() {
@@ -148,6 +160,7 @@ function bindInfoOverlay(overlay, openFn, closeFn, triggerBtn, closeBtn) {
 
 bindInfoOverlay(infoOverlay, openInfoDialog, closeInfoDialog, btnInfo, infoCloseBtn);
 bindInfoOverlay(segLevelInfoOverlay, openSegLevelInfoDialog, closeSegLevelInfoDialog, btnSegLevelInfo, segLevelInfoCloseBtn);
+bindInfoOverlay(uniLevelInfoOverlay, openUniLevelInfoDialog, closeUniLevelInfoDialog, btnUniLevelInfo, uniLevelInfoCloseBtn);
 bindInfoOverlay(roiLevelInfoOverlay, openRoiLevelInfoDialog, closeRoiLevelInfoDialog, btnRoiLevelInfo, roiLevelInfoCloseBtn);
 bindInfoOverlay(segSkewInfoOverlay, openSegSkewInfoDialog, closeSegSkewInfoDialog, btnSegSkewInfo, segSkewInfoCloseBtn);
 bindInfoOverlay(anLambdaSInfoOverlay, openAnLambdaSInfoDialog, closeAnLambdaSInfoDialog, btnAnLambdaSInfo, anLambdaSInfoCloseBtn);
@@ -162,6 +175,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (infoOverlay && infoOverlay.classList.contains('show')) closeInfoDialog();
     if (segLevelInfoOverlay && segLevelInfoOverlay.classList.contains('show')) closeSegLevelInfoDialog();
+    if (uniLevelInfoOverlay && uniLevelInfoOverlay.classList.contains('show')) closeUniLevelInfoDialog();
     if (roiLevelInfoOverlay && roiLevelInfoOverlay.classList.contains('show')) closeRoiLevelInfoDialog();
     if (segSkewInfoOverlay && segSkewInfoOverlay.classList.contains('show')) closeSegSkewInfoDialog();
     if (anLambdaSInfoOverlay && anLambdaSInfoOverlay.classList.contains('show')) closeAnLambdaSInfoDialog();
