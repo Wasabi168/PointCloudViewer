@@ -1,6 +1,6 @@
 /**
  * 可重用影像檢視元件
- * 依賴：render.js, webgl-3d.js, colormap.js, uni-level.js
+ * 依賴：render.js, webgl-3d.js, colormap.js, uni-level.js, profile-poly.js
  * 匯出（全域）：createImageView()
  */
 /* =========================================================================
@@ -43,6 +43,16 @@ function createImageView(ids, options) {
             uniLevelApplyRunning: false,
             uniLevelApplyRaf: 0,
             uniLevelFeedbackTimer: 0,
+            profilePoly: false,
+            profilePolyRunId: 0,
+            profilePolyBase: null,
+            profilePolyResult: null,
+            profilePolyViews: null,
+            profilePolyPan: null,
+            profilePolyClip: null,
+            profilePolyApplyPending: false,
+            profilePolyApplyRunning: false,
+            profilePolyApplyRaf: 0,
             segLevel: false,
             segLevelBusy: false,
             segLevelTuneBusy: false,
@@ -184,6 +194,7 @@ function createImageView(ids, options) {
 
         const img = ctx.createImageData(bw, bh);
         const px = img.data;
+        fillMissingPixels(px);
         const lut = buildColormapLut(cmap);
         const { cmin, crange } = effColorRange(ds);
         const rBuf = R > 0 ? R * dpr : 0;
@@ -225,7 +236,7 @@ function createImageView(ids, options) {
         for (let i = 0; i < data.length; i++) {
             const po = i * 4;
             const v = data[i];
-            if (!Number.isFinite(v)) { px[po] = px[po + 1] = px[po + 2] = 0; px[po + 3] = 255; continue; }
+            if (!Number.isFinite(v)) { paintMissingPixel(px, po); continue; }
             let t = (v - cmin) / crange;
             if (t < 0) t = 0; else if (t > 1) t = 1;
             const lo = ((t * 255) | 0) * 3;
@@ -678,6 +689,14 @@ function createImageView(ids, options) {
             const data = st.edit.uniLevelResult.correctedData;
             return gridSaveSource(data, w, h, NaN, NaN, uniLevelClipFor('after'), canvas, wrap);
         }
+        if (id === 'edProfilePolyBefore' && st.edit.profilePolyBase) {
+            const b = st.edit.profilePolyBase;
+            return gridSaveSource(b.data, w, h, b.vmin, b.vmax, profilePolyClipFor('before'), canvas, wrap);
+        }
+        if (id === 'edProfilePolyAfter' && st.edit.profilePolyResult && st.edit.profilePolyResult.correctedData) {
+            const data = st.edit.profilePolyResult.correctedData;
+            return gridSaveSource(data, w, h, NaN, NaN, profilePolyClipFor('after'), canvas, wrap);
+        }
         if (id === 'edRoiLevelBefore' && st.edit.roiLevelBase) {
             const b = st.edit.roiLevelBase;
             return gridSaveSource(b.data, b.width || w, b.height || h, b.vmin, b.vmax, clip, canvas, wrap);
@@ -833,6 +852,7 @@ function createImageView(ids, options) {
         if (st.dataset) {
             if (st.edit.segLevel) renderSegLevelCompare();
             else if (st.edit.uniLevel) renderUniLevelCompare();
+            else if (st.edit.profilePoly) renderProfilePolyCompare();
             else if (st.edit.segSkew) renderSegSkewCompare();
             else if (st.edit.medianFilter) renderMedianFilterCompare();
             else if (st.edit.scatterGrid) renderScatterGridCompare();
@@ -2025,6 +2045,7 @@ function createImageView(ids, options) {
             { btn: el.medianFilter, tipKey: 'medianFilterTitle', scatterKey: 'medianFilterScatter' },
             { btn: el.nanPatch, tipKey: 'nanPatchTitle', scatterKey: 'nanPatchScatter' },
             { btn: el.uniLevel, tipKey: 'uniLevelTitle', scatterKey: 'uniLevelScatter' },
+            { btn: el.profilePoly, tipKey: 'profilePolyTitle', scatterKey: 'profilePolyScatter' },
             { btn: el.roiLevel, tipKey: 'roiLevelTitle', scatterKey: 'roiLevelScatter' },
             { btn: el.segLevel, tipKey: 'segLevelTitle', scatterKey: 'segLevelScatter' },
             { btn: el.segSkew, tipKey: 'segSkewTitle', scatterKey: 'segSkewScatter' },
@@ -2123,6 +2144,13 @@ function createImageView(ids, options) {
         if (el.uniLevelKReset) el.uniLevelKReset.disabled = uniLocked;
         if (el.uniLevelShowProbeBefore) el.uniLevelShowProbeBefore.disabled = !(has && st.edit.uniLevel);
         if (el.uniLevelShowProbeAfter) el.uniLevelShowProbeAfter.disabled = !(has && st.edit.uniLevel);
+        const polyBusy = !!(st.edit.profilePolyApplyRunning || st.edit.profilePolyApplyPending);
+        if (el.profilePolyApply) el.profilePolyApply.disabled = !(has && st.edit.profilePoly && !polyBusy && st.edit.profilePolyResult && st.edit.profilePolyResult.correctedData);
+        if (el.profilePolyCancel) el.profilePolyCancel.disabled = !(has && st.edit.profilePoly);
+        const polyLocked = !(has && st.edit.profilePoly && st.edit.profilePolyResult);
+        if (el.profilePolyOrder) el.profilePolyOrder.disabled = polyLocked;
+        if (el.profilePolyDirH) el.profilePolyDirH.disabled = polyLocked;
+        if (el.profilePolyDirV) el.profilePolyDirV.disabled = polyLocked;
         if (el.roiLevelApply) el.roiLevelApply.disabled = !(has && st.edit.roiLevel && !st.edit.roiLevelBusy && st.edit.roiLevelResult);
         if (el.roiLevelCancel) el.roiLevelCancel.disabled = !(has && st.edit.roiLevel);
         updateHistoryButtons();
@@ -2236,6 +2264,7 @@ function createImageView(ids, options) {
         if (st.edit.nanPatch) cancelNanPatch();
         if (st.edit.roiLevel) cancelRoiLevel();
         if (st.edit.uniLevel) cancelUniLevel();
+        if (st.edit.profilePoly) cancelProfilePoly();
     }
     function doUndo() {
         if (!editing || !st.dataset || st.edit.histIndex <= 0) return;
@@ -2631,8 +2660,7 @@ function createImageView(ids, options) {
                 const v = data[row + x];
                 const po = (y * cw + x) * 4;
                 if (!Number.isFinite(v)) {
-                    px[po] = px[po + 1] = px[po + 2] = 0;
-                    px[po + 3] = 255;
+                    paintMissingPixel(px, po);
                     continue;
                 }
                 let tcol = (v - cmin) / denom;
@@ -3645,6 +3673,627 @@ function createImageView(ids, options) {
         showToast(msg, 'info');
     }
 
+    /* ---------- 剖面多項式校正（逐列／逐欄擬合，略過無效點） ---------- */
+
+    function profilePolyDirName(direction) {
+        return direction === 'vertical' ? t('profilePolyDirNameV') : t('profilePolyDirNameH');
+    }
+
+    function profilePolyStatusText(result) {
+        if (!result) return '';
+        return t('profilePolyMeta', profilePolyDirName(result.direction), result.order, result.fitted || 0, result.skipped || 0);
+    }
+
+    function profilePolySyncOrderOptions(direction) {
+        const sel = el.profilePolyOrder;
+        if (!sel) return;
+        const ds = st.dataset;
+        const max = (ds && typeof profilePolyMaxOrder === 'function')
+            ? profilePolyMaxOrder(ds.width, ds.height, direction)
+            : 9;
+        const cap = Math.max(1, max);
+        for (const opt of sel.options) opt.disabled = Number(opt.value) > cap;
+        if (Number(sel.value) > cap) sel.value = String(cap);
+    }
+
+    function profilePolySetDirection(direction) {
+        const vertical = direction === 'vertical';
+        if (el.profilePolyDirH) {
+            el.profilePolyDirH.classList.toggle('active', !vertical);
+            el.profilePolyDirH.setAttribute('aria-pressed', vertical ? 'false' : 'true');
+        }
+        if (el.profilePolyDirV) {
+            el.profilePolyDirV.classList.toggle('active', vertical);
+            el.profilePolyDirV.setAttribute('aria-pressed', vertical ? 'true' : 'false');
+        }
+    }
+
+    function profilePolyReadDirection() {
+        return (el.profilePolyDirV && el.profilePolyDirV.classList.contains('active')) ? 'vertical' : 'horizontal';
+    }
+
+    function profilePolySyncChrome() {
+        const result = st.edit.profilePolyResult;
+        const direction = result ? result.direction : profilePolyReadDirection();
+        profilePolySetDirection(direction);
+        profilePolySyncOrderOptions(direction);
+        if (el.profilePolyOrder && result && document.activeElement !== el.profilePolyOrder) {
+            const cap = st.dataset && typeof profilePolyMaxOrder === 'function'
+                ? Math.max(1, profilePolyMaxOrder(st.dataset.width, st.dataset.height, direction))
+                : 9;
+            const order = Math.min(result.order, cap);
+            el.profilePolyOrder.value = String(order);
+        }
+    }
+
+    function profilePolyEnsureViews() {
+        if (!st.edit.profilePolyViews) {
+            st.edit.profilePolyViews = {
+                beforeImg: segLevelDefaultView(),
+                afterImg: segLevelDefaultView(),
+            };
+        }
+        return st.edit.profilePolyViews;
+    }
+
+    function profilePolyResetViews() {
+        st.edit.profilePolyViews = null;
+        st.edit.profilePolyPan = null;
+    }
+
+    function profilePolyImagePeer(key) {
+        if (key === 'beforeImg') return { key: 'afterImg', canvas: el.profilePolyAfter };
+        if (key === 'afterImg') return { key: 'beforeImg', canvas: el.profilePolyBefore };
+        return null;
+    }
+
+    function profilePolyApplyTransform(canvas, view) {
+        if (!canvas || !view) return;
+        const wrap = canvas.parentElement;
+        canvas.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
+        canvas.style.transformOrigin = '0 0';
+        if (wrap) {
+            const ind = wrap.querySelector('.seg-level-zoom-ind');
+            if (ind) ind.textContent = segLevelZoomPct(view);
+        }
+    }
+
+    function profilePolyMirrorImage(fromKey) {
+        const peer = profilePolyImagePeer(fromKey);
+        if (!peer || !peer.canvas) return;
+        const views = profilePolyEnsureViews();
+        const src = views[fromKey];
+        const dst = views[peer.key];
+        if (!src || !dst) return;
+        dst.scale = src.scale;
+        dst.tx = src.tx;
+        dst.ty = src.ty;
+        dst.contentW = src.contentW;
+        dst.contentH = src.contentH;
+        profilePolyApplyTransform(peer.canvas, dst);
+    }
+
+    function profilePolySyncView(zoomKey, canvas, resetView) {
+        if (!zoomKey || !canvas) return;
+        const wrap = canvas.parentElement;
+        if (!wrap) return;
+        const views = profilePolyEnsureViews();
+        const view = views[zoomKey];
+        const { cw, ch } = segLevelContentSize(canvas);
+        const sizeChanged = view.contentW !== cw || view.contentH !== ch;
+        if (resetView || sizeChanged) segLevelFitView(view, wrap, cw, ch);
+        profilePolyApplyTransform(canvas, view);
+        profilePolyMirrorImage(zoomKey);
+    }
+
+    function profilePolyZoomAt(zoomKey, wrap, canvas, screenX, screenY, zoomFactor) {
+        const views = profilePolyEnsureViews();
+        const view = views[zoomKey];
+        let newScale = view.scale * zoomFactor;
+        if (newScale < view.minScale) newScale = view.minScale;
+        if (newScale > view.maxScale) newScale = view.maxScale;
+        const k = newScale / view.scale;
+        view.tx = screenX - (screenX - view.tx) * k;
+        view.ty = screenY - (screenY - view.ty) * k;
+        view.scale = newScale;
+        profilePolyApplyTransform(canvas, view);
+        profilePolyMirrorImage(zoomKey);
+    }
+
+    function profilePolyEnsureClips() {
+        if (!st.edit.profilePolyClip) {
+            st.edit.profilePolyClip = { before: { lo: 0, hi: 1 }, after: { lo: 0, hi: 1 } };
+        }
+        return st.edit.profilePolyClip;
+    }
+
+    function profilePolyClipFor(pane) {
+        const clips = profilePolyEnsureClips();
+        return pane === 'after' ? clips.after : clips.before;
+    }
+
+    function profilePolyResetClips() {
+        st.edit.profilePolyClip = { before: { lo: 0, hi: 1 }, after: { lo: 0, hi: 1 } };
+    }
+
+    function profilePolyPaneStats(pane) {
+        if (pane === 'after') {
+            const data = st.edit.profilePolyResult && st.edit.profilePolyResult.correctedData;
+            if (!data) return null;
+            const range = computeRange(data);
+            return { vmin: range.vmin, vmax: range.vmax, data };
+        }
+        const base = st.edit.profilePolyBase;
+        if (!base) return null;
+        return { vmin: base.vmin, vmax: base.vmax, data: base.data };
+    }
+
+    function profilePolyVisibleValueRange(pane) {
+        const canvas = pane === 'after' ? el.profilePolyAfter : el.profilePolyBefore;
+        const wrap = canvas && canvas.parentElement;
+        const stats = profilePolyPaneStats(pane);
+        if (!canvas || !wrap || !stats || !st.dataset) return null;
+        const data = stats.data;
+        const view = profilePolyEnsureViews()[pane === 'after' ? 'afterImg' : 'beforeImg'];
+        const scale = view.scale || 1;
+        const { width, height } = st.dataset;
+        const x0 = Math.max(0, Math.floor((0 - view.tx) / scale));
+        const y0 = Math.max(0, Math.floor((0 - view.ty) / scale));
+        const x1 = Math.min(width, Math.ceil((wrap.clientWidth - view.tx) / scale));
+        const y1 = Math.min(height, Math.ceil((wrap.clientHeight - view.ty) / scale));
+        if (x1 <= x0 || y1 <= y0) return null;
+        let vmin = Infinity;
+        let vmax = -Infinity;
+        let count = 0;
+        for (let y = y0; y < y1; y++) {
+            const row = y * width;
+            for (let x = x0; x < x1; x++) {
+                const v = data[row + x];
+                if (!Number.isFinite(v)) continue;
+                if (v < vmin) vmin = v;
+                if (v > vmax) vmax = v;
+                count++;
+            }
+        }
+        if (!count || !(vmax >= vmin)) return null;
+        if (!(vmax > vmin)) {
+            const pad = Math.max(Math.abs(vmin) * 0.001, 1e-6);
+            vmin -= pad;
+            vmax += pad;
+        }
+        return { min: vmin, max: vmax };
+    }
+
+    function profilePolySetClipRange(pane, rangeMin, rangeMax) {
+        const stats = profilePolyPaneStats(pane);
+        if (!stats) return;
+        const span = (stats.vmax - stats.vmin) || 1;
+        let lo = (rangeMin - stats.vmin) / span;
+        let hi = (rangeMax - stats.vmin) / span;
+        if (lo < 0) lo = 0;
+        if (hi > 1) hi = 1;
+        if (hi < lo) { const swap = lo; lo = hi; hi = swap; }
+        if (hi - lo < 0.01) {
+            const mid = (lo + hi) / 2;
+            lo = Math.max(0, mid - 0.005);
+            hi = Math.min(1, lo + 0.01);
+            if (hi > 1) { hi = 1; lo = 0.99; }
+        }
+        const clip = profilePolyClipFor(pane);
+        clip.lo = lo;
+        clip.hi = hi;
+    }
+
+    function profilePolyRenderImage(canvas, data, width, height, cmin, crange, cmap, zoomKey, resetView) {
+        if (!canvas || !data) return;
+        const cw = Math.max(1, width);
+        const ch = Math.max(1, height);
+        canvas.width = cw;
+        canvas.height = ch;
+        canvas.style.width = cw + 'px';
+        canvas.style.height = ch + 'px';
+        const ctx = canvas.getContext('2d');
+        const img = ctx.createImageData(cw, ch);
+        const px = img.data;
+        const lut = buildColormapLut(cmap);
+        const denom = crange || 1e-12;
+        for (let y = 0; y < ch; y++) {
+            const row = y * width;
+            for (let x = 0; x < cw; x++) {
+                const v = data[row + x];
+                const po = (y * cw + x) * 4;
+                if (!Number.isFinite(v)) {
+                    paintMissingPixel(px, po);
+                    continue;
+                }
+                let tcol = (v - cmin) / denom;
+                if (tcol < 0) tcol = 0;
+                else if (tcol > 1) tcol = 1;
+                const lo = ((tcol * 255) | 0) * 3;
+                px[po] = lut[lo];
+                px[po + 1] = lut[lo + 1];
+                px[po + 2] = lut[lo + 2];
+                px[po + 3] = 255;
+            }
+        }
+        ctx.putImageData(img, 0, 0);
+        profilePolySyncView(zoomKey, canvas, resetView);
+    }
+
+    function renderProfilePolyCompare(opts) {
+        const resetView = !!(opts && opts.resetView);
+        const base = st.edit.profilePolyBase;
+        const result = st.edit.profilePolyResult;
+        if (!base || !result || !st.dataset) return;
+        const { width, height } = st.dataset;
+        const cmap = el.colormap.value;
+        const beforeDr = segLevelDisplayRange(base.vmin, base.vmax, profilePolyClipFor('before'));
+        profilePolyRenderImage(
+            el.profilePolyBefore, base.data, width, height,
+            beforeDr.cmin, beforeDr.crange, cmap, 'beforeImg', resetView,
+        );
+        renderSegLevelPaneColorbar(
+            el.profilePolyBeforeCb, el.profilePolyBeforeCbLo, el.profilePolyBeforeCbHi,
+            base.vmin, base.vmax, cmap, profilePolyClipFor('before'),
+        );
+        const afterData = result.correctedData;
+        if (afterData) {
+            const afterStats = computeRange(afterData);
+            const afterDr = segLevelDisplayRange(afterStats.vmin, afterStats.vmax, profilePolyClipFor('after'));
+            profilePolyRenderImage(
+                el.profilePolyAfter, afterData, width, height,
+                afterDr.cmin, afterDr.crange, cmap, 'afterImg', resetView,
+            );
+            renderSegLevelPaneColorbar(
+                el.profilePolyAfterCb, el.profilePolyAfterCbLo, el.profilePolyAfterCbHi,
+                afterStats.vmin, afterStats.vmax, cmap, profilePolyClipFor('after'),
+            );
+        }
+        profilePolySyncChrome();
+    }
+
+    function renderProfilePolyAfterOnly() {
+        const result = st.edit.profilePolyResult;
+        if (!result || !result.correctedData || !st.dataset) return;
+        const { width, height } = st.dataset;
+        const cmap = el.colormap.value;
+        const afterStats = computeRange(result.correctedData);
+        const afterDr = segLevelDisplayRange(afterStats.vmin, afterStats.vmax, profilePolyClipFor('after'));
+        profilePolyRenderImage(
+            el.profilePolyAfter, result.correctedData, width, height,
+            afterDr.cmin, afterDr.crange, cmap, 'afterImg', false,
+        );
+        renderSegLevelPaneColorbar(
+            el.profilePolyAfterCb, el.profilePolyAfterCbLo, el.profilePolyAfterCbHi,
+            afterStats.vmin, afterStats.vmax, cmap, profilePolyClipFor('after'),
+        );
+        profilePolySyncChrome();
+    }
+
+    function setProfilePolyBusy(busy, text) {
+        if (el.profilePolyBusy) {
+            el.profilePolyBusy.classList.toggle('show', !!busy);
+            el.profilePolyBusy.setAttribute('aria-hidden', busy ? 'false' : 'true');
+        }
+        if (el.profilePolyBusyText && text) el.profilePolyBusyText.textContent = text;
+        if (el.profilePolyCompare) el.profilePolyCompare.classList.toggle('is-tune-busy', !!busy);
+    }
+
+    function scheduleProfilePoly() {
+        st.edit.profilePolyApplyPending = true;
+        st.edit.profilePolyRunId = (st.edit.profilePolyRunId || 0) + 1;
+        updateEditButtons();
+        if (st.edit.profilePolyApplyRunning || st.edit.profilePolyApplyRaf) return;
+        st.edit.profilePolyApplyRaf = requestAnimationFrame(() => {
+            st.edit.profilePolyApplyRaf = 0;
+            pumpProfilePoly();
+        });
+    }
+
+    async function pumpProfilePoly() {
+        if (st.edit.profilePolyApplyRunning) return;
+        st.edit.profilePolyApplyRunning = true;
+        updateEditButtons();
+        try {
+            while (st.edit.profilePolyApplyPending && st.edit.profilePoly) {
+                st.edit.profilePolyApplyPending = false;
+                const runId = st.edit.profilePolyRunId;
+                const base = st.edit.profilePolyBase;
+                const result = st.edit.profilePolyResult;
+                if (!base || !result || !st.dataset) break;
+                const { width, height } = st.dataset;
+                const large = typeof segLevelIsLarge === 'function' && segLevelIsLarge(width, height);
+                if (large) setProfilePolyBusy(true, t('profilePolyUpdating'));
+                let out = null;
+                if (typeof profilePolyCorrectAsync === 'function') {
+                    out = await profilePolyCorrectAsync(
+                        base.data, width, height, result.order, result.direction, null,
+                        () => runId !== st.edit.profilePolyRunId || !st.edit.profilePoly,
+                        (fraction) => {
+                            if (runId !== st.edit.profilePolyRunId || !large) return;
+                            setProfilePolyBusy(true, t('profilePolyProgress', Math.round(fraction * 100)));
+                        },
+                    );
+                }
+                if (runId !== st.edit.profilePolyRunId || !st.edit.profilePoly) continue;
+                if (!out || !out.ok || !out.data) {
+                    showToast(t('profilePolyInsufficient'), 'info');
+                    continue;
+                }
+                result.correctedData = out.data;
+                result.fitted = out.fitted;
+                result.skipped = out.skipped;
+                result.finite = out.finite;
+                result.order = out.order;
+                result.direction = out.direction;
+                renderProfilePolyAfterOnly();
+                el.status.textContent = profilePolyStatusText(result);
+            }
+        } finally {
+            st.edit.profilePolyApplyRunning = false;
+            setProfilePolyBusy(false);
+            updateEditButtons();
+            if (st.edit.profilePolyApplyPending && st.edit.profilePoly) scheduleProfilePoly();
+        }
+    }
+
+    function onProfilePolyParamsChanged() {
+        if (!st.edit.profilePoly || !st.edit.profilePolyResult || !st.dataset) return;
+        const direction = profilePolyReadDirection();
+        profilePolySyncOrderOptions(direction);
+        const order = Number(el.profilePolyOrder && el.profilePolyOrder.value);
+        const result = st.edit.profilePolyResult;
+        if (result.order === order && result.direction === direction
+            && result.correctedData
+            && !st.edit.profilePolyApplyRunning
+            && !st.edit.profilePolyApplyPending) return;
+        result.order = order;
+        result.direction = direction;
+        el.status.textContent = t('profilePolyUpdating');
+        scheduleProfilePoly();
+    }
+
+    function setProfilePolyDirection(direction) {
+        if (!st.edit.profilePoly || !st.edit.profilePolyResult) return;
+        if (direction !== 'horizontal' && direction !== 'vertical') return;
+        profilePolySetDirection(direction);
+        onProfilePolyParamsChanged();
+    }
+
+    function setupProfilePolyZoom() {
+        const targets = [
+            { wrap: el.profilePolyBefore && el.profilePolyBefore.parentElement, canvas: el.profilePolyBefore, key: 'beforeImg' },
+            { wrap: el.profilePolyAfter && el.profilePolyAfter.parentElement, canvas: el.profilePolyAfter, key: 'afterImg' },
+        ];
+        for (const item of targets) {
+            if (!item.wrap || !item.canvas || item.wrap.dataset.profilePolyZoomBound) continue;
+            item.wrap.dataset.profilePolyZoomBound = '1';
+            item.wrap.classList.add('seg-level-zoomable');
+            if (!item.wrap.querySelector('.seg-level-zoom-ind')) {
+                const ind = document.createElement('div');
+                ind.className = 'seg-level-zoom-ind';
+                ind.setAttribute('aria-hidden', 'true');
+                item.wrap.appendChild(ind);
+            }
+            item.wrap.addEventListener('wheel', (e) => {
+                if (!st.edit.profilePoly) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const rect = item.wrap.getBoundingClientRect();
+                let dy = e.deltaY;
+                if (e.deltaMode === 1) dy *= 16;
+                else if (e.deltaMode === 2) dy *= item.wrap.clientHeight;
+                profilePolyZoomAt(item.key, item.wrap, item.canvas, e.clientX - rect.left, e.clientY - rect.top, Math.pow(1.0015, -dy));
+            }, { passive: false });
+            item.wrap.addEventListener('mousedown', (e) => {
+                if (!st.edit.profilePoly || e.button !== 0) return;
+                const view = profilePolyEnsureViews()[item.key];
+                const peer = profilePolyImagePeer(item.key);
+                st.edit.profilePolyPan = {
+                    key: item.key,
+                    wrap: item.wrap,
+                    canvas: item.canvas,
+                    peerWrap: peer && peer.canvas ? peer.canvas.parentElement : null,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    tx: view.tx,
+                    ty: view.ty,
+                };
+                item.wrap.classList.add('grabbing');
+                if (st.edit.profilePolyPan.peerWrap) st.edit.profilePolyPan.peerWrap.classList.add('grabbing');
+                e.preventDefault();
+            });
+            item.wrap.addEventListener('dblclick', (e) => {
+                if (!st.edit.profilePoly) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const view = profilePolyEnsureViews()[item.key];
+                segLevelFitView(view, item.wrap, view.contentW, view.contentH);
+                profilePolyApplyTransform(item.canvas, view);
+                profilePolyMirrorImage(item.key);
+            });
+        }
+        if (!st.edit.profilePolyPanBound) {
+            st.edit.profilePolyPanBound = true;
+            window.addEventListener('mousemove', (e) => {
+                const pan = st.edit.profilePolyPan;
+                if (!pan) return;
+                const view = profilePolyEnsureViews()[pan.key];
+                view.tx = pan.tx + (e.clientX - pan.startX);
+                view.ty = pan.ty + (e.clientY - pan.startY);
+                profilePolyApplyTransform(pan.canvas, view);
+                profilePolyMirrorImage(pan.key);
+            });
+            window.addEventListener('mouseup', () => {
+                const pan = st.edit.profilePolyPan;
+                if (!pan) return;
+                pan.wrap.classList.remove('grabbing');
+                if (pan.peerWrap) pan.peerWrap.classList.remove('grabbing');
+                st.edit.profilePolyPan = null;
+            });
+        }
+    }
+
+    function setupProfilePolyColorbars() {
+        const root = el.profilePolyCompare;
+        if (!root || root.dataset.colorBound) return;
+        root.dataset.colorBound = '1';
+        const MIN_GAP = 0.01;
+        let dragging = null;
+        let raf = 0;
+        const schedule = () => {
+            if (raf) return;
+            raf = requestAnimationFrame(() => {
+                raf = 0;
+                if (st.edit.profilePoly && st.edit.profilePolyResult) renderProfilePolyCompare({ resetView: false });
+            });
+        };
+        root.querySelectorAll('.seg-level-cbar-handle').forEach((handle) => {
+            handle.addEventListener('pointerdown', (e) => {
+                if (!st.edit.profilePoly || e.button !== 0) return;
+                const cbar = handle.closest('.seg-level-cbar');
+                const track = handle.parentElement;
+                if (!cbar || !track) return;
+                e.preventDefault();
+                e.stopPropagation();
+                dragging = {
+                    which: handle.dataset.which === 'lo' ? 'lo' : 'hi',
+                    pane: cbar.dataset.pane === 'after' ? 'after' : 'before',
+                    track,
+                    handle,
+                };
+                handle.classList.add('dragging');
+                try { handle.setPointerCapture(e.pointerId); } catch (_) { /* 略過 */ }
+            });
+            handle.addEventListener('pointermove', (e) => {
+                if (!dragging || dragging.handle !== handle) return;
+                const clip = profilePolyClipFor(dragging.pane);
+                const rect = dragging.track.getBoundingClientRect();
+                const fromTop = rect.height > 0 ? (e.clientY - rect.top) / rect.height : 0;
+                const f = 1 - Math.min(1, Math.max(0, fromTop));
+                if (dragging.which === 'lo') clip.lo = Math.max(0, Math.min(f, clip.hi - MIN_GAP));
+                else clip.hi = Math.min(1, Math.max(f, clip.lo + MIN_GAP));
+                schedule();
+            });
+            const endDrag = () => {
+                if (!dragging || dragging.handle !== handle) return;
+                handle.classList.remove('dragging');
+                dragging = null;
+            };
+            handle.addEventListener('pointerup', endDrag);
+            handle.addEventListener('pointercancel', endDrag);
+        });
+        root.querySelectorAll('.seg-level-cbar-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                if (!st.edit.profilePoly) return;
+                const cbar = btn.closest('.seg-level-cbar');
+                if (!cbar) return;
+                const pane = cbar.dataset.pane === 'after' ? 'after' : 'before';
+                if (btn.dataset.act === 'reset') {
+                    const clip = profilePolyClipFor(pane);
+                    clip.lo = 0;
+                    clip.hi = 1;
+                } else {
+                    const range = profilePolyVisibleValueRange(pane);
+                    if (!range) {
+                        showToast(t('segLevelColorViewEmpty'), 'info');
+                        return;
+                    }
+                    profilePolySetClipRange(pane, range.min, range.max);
+                }
+                renderProfilePolyCompare({ resetView: false });
+            });
+        });
+    }
+
+    function setProfilePolyConfigUI(visible) {
+        if (el.profilePolyConfig) el.profilePolyConfig.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+
+    function enterProfilePolyUI(active) {
+        if (el.viewer) el.viewer.classList.toggle('profile-poly-active', !!active);
+        if (el.profilePolyPanel) el.profilePolyPanel.setAttribute('aria-hidden', active ? 'false' : 'true');
+        if (el.profilePoly) el.profilePoly.classList.toggle('tool-active', !!active);
+        setProfilePolyConfigUI(!!active);
+        setSegLevelSideUI(!!active);
+    }
+
+    function exitProfilePolyMode() {
+        st.edit.profilePoly = false;
+        st.edit.profilePolyRunId = (st.edit.profilePolyRunId || 0) + 1;
+        st.edit.profilePolyApplyPending = false;
+        st.edit.profilePolyBase = null;
+        st.edit.profilePolyResult = null;
+        profilePolyResetClips();
+        profilePolyResetViews();
+        setProfilePolyBusy(false);
+        enterProfilePolyUI(false);
+        updateEditButtons();
+    }
+
+    function cancelProfilePoly() {
+        if (!st.edit.profilePoly) return;
+        exitProfilePolyMode();
+    }
+
+    function startProfilePolyMode() {
+        if (!editing || !st.dataset) { showToast(t('editNoData'), 'info'); return; }
+        if (isScatter(st.dataset)) { showToast(t('profilePolyScatter'), 'info'); return; }
+        if (typeof profilePolyCorrectAsync !== 'function') return;
+        if (st.edit.profilePoly) { cancelProfilePoly(); return; }
+        endTransientModes();
+
+        ensureFloatPixels(st.dataset);
+        const ds = st.dataset;
+        const { width, height } = ds;
+        profilePolySyncOrderOptions('horizontal');
+        const order = Number(el.profilePolyOrder && el.profilePolyOrder.value) || 1;
+        if (!(width > order) || !(height > 1)) {
+            showToast(t('profilePolyInsufficient'), 'info');
+            return;
+        }
+        const baseData = ds.data instanceof Float32Array ? ds.data.slice() : Float32Array.from(ds.data);
+        st.edit.profilePolyBase = { data: baseData, vmin: ds.vmin, vmax: ds.vmax };
+        st.edit.profilePolyResult = {
+            order,
+            direction: 'horizontal',
+            correctedData: null,
+            fitted: 0,
+            skipped: 0,
+            finite: 0,
+        };
+        profilePolySetDirection('horizontal');
+        profilePolyResetViews();
+        profilePolyResetClips();
+        st.edit.profilePoly = true;
+        enterProfilePolyUI(true);
+        profilePolySyncChrome();
+        el.status.textContent = t('profilePolyUpdating');
+        updateEditButtons();
+        renderProfilePolyCompare({ resetView: true });
+        scheduleProfilePoly();
+        requestAnimationFrame(() => {
+            if (st.edit.profilePoly && st.edit.profilePolyResult) renderProfilePolyCompare({ resetView: true });
+        });
+    }
+
+    function applyProfilePoly() {
+        const result = st.edit.profilePolyResult;
+        if (!st.edit.profilePoly || !result || !result.correctedData || !st.dataset) return;
+        if (st.edit.profilePolyApplyRunning || st.edit.profilePolyApplyPending) return;
+        const order = result.order;
+        const direction = result.direction;
+        ensureFloatPixels(st.dataset);
+        st.dataset.data = result.correctedData.slice();
+        exitProfilePolyMode();
+        refreshAfterEdit(false);
+        pushHistory();
+        setLastEditStep({ type: 'profilePoly', order, direction });
+        const msg = t('profilePolyDone', profilePolyDirName(direction), order);
+        el.status.textContent = msg;
+        showToast(msg, 'info');
+    }
+
     /* ---------- 擇區水平校正模式（ROI 擬合平面 → 全圖去傾斜） ---------- */
 
     function roiLevelStatusText(result) {
@@ -3992,8 +4641,7 @@ function createImageView(ids, options) {
                 const v = data[rowBase + x];
                 const po = (y * cw + x) * 4;
                 if (!Number.isFinite(v)) {
-                    px[po] = px[po + 1] = px[po + 2] = 0;
-                    px[po + 3] = 255;
+                    paintMissingPixel(px, po);
                     continue;
                 }
                 let t = (v - cmin) / crange;
@@ -5704,8 +6352,7 @@ function createImageView(ids, options) {
                 const v = data[rowBase + x];
                 const po = (y * cw + x) * 4;
                 if (!Number.isFinite(v)) {
-                    px[po] = px[po + 1] = px[po + 2] = 0;
-                    px[po + 3] = 255;
+                    paintMissingPixel(px, po);
                     continue;
                 }
                 let t = (v - cmin) / crange;
@@ -6684,8 +7331,7 @@ function createImageView(ids, options) {
                 const v = data[rowBase + x];
                 const po = (y * cw + x) * 4;
                 if (!Number.isFinite(v)) {
-                    px[po] = px[po + 1] = px[po + 2] = 0;
-                    px[po + 3] = 255;
+                    paintMissingPixel(px, po);
                     continue;
                 }
                 let t = (v - cmin) / crange;
@@ -7447,8 +8093,7 @@ function createImageView(ids, options) {
                 const v = data[rowBase + x];
                 const po = (y * cw + x) * 4;
                 if (!Number.isFinite(v)) {
-                    px[po] = px[po + 1] = px[po + 2] = 0;
-                    px[po + 3] = 255;
+                    paintMissingPixel(px, po);
                     continue;
                 }
                 let t = (v - cmin) / crange;
@@ -7833,8 +8478,7 @@ function createImageView(ids, options) {
                 const v = data[rowBase + x];
                 const po = (y * cw + x) * 4;
                 if (!Number.isFinite(v)) {
-                    px[po] = px[po + 1] = px[po + 2] = 0;
-                    px[po + 3] = 255;
+                    paintMissingPixel(px, po);
                     continue;
                 }
                 let tt = (v - cmin) / crange;
@@ -8662,8 +9306,7 @@ function createImageView(ids, options) {
                 const v = data[rowBase + x];
                 const po = (y * cw + x) * 4;
                 if (!Number.isFinite(v)) {
-                    px[po] = px[po + 1] = px[po + 2] = 0;
-                    px[po + 3] = 255;
+                    paintMissingPixel(px, po);
                     continue;
                 }
                 let t = (v - cmin) / crange;
@@ -8922,6 +9565,7 @@ function createImageView(ids, options) {
         if (st.edit.scatterGrid) cancelScatterGrid();
         if (st.edit.nanPatch) cancelNanPatch();
         if (st.edit.roiLevel) cancelRoiLevel();
+        if (st.edit.profilePoly) cancelProfilePoly();
         return cloneDatasetForTransfer(st.dataset);
     }
 
@@ -9036,6 +9680,7 @@ function createImageView(ids, options) {
         if (st.edit.scatterGrid) cancelScatterGrid();
         if (st.edit.nanPatch) cancelNanPatch();
         if (st.edit.roiLevel) cancelRoiLevel();
+        if (st.edit.profilePoly) cancelProfilePoly();
         // 點擊已啟用的模式 → 關閉
         if (st.edit.cropMode === mode) { exitCrop(); return; }
         st.edit.cropMode = mode;
@@ -9399,8 +10044,9 @@ function createImageView(ids, options) {
             if (st.edit.medianFilter) cancelMedianFilter();
             if (st.edit.scatterGrid) cancelScatterGrid();
             if (st.edit.nanPatch) cancelNanPatch();
-            if (st.edit.roiLevel) cancelRoiLevel();
-            st.edit.denoise = true;
+        if (st.edit.roiLevel) cancelRoiLevel();
+        if (st.edit.profilePoly) cancelProfilePoly();
+        st.edit.denoise = true;
             st.edit.histLo = 0; st.edit.histHi = 1;
             st.edit.histAuto = false;
             snapshotDenoiseBase();
@@ -9509,6 +10155,7 @@ function createImageView(ids, options) {
         if (st.edit.nanPatch) exitNanPatchMode();
         if (st.edit.roiLevel) exitRoiLevelMode();
         if (st.edit.uniLevel) exitUniLevelMode();
+        if (st.edit.profilePoly) exitProfilePolyMode();
         resetHistory();          // 以新載入的資料作為歷史起點
         updateEditButtons();
     }
@@ -9617,6 +10264,14 @@ function createImageView(ids, options) {
         if (el.uniLevelShowProbeAfter) el.uniLevelShowProbeAfter.addEventListener('change', onUniLevelProbeToggle);
         setupUniLevelZoom();
         setupUniLevelColorbars();
+        if (el.profilePoly) el.profilePoly.addEventListener('click', startProfilePolyMode);
+        if (el.profilePolyApply) el.profilePolyApply.addEventListener('click', applyProfilePoly);
+        if (el.profilePolyCancel) el.profilePolyCancel.addEventListener('click', cancelProfilePoly);
+        if (el.profilePolyOrder) el.profilePolyOrder.addEventListener('change', onProfilePolyParamsChanged);
+        if (el.profilePolyDirH) el.profilePolyDirH.addEventListener('click', () => setProfilePolyDirection('horizontal'));
+        if (el.profilePolyDirV) el.profilePolyDirV.addEventListener('click', () => setProfilePolyDirection('vertical'));
+        setupProfilePolyZoom();
+        setupProfilePolyColorbars();
         if (el.histAuto) el.histAuto.addEventListener('click', () => autoDenoiseBounds());
         if (el.histApply) el.histApply.addEventListener('click', () => toggleDenoise(false));
         if (el.histCancel) el.histCancel.addEventListener('click', () => cancelDenoise());
@@ -9649,6 +10304,7 @@ function createImageView(ids, options) {
             if (st.edit.denoise) renderHist();
             if (st.edit.segLevel) renderSegLevelCompare({ resetView: true });
             if (st.edit.uniLevel) renderUniLevelCompare({ resetView: true });
+            if (st.edit.profilePoly) renderProfilePolyCompare({ resetView: true });
             if (st.edit.segSkew) renderSegSkewCompare({ resetView: true });
             if (st.edit.medianFilter) renderMedianFilterCompare({ resetView: true });
             if (st.edit.scatterGrid) renderScatterGridCompare({ resetView: true });
@@ -9675,12 +10331,27 @@ function createImageView(ids, options) {
         getDatasetSignature: () => st.dataset ? getDatasetSignature(st.dataset) : null,
         getLastEditStep: () => st.edit.lastEditStep,
         clearLastEditStep: () => { setLastEditStep(null); },
+        repaint: () => {
+            if (!st.dataset) return;
+            if (isScatter(st.dataset) && (!el.viewer || el.viewer.clientWidth < 2)) return;
+            render(st.dataset, el.colormap.value, false);
+            if (st.edit.denoise) renderHist();
+            if (st.edit.segLevel) renderSegLevelCompare({ resetView: false });
+            if (st.edit.uniLevel) renderUniLevelCompare({ resetView: false });
+            if (st.edit.profilePoly) renderProfilePolyCompare({ resetView: false });
+            if (st.edit.segSkew) renderSegSkewCompare({ resetView: false });
+            if (st.edit.medianFilter) renderMedianFilterCompare({ resetView: false });
+            if (st.edit.scatterGrid) renderScatterGridCompare({ resetView: false });
+            if (st.edit.nanPatch) renderNanPatchCompare({ resetView: false });
+            if (st.edit.roiLevel) renderRoiLevelCompare({ resetView: false });
+        },
         refit: () => {
             if (st.dataset && el.viewer.clientWidth > 0) {
                 fitImage();
                 if (st.edit.denoise) renderHist();
                 if (st.edit.segLevel) renderSegLevelCompare({ resetView: true });
                 if (st.edit.uniLevel) renderUniLevelCompare({ resetView: true });
+            if (st.edit.profilePoly) renderProfilePolyCompare({ resetView: true });
                 if (st.edit.segSkew) renderSegSkewCompare({ resetView: true });
                 if (st.edit.medianFilter) renderMedianFilterCompare({ resetView: true });
                 if (st.edit.scatterGrid) renderScatterGridCompare({ resetView: true });
@@ -9705,6 +10376,12 @@ function createImageView(ids, options) {
             if (st.edit.uniLevel && st.edit.uniLevelResult) {
                 uniLevelSyncChrome();
                 el.status.textContent = uniLevelStatusText(st.edit.uniLevelResult);
+            }
+            if (st.edit.profilePoly && st.edit.profilePolyResult) {
+                profilePolySyncChrome();
+                el.status.textContent = st.edit.profilePolyResult.correctedData
+                    ? profilePolyStatusText(st.edit.profilePolyResult)
+                    : t('profilePolyUpdating');
             }
             syncSegLevelSideToggle();
             if (editing) updateEditButtons();
@@ -9845,6 +10522,18 @@ const editorView = createImageView({
     uniLevelShowProbeAfter: 'edUniLevelShowProbeAfter',
     uniLevelUpdateBadge: 'edUniLevelUpdateBadge',
     uniLevelApply: 'edUniLevelApply', uniLevelCancel: 'edUniLevelCancel',
+    profilePoly: 'edProfilePoly',
+    profilePolyPanel: 'edProfilePolyPanel', profilePolyConfig: 'edProfilePolyConfig',
+    profilePolyOrder: 'edProfilePolyOrder',
+    profilePolyDirH: 'edProfilePolyDirH', profilePolyDirV: 'edProfilePolyDirV',
+    profilePolyCompare: 'edProfilePolyCompare', profilePolyBusy: 'edProfilePolyBusy',
+    profilePolyBusyText: 'edProfilePolyBusyText',
+    profilePolyBefore: 'edProfilePolyBefore', profilePolyAfter: 'edProfilePolyAfter',
+    profilePolyBeforeCb: 'edProfilePolyBeforeCb', profilePolyBeforeCbLo: 'edProfilePolyBeforeCbLo',
+    profilePolyBeforeCbHi: 'edProfilePolyBeforeCbHi',
+    profilePolyAfterCb: 'edProfilePolyAfterCb', profilePolyAfterCbLo: 'edProfilePolyAfterCbLo',
+    profilePolyAfterCbHi: 'edProfilePolyAfterCbHi',
+    profilePolyApply: 'edProfilePolyApply', profilePolyCancel: 'edProfilePolyCancel',
     roiLevel: 'edRoiLevel',
     roiLevelPanel: 'edRoiLevelPanel', roiLevelConfig: 'edRoiLevelConfig',
     roiLevelMeta: 'edRoiLevelMeta',

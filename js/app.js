@@ -33,19 +33,31 @@ function editorHasData() {
     return typeof editorView !== 'undefined' && editorView.hasData && editorView.hasData();
 }
 
+function editorHasHeightData() {
+    return editorHasData()
+        && typeof editorView.canUseCalc === 'function'
+        && editorView.canUseCalc();
+}
+
+function bumpHasData() {
+    return typeof BumpAnalysis !== 'undefined' && BumpAnalysis.hasData && BumpAnalysis.hasData();
+}
+
+function crossLoadMessageKey(source, named) {
+    if (source === 'viewer') return named ? 'crossLoadToEditor' : 'crossLoadToEditorPlain';
+    if (source === 'editor') return named ? 'crossLoadToViewer' : 'crossLoadToViewerPlain';
+    if (source === 'editor-bump') return named ? 'crossLoadEditorToBump' : 'crossLoadEditorToBumpPlain';
+    return '';
+}
+
 /** 語系切換時重畫詢問文字 */
 function syncCrossLoadPrompt() {
     if (!crossLoadPromptEl || crossLoadPromptEl.hidden) return;
     const source = crossLoadPromptEl.dataset.source;
     const name = crossLoadPromptEl.dataset.filename || '';
-    if (!crossLoadTextEl || (source !== 'viewer' && source !== 'editor')) return;
-    if (name) {
-        const key = source === 'viewer' ? 'crossLoadToEditor' : 'crossLoadToViewer';
-        crossLoadTextEl.textContent = t(key, name);
-    } else {
-        const key = source === 'viewer' ? 'crossLoadToEditorPlain' : 'crossLoadToViewerPlain';
-        crossLoadTextEl.textContent = t(key);
-    }
+    const key = crossLoadMessageKey(source, !!name);
+    if (!crossLoadTextEl || !key) return;
+    crossLoadTextEl.textContent = name ? t(key, name) : t(key);
 }
 
 function tickCrossLoadBar() {
@@ -107,14 +119,63 @@ function dismissCrossLoad(immediate) {
     }, CROSS_LOAD_FADE_MS);
 }
 
+function showCrossLoadPrompt(source, filename) {
+    if (!crossLoadPromptEl) return;
+    dismissCrossLoad(true);
+    crossLoadPromptEl.dataset.source = source;
+    crossLoadPromptEl.dataset.filename = filename || '';
+    crossLoadPromptEl.hidden = false;
+    crossLoadPromptEl.setAttribute('aria-hidden', 'false');
+    syncCrossLoadPrompt();
+    if (crossLoadTimerBar) crossLoadTimerBar.style.transform = 'scaleX(1)';
+    crossLoadPromptEl.classList.remove('show');
+    void crossLoadPromptEl.offsetWidth;
+    crossLoadPromptEl.classList.add('show');
+    crossLoadActive = true;
+    crossLoadPaused = false;
+    crossLoadRemain = CROSS_LOAD_HOLD_MS;
+    armCrossLoadTimer();
+}
+
+function dismissEditorToBumpLoad() {
+    if (!crossLoadPromptEl || crossLoadPromptEl.dataset.source !== 'editor-bump') return;
+    dismissCrossLoad(false);
+}
+
 /**
- * 使用者手動從有圖的頁面切到沒有圖的另一頁時，在角落詢問是否載入。
- * 只在分頁按鈕觸發；「傳送到檢視／編輯」不會再問一次。
+ * 切到 Bump 分析時，若 Bump 是空的且點雲編輯有高度圖，詢問是否載入。
+ * 散點資料無法當成高度圖，不詢問。
+ */
+function offerEditorToBumpLoad() {
+    if (!crossLoadPromptEl) return;
+    if (typeof datasetTransferInProgress !== 'undefined' && datasetTransferInProgress) {
+        dismissCrossLoad(true);
+        return;
+    }
+    if (!editorHasHeightData() || bumpHasData()) {
+        dismissCrossLoad(false);
+        return;
+    }
+    const filename = editorView.getFilename ? editorView.getFilename() : '';
+    showCrossLoadPrompt('editor-bump', filename);
+}
+
+/**
+ * 使用者手動切換時，在角落詢問是否載入。
+ * 點雲檢視 ↔ 點雲編輯，以及切到空的 Bump 分析且點雲編輯有高度圖時。
+ * 只在分頁或 Bump 分析按鈕觸發；「傳送到…」不會再問一次。
  */
 function offerCrossPageLoad(from, to) {
     if (!crossLoadPromptEl) return;
     if (typeof datasetTransferInProgress !== 'undefined' && datasetTransferInProgress) {
         dismissCrossLoad(true);
+        return;
+    }
+    if (to === 'analysis'
+        && typeof AnalysisView !== 'undefined'
+        && AnalysisView.getTool
+        && AnalysisView.getTool() === 'bump') {
+        offerEditorToBumpLoad();
         return;
     }
     let source = null;
@@ -128,20 +189,7 @@ function offerCrossPageLoad(from, to) {
     const filename = source === 'viewer'
         ? ((currentDataset && currentDataset.filename) || '')
         : (editorView.getFilename ? editorView.getFilename() : '');
-    dismissCrossLoad(true);
-    crossLoadPromptEl.dataset.source = source;
-    crossLoadPromptEl.dataset.filename = filename;
-    crossLoadPromptEl.hidden = false;
-    crossLoadPromptEl.setAttribute('aria-hidden', 'false');
-    syncCrossLoadPrompt();
-    if (crossLoadTimerBar) crossLoadTimerBar.style.transform = 'scaleX(1)';
-    crossLoadPromptEl.classList.remove('show');
-    void crossLoadPromptEl.offsetWidth;
-    crossLoadPromptEl.classList.add('show');
-    crossLoadActive = true;
-    crossLoadPaused = false;
-    crossLoadRemain = CROSS_LOAD_HOLD_MS;
-    armCrossLoadTimer();
+    showCrossLoadPrompt(source, filename);
 }
 
 function acceptCrossLoad() {
@@ -159,6 +207,16 @@ function acceptCrossLoad() {
         const cmapEl = document.getElementById('edColormap');
         const opts = cmapEl ? { colormap: cmapEl.value } : undefined;
         if (ds && loadDatasetIntoViewer(ds, opts)) showToast(t('sentToViewer'), 'info');
+    } else if (source === 'editor-bump') {
+        if (bumpHasData() || !editorHasHeightData() || typeof BumpInspection === 'undefined' || !BumpInspection.loadDataset) return;
+        const ds = editorView.getDataset();
+        if (!ds) return;
+        if (typeof BumpAnalysis !== 'undefined' && BumpAnalysis.setPage) BumpAnalysis.setPage('bcPageInspect');
+        BumpInspection.loadDataset(ds).then((ok) => {
+            if (!ok) return;
+            if (typeof BumpAnalysis !== 'undefined' && BumpAnalysis.refit) BumpAnalysis.refit();
+            showToast(t('sentToBump'), 'info');
+        });
     }
 }
 
@@ -229,3 +287,18 @@ else if (typeof BatchFileManager !== 'undefined' && BatchFileManager.setPageCont
 
 // 套用初始語言
 applyLanguage(currentLang);
+
+/** 主題切換後重繪已開啟的影像，讓缺測區跟著底色變 */
+function refreshThemeSurfaces() {
+    const cmapEl = document.getElementById('colormap');
+    if (typeof currentDataset !== 'undefined' && currentDataset && typeof render === 'function') {
+        const scatterHidden = currentDataset.type === 'pcd-scatter'
+            && (!document.getElementById('viewer') || document.getElementById('viewer').clientWidth < 2);
+        if (!scatterHidden) render(currentDataset, cmapEl ? cmapEl.value : 'jet', false);
+    }
+    if (typeof editorView !== 'undefined' && editorView && editorView.repaint) editorView.repaint();
+    if (typeof AnalysisView !== 'undefined' && AnalysisView.repaint) AnalysisView.repaint();
+    if (typeof OverlayAnalysis !== 'undefined' && OverlayAnalysis.repaint) OverlayAnalysis.repaint();
+    if (typeof BumpInspection !== 'undefined' && BumpInspection.repaint) BumpInspection.repaint();
+    if (typeof BumpOverlay !== 'undefined' && BumpOverlay.repaint) BumpOverlay.repaint();
+}

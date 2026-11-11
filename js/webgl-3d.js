@@ -16,6 +16,7 @@ const Viewer3D = (() => {
     let pointPx = DEFAULT_POINT_PX;
 
     let gl = null;
+    let stageThemeKey = '';
     let program = null;
     let posBuffer = null;
     let colorBuffer = null;
@@ -83,6 +84,21 @@ const Viewer3D = (() => {
         return s;
     }
 
+    function applyStageClear() {
+        if (!gl) return;
+        const key = document.documentElement.getAttribute('data-theme') || 'dark';
+        if (key === stageThemeKey) return;
+        stageThemeKey = key;
+        let rgb = [0.078, 0.082, 0.11];
+        const raw = getComputedStyle(document.documentElement).getPropertyValue('--stage').trim();
+        const m = /^#([0-9a-f]{6})$/i.exec(raw);
+        if (m) {
+            const n = parseInt(m[1], 16);
+            rgb = [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+        }
+        gl.clearColor(rgb[0], rgb[1], rgb[2], 1);
+    }
+
     function initGL() {
         if (supported !== null) return supported;
         try {
@@ -130,7 +146,7 @@ const Viewer3D = (() => {
         posBuffer    = gl.createBuffer();
         colorBuffer  = gl.createBuffer();
 
-        gl.clearColor(0.078, 0.082, 0.11, 1.0);
+        applyStageClear();
         gl.enable(gl.DEPTH_TEST);
         supported = true;
         return true;
@@ -408,6 +424,11 @@ const Viewer3D = (() => {
             return true;
         },
         onResize() { if (active) requestDraw(); },
+        syncTheme() {
+            stageThemeKey = '';
+            applyStageClear();
+            if (active) requestDraw();
+        },
         getPointSize() { return pointPx; },
         getDefaultPointSize() { return DEFAULT_POINT_PX; },
         getPointSizeLimits() { return { min: POINT_SIZE_MIN, max: POINT_SIZE_MAX }; },

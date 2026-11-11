@@ -49,10 +49,10 @@ body:has(#pageAnalysis.active.an-page-bump) {
 }
 #bcRoot :where(button:hover:not(:disabled):not(.colormap-picker-trigger), label.bc-file-btn:hover:not(:disabled)) { background: none; }
 #bcRoot :where(button:disabled, label.bc-file-btn:disabled) { opacity: 0.45; cursor: not-allowed; }
-#bcRoot :where(select:not(.colormap-picker-native)) { background: #1e1e28; color: var(--text); border: 1px solid var(--border); }
+#bcRoot :where(select:not(.colormap-picker-native)) { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
 /* 色彩選單沿用 WebViewer 的 .colormap-picker 樣式，只縮小尺寸配合 BumpCop 工具列 */
 #bcRoot .colormap-picker-trigger {
-    background: #343446;
+    background: var(--surface-3);
     padding: 7px 28px 7px 12px;
     border-radius: 8px;
     min-width: 108px;
@@ -96,7 +96,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
 #bcRoot .step,
 #bcRoot .nav-btn {
     border: 1px solid var(--border);
-    background: #343446;
+    background: var(--surface-3);
     border-radius: 8px;
 }
 #bcRoot .bc-info-btn {
@@ -115,7 +115,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     padding: 0;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: #343446;
+    background: var(--surface-3);
     color: var(--text);
     flex-shrink: 0;
     cursor: pointer;
@@ -163,7 +163,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     list-style: none;
     counter-reset: step;
     border-bottom: 1px solid var(--border);
-    background: #242433;
+    background: var(--sunken);
 }
 #bcRoot .stepper li { display: flex; margin: 0; padding: 0; }
 #bcRoot .step {
@@ -188,7 +188,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     margin: 12px;
     border: 1px solid var(--border);
     border-radius: 12px;
-    background: #17171f;
+    background: var(--stage);
     overflow: hidden;
 }
 #bcRoot .bc-viewer.drag-over { border-color: var(--accent); }
@@ -483,7 +483,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     top: 0;
     z-index: 14;
     height: 6px;
-    background: #3a3a4a;
+    background: var(--control);
     overflow: hidden;
 }
 #bcRoot .load-progress-bar {
@@ -617,7 +617,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     font-size: 11px;
     line-height: 1;
     color: var(--text);
-    background: #2a2a38;
+    background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 3px;
     padding: 2px 4px;
@@ -676,11 +676,11 @@ body:has(#pageAnalysis.active.an-page-bump) {
     padding: 4px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: #1e1e28;
+    background: var(--bg);
     color: var(--text);
 }
 #bcRoot .bc-profile-icon-btn svg { width: 16px; height: 16px; display: block; }
-#bcRoot .bc-profile-icon-btn:hover { color: white; }
+#bcRoot .bc-profile-icon-btn:hover { color: var(--text); }
 #bcRoot .bc-profile-icon-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
 #bcRoot .bc-profile-icon-btn:disabled { opacity: 0.4; cursor: default; }
 #bcRoot .profile-chart-toggle {
@@ -689,7 +689,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
-    background: #1e1e28;
+    background: var(--bg);
 }
 #bcRoot .profile-chart-toggle button {
     display: flex;
@@ -704,11 +704,11 @@ body:has(#pageAnalysis.active.an-page-bump) {
     cursor: pointer;
 }
 #bcRoot .profile-chart-toggle button + button { border-left: 1px solid var(--border); }
-#bcRoot .profile-chart-toggle button:hover { color: white; }
+#bcRoot .profile-chart-toggle button:hover { color: var(--text); }
 #bcRoot .profile-chart-toggle button.active { background: var(--accent); color: white; }
 #bcRoot .profile-chart-toggle button svg { width: 16px; height: 16px; display: block; }
 #bcRoot .bc-profile-plot { position: relative; height: 150px; margin-top: 6px; }
-#bcRoot .bc-profile-plot canvas { width: 100%; height: 100%; display: block; }
+#bcRoot .bc-profile-plot canvas { width: 100%; height: 100%; display: block; background: var(--plot); border-radius: 4px; }
 #bcRoot .bc-profile-plot.measure-mode,
 #bcRoot .bc-profile-plot.measure-mode canvas { cursor: crosshair; }
 #bcRoot .bc-profile-tip {
@@ -750,7 +750,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
 #bcRoot .bump-detail-summary > div {
     min-width: 0;
     padding: 8px 10px;
-    background: #1e1e28;
+    background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 8px;
 }
@@ -766,7 +766,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
 #bcRoot .bump-detail-list {
     max-height: 148px;
     overflow: auto;
-    background: #1e1e28;
+    background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 8px;
     font-size: 12px;
@@ -780,7 +780,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     top: 0;
     z-index: 1;
     padding: 0;
-    background: #262633;
+    background: var(--sunken);
     color: var(--muted);
     font-weight: 500;
 }
@@ -867,9 +867,9 @@ body:has(#pageAnalysis.active.an-page-bump) {
 #bcRoot .dot-size-head { display: flex; justify-content: space-between; align-items: baseline; }
 #bcRoot .bc-side input,
 #bcRoot .bc-side select {
-    background: #1e1e28;
+    background: var(--bg);
     color: var(--text);
-    color-scheme: dark;
+    color-scheme: inherit;
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 8px;
@@ -879,7 +879,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
 #bcRoot .nav-btn:disabled,
 #bcRoot .tool-btn:disabled { opacity: 0.45; cursor: default; }
 #bcRoot .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-#bcRoot .result-grid div { background: #1e1e28; border-radius: 8px; padding: 8px; }
+#bcRoot .result-grid div { background: var(--bg); border-radius: 8px; padding: 8px; }
 #bcRoot .result-grid span { display: block; color: var(--muted); font-size: 12px; }
 #bcRoot .result-grid strong { font-size: 16px; }
 #bcRoot .result-focus-hint { margin: 0; color: var(--muted); font-size: 12px; }
@@ -1011,7 +1011,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     z-index: 25;
     min-width: 196px;
     padding: 6px;
-    background: rgba(20, 20, 28, 0.96);
+    background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 10px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
@@ -1036,7 +1036,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     padding: 6px 8px;
     border: 1px solid var(--border);
     border-radius: 6px;
-    background: #2a2a38;
+    background: var(--control);
     color: var(--text);
     font-size: 12px;
 }
@@ -1052,7 +1052,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     top: 8px;
     z-index: 6;
     height: 6px;
-    background: #3a3a4a;
+    background: var(--control);
     border-radius: 999px;
     overflow: hidden;
 }
@@ -1072,7 +1072,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     flex-direction: column;
     border: 1px solid var(--border);
     border-radius: 12px;
-    background: #17171f;
+    background: var(--stage);
     overflow: hidden;
 }
 #bcRoot .overlay-pane.collapsed { flex: 0 0 44px; min-width: 44px; }
@@ -1093,7 +1093,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     gap: 8px;
     padding: 8px 10px;
     border-bottom: 1px solid var(--border);
-    background: #22222e;
+    background: var(--sunken);
 }
 #bcRoot .overlay-pane-name { font-size: 13px; }
 #bcRoot .overlay-pane-span {

@@ -2,6 +2,22 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8" />
+<script>
+(function () {
+    var pref = 'system';
+    try {
+        var raw = localStorage.getItem('pcviewer.prefs');
+        if (raw) {
+            var saved = JSON.parse(raw);
+            if (saved && (saved.theme === 'light' || saved.theme === 'dark')) pref = saved.theme;
+        }
+    } catch (e) {}
+    var theme = pref === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+        : pref;
+    document.documentElement.setAttribute('data-theme', theme);
+})();
+</script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231e1e28'/%3E%3Cpath d='M4 26 L16 20 L28 26' fill='none' stroke='%233a3a4a' stroke-width='1.2' stroke-linecap='round'/%3E%3Cpath d='M8 26 L16 17 L24 26' fill='none' stroke='%233a3a4a' stroke-width='0.8' opacity='0.55'/%3E%3Ccircle cx='8' cy='16' r='1.6' fill='%233a6fd4'/%3E%3Ccircle cx='10' cy='22' r='1.8' fill='%234f8cff' opacity='0.9'/%3E%3Ccircle cx='13' cy='14' r='2' fill='%236aa1ff'/%3E%3Ccircle cx='16' cy='18' r='2.2' fill='%236aa1ff'/%3E%3Ccircle cx='19' cy='11' r='2.4' fill='%236aa1ff'/%3E%3Ccircle cx='22' cy='21' r='1.8' fill='%234f8cff'/%3E%3Ccircle cx='24' cy='15' r='1.7' fill='%234f8cff' opacity='0.85'/%3E%3C/svg%3E" />
 <title data-i18n-title>CloudMap</title>
 <link rel="stylesheet" href="css/main.css" />
@@ -22,6 +38,19 @@
             <path d="M12 11v8"/>
         </svg>
     </button>
+    <div class="lang-toggle theme-toggle" id="themeToggle" role="group" data-i18n-aria="themeToggleLabel" aria-label="主題色">
+        <button type="button" data-theme="dark" data-i18n-title="themeDarkTitle" data-i18n-aria="themeDarkTitle" title="暗色系" aria-label="暗色系" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/>
+            </svg>
+        </button>
+        <button type="button" data-theme="light" data-i18n-title="themeLightTitle" data-i18n-aria="themeLightTitle" title="白色系" aria-label="白色系" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>
+            </svg>
+        </button>
+    </div>
     <div class="lang-toggle" id="langToggle">
         <button type="button" data-lang="zh-Hant" class="active">繁中</button>
         <button type="button" data-lang="en">EN</button>
@@ -492,6 +521,9 @@
                         <button type="button" id="edUniLevel" data-i18n="uniLevel" data-i18n-title="uniLevelTitle">單向水平校正</button>
                     </span>
                     <span class="ed-tool-tip-host">
+                        <button type="button" id="edProfilePoly" data-i18n="profilePoly" data-i18n-title="profilePolyTitle">剖面多項式校正</button>
+                    </span>
+                    <span class="ed-tool-tip-host">
                         <button type="button" id="edRoiLevel" data-i18n="roiLevel" data-i18n-title="roiLevelTitle">擇區水平校正</button>
                     </span>
                     <span class="ed-tool-tip-host">
@@ -828,6 +860,132 @@
                             <div class="seg-level-tune-busy-card">
                                 <div class="seg-level-spinner" aria-hidden="true"></div>
                                 <span class="seg-level-tune-busy-text" id="edUniLevelBusyText" data-i18n="uniLevelUpdating">正在更新預覽…</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="seg-level-panel" id="edProfilePolyPanel" aria-hidden="true">
+                <div class="seg-level-head">
+                    <div class="seg-level-title-wrap">
+                        <span class="seg-level-mode-badge" data-i18n="profilePolyModeName">剖面多項式校正模式</span>
+                        <button type="button" class="info-btn seg-level-info-btn" id="edProfilePolyInfo" data-i18n-title="profilePolyInfoBtnTitle" data-i18n-aria="profilePolyInfoBtnTitle" title="剖面多項式校正說明" aria-label="剖面多項式校正說明">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true">
+                                <circle cx="12" cy="7" r="1.75" fill="currentColor" stroke="none"/>
+                                <path d="M12 11v8"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="seg-level-config" id="edProfilePolyConfig" aria-hidden="true">
+                        <label class="seg-level-config-item" for="edProfilePolyOrder">
+                            <span data-i18n="profilePolyOrderLabel">階數</span>
+                            <select id="edProfilePolyOrder" data-i18n-title="profilePolyOrderTitle" title="1 階去除每條剖線的直線傾斜，2 階再去除彎曲；階數越高能去除的背景越彎">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                            </select>
+                        </label>
+                        <div class="seg-level-config-item">
+                            <span data-i18n="profilePolyDirLabel">方向</span>
+                            <div class="cursor-toggle" id="edProfilePolyDirToggle" role="group" data-i18n-aria="profilePolyDirLabel" aria-label="方向">
+                                <button type="button" id="edProfilePolyDirH" class="active" aria-pressed="true" data-i18n="profilePolyDirHorizontal" data-i18n-title="profilePolyDirHorizontalTitle" title="逐列擬合，去除左右方向的多項式背景">水平（沿 X）</button>
+                                <button type="button" id="edProfilePolyDirV" aria-pressed="false" data-i18n="profilePolyDirVertical" data-i18n-title="profilePolyDirVerticalTitle" title="逐欄擬合，去除上下方向的多項式背景">垂直（沿 Y）</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="seg-level-actions">
+                        <button type="button" id="edProfilePolyApply" data-i18n="profilePolyApply" data-i18n-title="profilePolyApplyTitle">套用</button>
+                        <button type="button" id="edProfilePolyCancel" class="btn-secondary" data-i18n="profilePolyCancel" data-i18n-title="profilePolyCancelTitle">取消</button>
+                    </div>
+                </div>
+                <div class="seg-level-compare" id="edProfilePolyCompare">
+                    <div class="seg-level-pane">
+                        <div class="seg-level-pane-head">
+                            <span class="seg-level-pane-label" data-i18n="profilePolyBefore">校正前</span>
+                        </div>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap">
+                                <canvas id="edProfilePolyBefore"></canvas>
+                            </div>
+                            <div class="seg-level-cbar" data-pane="before">
+                                <span class="seg-level-cbar-end seg-level-cbar-end-hi"></span>
+                                <div class="seg-level-cbar-track">
+                                    <canvas id="edProfilePolyBeforeCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                    <div class="seg-level-cbar-handle is-hi" data-which="hi">
+                                        <span class="seg-level-cbar-val" id="edProfilePolyBeforeCbHi"></span>
+                                    </div>
+                                    <div class="seg-level-cbar-handle is-lo" data-which="lo">
+                                        <span class="seg-level-cbar-val" id="edProfilePolyBeforeCbLo"></span>
+                                    </div>
+                                </div>
+                                <span class="seg-level-cbar-end seg-level-cbar-end-lo"></span>
+                                <div class="seg-level-cbar-actions">
+                                    <button type="button" class="seg-level-cbar-btn" data-act="fit" data-i18n-title="segLevelColorFitTitle" data-i18n-aria="segLevelColorFitTitle" title="將色階兩端設為目前畫面裡的資料最小與最大值" aria-label="將色階兩端設為目前畫面裡的資料最小與最大值">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M4 9V4h5"/>
+                                            <path d="M15 4h5v5"/>
+                                            <path d="M20 15v5h-5"/>
+                                            <path d="M9 20H4v-5"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" class="seg-level-cbar-btn" data-act="reset" data-i18n-title="segLevelColorResetTitle" data-i18n-aria="segLevelColorResetTitle" title="色階恢復為這張圖的全部資料範圍" aria-label="色階恢復為這張圖的全部資料範圍">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M3 12a9 9 0 1 0 3-6.7"/>
+                                            <path d="M3 4v5h5"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="seg-level-pane seg-level-pane-after">
+                        <div class="seg-level-pane-head">
+                            <span class="seg-level-pane-label" data-i18n="profilePolyAfter">校正後</span>
+                        </div>
+                        <div class="seg-level-image-row">
+                            <div class="seg-level-canvas-wrap">
+                                <canvas id="edProfilePolyAfter"></canvas>
+                            </div>
+                            <div class="seg-level-cbar" data-pane="after">
+                                <span class="seg-level-cbar-end seg-level-cbar-end-hi"></span>
+                                <div class="seg-level-cbar-track">
+                                    <canvas id="edProfilePolyAfterCb" class="seg-level-cbar-canvas" width="14" height="120"></canvas>
+                                    <div class="seg-level-cbar-handle is-hi" data-which="hi">
+                                        <span class="seg-level-cbar-val" id="edProfilePolyAfterCbHi"></span>
+                                    </div>
+                                    <div class="seg-level-cbar-handle is-lo" data-which="lo">
+                                        <span class="seg-level-cbar-val" id="edProfilePolyAfterCbLo"></span>
+                                    </div>
+                                </div>
+                                <span class="seg-level-cbar-end seg-level-cbar-end-lo"></span>
+                                <div class="seg-level-cbar-actions">
+                                    <button type="button" class="seg-level-cbar-btn" data-act="fit" data-i18n-title="segLevelColorFitTitle" data-i18n-aria="segLevelColorFitTitle" title="將色階兩端設為目前畫面裡的資料最小與最大值" aria-label="將色階兩端設為目前畫面裡的資料最小與最大值">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M4 9V4h5"/>
+                                            <path d="M15 4h5v5"/>
+                                            <path d="M20 15v5h-5"/>
+                                            <path d="M9 20H4v-5"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" class="seg-level-cbar-btn" data-act="reset" data-i18n-title="segLevelColorResetTitle" data-i18n-aria="segLevelColorResetTitle" title="色階恢復為這張圖的全部資料範圍" aria-label="色階恢復為這張圖的全部資料範圍">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M3 12a9 9 0 1 0 3-6.7"/>
+                                            <path d="M3 4v5h5"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="seg-level-tune-busy" id="edProfilePolyBusy" aria-hidden="true">
+                            <div class="seg-level-tune-busy-card">
+                                <div class="seg-level-spinner" aria-hidden="true"></div>
+                                <span class="seg-level-tune-busy-text" id="edProfilePolyBusyText" data-i18n="profilePolyUpdating">正在計算校正…</span>
                             </div>
                         </div>
                     </div>
@@ -3204,6 +3362,42 @@
     </div>
 </div>
 
+<div class="info-overlay" id="profilePolyInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="profilePolyInfoTitle">
+    <div class="info-panel info-panel--wide">
+        <div class="info-header">
+            <h3 id="profilePolyInfoTitle" data-i18n="profilePolyInfoTitle">剖面多項式校正說明</h3>
+            <button type="button" class="info-close" id="profilePolyInfoCloseBtn" data-i18n-aria="infoClose" aria-label="關閉">&times;</button>
+        </div>
+        <div class="info-body">
+            <section class="info-section">
+                <h4 data-i18n="roiLevelInfoPurposeHeading">功能目的</h4>
+                <p data-i18n="profilePolyInfoPurposeText">對每一列或每一欄各自擬合多項式，再從有效高度扣掉這條曲線。無效點不參與擬合，也維持無效。1 階去掉直線傾斜，2 階再去掉彎曲，階數越高能描述的背景越彎。</p>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="roiLevelInfoWorkflowHeading">操作流程</h4>
+                <ol class="info-steps">
+                    <li data-i18n="profilePolyInfoStep1">載入高度圖後，點選工具列「剖面多項式校正」進入此模式。</li>
+                    <li data-i18n="profilePolyInfoStep2">在上方選擇階數。1 階去除每條剖線的直線傾斜，2 階再去除彎曲。</li>
+                    <li data-i18n="profilePolyInfoStep3">選擇方向。水平（沿 X）逐列處理左右方向；垂直（沿 Y）逐欄處理上下方向。右側顯示校正後的全圖。</li>
+                    <li data-i18n="profilePolyInfoStep4">確認結果後按「套用」寫入資料並離開；按「取消」則放棄預覽。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="roiLevelInfoPrincipleHeading">演算法原理</h4>
+                <ol class="info-steps">
+                    <li data-i18n="profilePolyInfoPrinciple1">取樣：水平方向逐列沿 X 擬合，垂直方向逐欄沿 Y 擬合。每一條只使用該線上的有限高度，NaN 與無限值略過。</li>
+                    <li data-i18n="profilePolyInfoPrinciple2">擬合：對有效點做最小平方多項式。座標先平移到這條線的有效點平均再縮放，避免高階項數值不穩。</li>
+                    <li data-i18n="profilePolyInfoPrinciple3">套用：有效點扣除擬合曲線後，加回全圖有效值的平均，讓高度基準留在原本的區間。有效點少於「階數 + 1」的剖線維持原值，無效點維持無效。</li>
+                </ol>
+            </section>
+            <section class="info-section">
+                <h4 data-i18n="roiLevelInfoNoteHeading">注意事項</h4>
+                <p data-i18n="profilePolyInfoNoteText">僅適用於規則網格高度圖；散布點雲不支援。階數必須小於該方向的像素數。階數越高越容易把真實形貌一起扣掉，一般先用 1 或 2 階。一次只處理一個方向；兩個方向都要去除時，可先套用水平再套用垂直。</p>
+            </section>
+        </div>
+    </div>
+</div>
+
 <!-- 擇區水平校正說明 modal -->
 <div class="info-overlay" id="roiLevelInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="roiLevelInfoTitle">
     <div class="info-panel info-panel--wide">
@@ -3460,6 +3654,7 @@
 <script src="js/file-export.js"></script>
 <script src="js/segment-level.js"></script>
 <script src="js/uni-level.js"></script>
+<script src="js/profile-poly.js"></script>
 <script src="js/segment-skew.js"></script>
 <script src="js/median-filter.js"></script>
 <script src="js/nan-patch.js"></script>

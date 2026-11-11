@@ -1,7 +1,7 @@
 /**
  * 使用者偏好 (localStorage)
  * 依賴：i18n.js
- * 匯出（全域）：userPrefs, getUserPref(), setUserPref(), saveUserPrefs()
+ * 匯出（全域）：userPrefs, getUserPref(), setUserPref(), saveUserPrefs(), applyTheme()
  */
 /* =========================================================================
  *  0b. 使用者偏好 (localStorage 持久化)
@@ -19,6 +19,7 @@ const PREFS_DEFAULTS = {
     profileChartStyle: 'line',
     profileDistUnit: '',
     anNavCollapsed: false,
+    anTool: 'profile',
     csvXunit: 'mm',
     csvYunit: 'mm',
     csvZunit: 'um',
@@ -35,6 +36,7 @@ const PREFS_DEFAULTS = {
     bcProfileChartStyle: 'line',
     bcDotScale: 1,
     bcSubTab: 'inspect',
+    theme: 'system',
 };
 
 let userPrefs = (() => {
@@ -57,6 +59,31 @@ function setUserPref(key, value) {
 
 function getUserPref(key) {
     return userPrefs[key] ?? PREFS_DEFAULTS[key];
+}
+
+function systemColorTheme() {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function resolveColorTheme(pref) {
+    return (pref === 'light' || pref === 'dark') ? pref : systemColorTheme();
+}
+
+/** 套用主題。pref 為 light / dark / system；未指定時沿用已儲存值。 */
+function applyTheme(pref, opts) {
+    if (pref == null) pref = getUserPref('theme');
+    if (pref !== 'light' && pref !== 'dark' && pref !== 'system') pref = 'system';
+    userPrefs.theme = pref;
+    if (!opts || !opts.skipSave) saveUserPrefs();
+    const resolved = resolveColorTheme(pref);
+    document.documentElement.setAttribute('data-theme', resolved);
+    document.querySelectorAll('#themeToggle button').forEach(btn => {
+        const on = btn.getAttribute('data-theme') === resolved;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    if (typeof Viewer3D !== 'undefined' && Viewer3D.syncTheme) Viewer3D.syncTheme();
+    if (typeof refreshThemeSurfaces === 'function') refreshThemeSurfaces();
 }
 
 /** 將偏好套用到 <select>（僅在選項存在時） */
@@ -222,5 +249,18 @@ function applyLanguage(lang) {
         if (typeof layoutEdToolbar === 'function') layoutEdToolbar();
     });
 }
+
+document.querySelectorAll('#themeToggle button').forEach(btn => {
+    btn.addEventListener('click', () => applyTheme(btn.getAttribute('data-theme')));
+});
+
+applyTheme(getUserPref('theme'), { skipSave: true });
+
+const themeMedia = window.matchMedia('(prefers-color-scheme: light)');
+function onSystemThemeChange() {
+    if (getUserPref('theme') === 'system') applyTheme('system', { skipSave: true });
+}
+if (themeMedia.addEventListener) themeMedia.addEventListener('change', onSystemThemeChange);
+else if (themeMedia.addListener) themeMedia.addListener(onSystemThemeChange);
 
 

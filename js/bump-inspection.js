@@ -877,10 +877,7 @@ const BumpInspection = (() => {
                 const value = sampleFor(mode, point.row, point.col);
                 const offset = (y * width + x) * 4;
                 if (!Number.isFinite(value)) {
-                    pixels[offset] = 30;
-                    pixels[offset + 1] = 30;
-                    pixels[offset + 2] = 40;
-                    pixels[offset + 3] = 255;
+                    paintMissingPixel(pixels, offset);
                 } else {
                     const rgb = colorRgb(value);
                     pixels[offset] = rgb[0];
@@ -1364,9 +1361,7 @@ const BumpInspection = (() => {
             const offset = index * 4;
             const value = best[index];
             if (!Number.isFinite(value)) {
-                pixels[offset] = 30;
-                pixels[offset + 1] = 30;
-                pixels[offset + 2] = 40;
+                paintMissingPixel(pixels, offset);
             } else {
                 const rgb = colorRgb(value);
                 pixels[offset] = rgb[0];
@@ -2539,6 +2534,47 @@ const BumpInspection = (() => {
             }
             loadFile(file);
             return;
+        }
+    }
+
+    /** 從點雲編輯等已解析的高度圖載入（不經檔案選擇） */
+    async function loadDataset(dataset) {
+        if (!dataset || dataset.type === 'pcd-scatter' || !dataset.data || !dataset.width || !dataset.height) {
+            return false;
+        }
+        const serial = ++loadSerial;
+        state.busy = true;
+        update();
+        showProgress(0.2);
+        try {
+            const data = dataset.data instanceof Float32Array
+                ? new Float32Array(dataset.data)
+                : Float32Array.from(dataset.data);
+            for (let i = 0; i < data.length; i++) if (!Number.isFinite(data[i])) data[i] = NaN;
+            const prepared = {
+                header: dataset.header ? { ...dataset.header } : {},
+                data,
+                width: dataset.width,
+                height: dataset.height,
+                name: dataset.name || dataset.filename || '',
+            };
+            const session = await Api.upload(prepared, (fraction) => {
+                if (serial !== loadSerial) return;
+                showProgress(0.2 + clamp(fraction, 0, 1) * 0.8);
+            });
+            if (serial !== loadSerial) return false;
+            setDataset(prepared, session.session_id);
+            showProgress(1);
+            return true;
+        } catch (error) {
+            if (serial === loadSerial) showToast(error.message, 'error');
+            return false;
+        } finally {
+            if (serial === loadSerial) {
+                hideProgress();
+                state.busy = false;
+                update();
+            }
         }
     }
 
@@ -5599,8 +5635,16 @@ const BumpInspection = (() => {
             requestRender();
             if (resultView.order.length) renderResultWindow(true);
         },
+        repaint() {
+            if (!state.dataset) return;
+            const stage = state.step === 3 ? el.stageCompare : el.stageSingle;
+            if (!stage || stage.clientWidth < 2) return;
+            requestRender();
+            if (resultView.order.length) renderResultWindow(true);
+        },
         hasData() {
             return !!state.dataset;
         },
+        loadDataset,
     };
 })();

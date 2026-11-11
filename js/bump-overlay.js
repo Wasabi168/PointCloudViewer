@@ -894,9 +894,7 @@ const BumpOverlay = (() => {
                 let value = NaN;
                 if (r >= 0 && c >= 0 && r < dh && c < dw) value = data[r * dw + c];
                 if (!Number.isFinite(value)) {
-                    pixels[offset] = 30;
-                    pixels[offset + 1] = 30;
-                    pixels[offset + 2] = 40;
+                    paintMissingPixel(pixels, offset);
                 } else {
                     const index = Math.max(0, Math.min(255, ((value - vmin) / span) * 255)) | 0;
                     pixels[offset] = lut[index * 3];
@@ -916,7 +914,8 @@ const BumpOverlay = (() => {
         if (pane.map.width !== width) pane.map.width = width;
         if (pane.map.height !== height) pane.map.height = height;
         const ctx = pane.map.getContext('2d', { alpha: false });
-        ctx.fillStyle = 'rgb(30,30,40)';
+        const bg = (typeof readMissingPixelRgb === 'function') ? readMissingPixelRgb() : [30, 30, 40];
+        ctx.fillStyle = 'rgb(' + bg[0] + ',' + bg[1] + ',' + bg[2] + ')';
         ctx.fillRect(0, 0, width, height);
         const radius = bumpScreenRadius();
         const lut = state.lut;
@@ -2727,6 +2726,12 @@ const BumpOverlay = (() => {
         requestMaps();
     }
 
+    function repaint() {
+        const visible = visiblePanes().some((pane) => pane && pane.stageEl && pane.stageEl.clientWidth >= 2);
+        if (!visible) return;
+        requestMaps();
+    }
+
     function onLanguage() {
         Object.values(loadPanes).concat(Object.values(resultPanes)).forEach((pane) => {
             if (!pane) return;
@@ -2772,5 +2777,5 @@ const BumpOverlay = (() => {
         return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
     }
 
-    return { bind, resize, onLanguage };
+    return { bind, resize, repaint, onLanguage };
 })();

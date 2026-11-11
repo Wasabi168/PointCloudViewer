@@ -277,6 +277,20 @@ function batchApplyUniLevel(ds, step) {
     return { ok: true };
 }
 
+function batchApplyProfilePoly(ds, step) {
+    if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
+    if (!ds || !ds.data || !(ds.width > 1) || !(ds.height > 1)) return { ok: false, reason: 'invalid' };
+    if (typeof profilePolyCorrect !== 'function') return { ok: false, reason: 'invalid' };
+    const order = Math.round(Number(step && step.order));
+    const direction = step && step.direction === 'vertical' ? 'vertical' : 'horizontal';
+    batchEnsureFloatPixels(ds);
+    const result = profilePolyCorrect(ds.data, ds.width, ds.height, order, direction, null);
+    if (!result || !result.ok || !result.data) return { ok: false, reason: 'insufficient' };
+    ds.data = result.data;
+    batchRefreshRange(ds);
+    return { ok: true };
+}
+
 function batchApplyGlobalLevel(ds) {
     const acc = batchPlaneFitAccessors(ds);
     const plane = batchFitPlaneLeastSquares(acc);
@@ -739,6 +753,7 @@ function batchApplyStep(ds, step) {
         case 'invertZ': return batchApplyInvertZ(ds);
         case 'globalLevel': return batchApplyGlobalLevel(ds);
         case 'uniLevel': return batchApplyUniLevel(ds, step);
+        case 'profilePoly': return batchApplyProfilePoly(ds, step);
         case 'roiLevel': return batchApplyRoiLevel(ds, step);
         case 'segmentLevel': return batchApplySegmentLevel(ds, step);
         case 'segmentSkew': return batchApplySegmentSkew(ds, step);
@@ -871,6 +886,10 @@ function describeBatchStep(step) {
             const line = step.lineDir === 'vertical' ? t('bfmUniLevelLineVertical') : t('bfmUniLevelLineHorizontal');
             return t('bfmStepUniLevel', line, bfmFmtSlope(Number(step.k)));
         }
+        case 'profilePoly': {
+            const dir = step.direction === 'vertical' ? t('profilePolyDirNameV') : t('profilePolyDirNameH');
+            return t('bfmStepProfilePoly', dir, step.order);
+        }
         case 'roiLevel': return t('bfmStepRoiLevel');
         case 'segmentLevel': return t('bfmStepSegmentLevel');
         case 'segmentSkew': return t('bfmStepSegmentSkew');
@@ -972,8 +991,7 @@ function renderGridThumbToCanvas(dataset, canvas, maxW, cmap) {
             const po = poBase + px_i * 4;
             const v = data[row + sx];
             if (!Number.isFinite(v)) {
-                px[po] = px[po + 1] = px[po + 2] = 0;
-                px[po + 3] = 255;
+                paintMissingPixel(px, po);
                 continue;
             }
             let t = (v - cmin) / crange;

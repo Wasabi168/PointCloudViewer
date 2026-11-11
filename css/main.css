@@ -1,4 +1,5 @@
     :root {
+        color-scheme: dark;
         --bg: #1e1e28;
         --panel: #2a2a38;
         --border: #3a3a4a;
@@ -9,6 +10,58 @@
         --scrollbar-track: var(--panel);
         --scrollbar-thumb: #4a4a5c;
         --scrollbar-thumb-hover: #5c5c70;
+        --control: #3a3a4a;
+        --control-hover: #4a4a5c;
+        --chrome: #15151d;
+        --inset: #1a1a22;
+        --surface-2: #2a2a36;
+        --surface-3: #343446;
+        --hover-strong: #454558;
+        --border-strong: #555568;
+        --row-hover: #30303e;
+        --sunken: #22222e;
+        --field: #23232f;
+        --stage: #14151c;
+        --stage-glow: #20222e;
+        --plot: #15151d;
+        --nan: #000000;
+        --canvas-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        --hover-wash: rgba(255, 255, 255, 0.06);
+        --nav-active-fg: #fff;
+        --nav-active-bg: rgba(79, 140, 255, 0.18);
+        --nav-active-border: rgba(79, 140, 255, 0.35);
+    }
+
+    html[data-theme="light"] {
+        color-scheme: light;
+        --bg: #f3f5f8;
+        --panel: #ffffff;
+        --border: #d5d8e2;
+        --text: #1c1e28;
+        --accent: #2f6fe0;
+        --accent-hover: #245bc4;
+        --muted: #5c6474;
+        --scrollbar-thumb: #c3c7d2;
+        --scrollbar-thumb-hover: #a9aebc;
+        --control: #e7e9ef;
+        --control-hover: #d7dae3;
+        --chrome: #e6e9f0;
+        --inset: #eef0f4;
+        --surface-2: #f7f8fb;
+        --surface-3: #e8ebf2;
+        --hover-strong: #d5d9e3;
+        --border-strong: #c5c9d4;
+        --row-hover: #e6eaf2;
+        --sunken: #eef0f5;
+        --field: #ffffff;
+        --stage: #e4e7ef;
+        --stage-glow: #f4f6fa;
+        --nan: #e0e4ec;
+        --canvas-shadow: 0 0 0 1px rgba(36, 44, 64, 0.45), 0 4px 16px rgba(28, 34, 48, 0.18);
+        --hover-wash: rgba(20, 24, 40, 0.06);
+        --nav-active-fg: #1d4fa3;
+        --nav-active-bg: rgba(47, 111, 224, 0.12);
+        --nav-active-border: rgba(47, 111, 224, 0.38);
     }
 
     * {
@@ -116,7 +169,7 @@
     }
     .colormap-picker-ui { position: relative; }
     .colormap-picker-trigger {
-        background: #3a3a4a;
+        background: var(--control);
         color: var(--text);
         border: 1px solid var(--border);
         padding: 8px 28px 8px 16px;
@@ -127,7 +180,7 @@
         text-align: left;
         position: relative;
     }
-    .colormap-picker-trigger:hover { background: #4a4a5c; }
+    .colormap-picker-trigger:hover { background: var(--control-hover); }
     .colormap-picker-trigger::after {
         content: '\25BE';
         position: absolute;
@@ -243,11 +296,11 @@
     /* ?????? */
     .more-wrap { position: relative; }
     .more-btn {
-        background: #3a3a4a;
+        background: var(--control);
         color: var(--text);
         border: 1px solid var(--border);
     }
-    .more-btn:hover { background: #4a4a5c; }
+    .more-btn:hover { background: var(--control-hover); }
     .more-wrap.open .more-btn {
         background: var(--accent);
         color: #fff;
@@ -338,7 +391,7 @@
     }
 
     select {
-        background: #3a3a4a;
+        background: var(--control);
         color: var(--text);
         border: 1px solid var(--border);
     }
@@ -504,7 +557,7 @@
     .cross-load-timer {
         height: 3px;
         margin: 0 -14px;
-        background: rgba(255, 255, 255, 0.08);
+        background: var(--hover-wash);
         border-radius: 0 0 10px 10px;
         overflow: hidden;
     }
@@ -526,8 +579,8 @@
         left: 0;
         transform-origin: 0 0;
         image-rendering: pixelated;
-        background: #000;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        background: var(--nan);
+        box-shadow: var(--canvas-shadow);
         cursor: grab;
         will-change: transform;
     }
@@ -540,7 +593,7 @@
         inset: 0;
         width: 100%;
         height: 100%;
-        background: radial-gradient(circle at 50% 35%, #20222e 0%, #14151c 100%);
+        background: radial-gradient(circle at 50% 35%, var(--stage-glow) 0%, var(--stage) 100%);
         cursor: grab;
         z-index: 7;
         touch-action: none;
@@ -749,14 +802,14 @@
         padding: 0;
         border: 1px solid var(--border);
         border-radius: 6px;
-        background: #2a2a38;
+        background: var(--panel);
         color: var(--muted);
         cursor: pointer;
     }
     .side-toggle:hover {
         color: var(--text);
-        background: #343446;
-        border-color: #555568;
+        background: var(--surface-3);
+        border-color: var(--border-strong);
     }
     .side-toggle-icon {
         width: 16px;
@@ -820,7 +873,7 @@
     }
     .info-row .v.info-unit-editable:hover {
         color: var(--accent);
-        background: rgba(255, 255, 255, 0.06);
+        background: var(--hover-wash);
     }
     .info-unit-input {
         width: 4.5em;
@@ -837,7 +890,7 @@
     .progress {
         width: 100%;
         height: 6px;
-        background: #3a3a4a;
+        background: var(--control);
         border-radius: 3px;
         overflow: hidden;
         margin: 8px 0;
@@ -946,7 +999,7 @@
         font-size: 11px;
         line-height: 1;
         color: var(--fg);
-        background: #2a2a38;
+        background: var(--panel);
         border: 1px solid var(--border);
         border-radius: 3px;
         padding: 2px 4px;
@@ -1008,7 +1061,7 @@
         border: 1px solid var(--border);
         border-radius: 6px;
         overflow: hidden;
-        background: #3a3a4a;
+        background: var(--control);
     }
     .lang-toggle button,
     .cursor-toggle button {
@@ -1039,7 +1092,7 @@
         width: 1px;
         align-self: stretch;
         margin: 5px 0;
-        background: rgba(255, 255, 255, 0.14);
+        background: var(--border-strong);
         flex-shrink: 0;
     }
     .lang-toggle button:hover,
@@ -1109,7 +1162,7 @@
         left: 12px;
         right: 12px;
         top: 12px;
-        background: rgba(20, 20, 28, 0.92);
+        background: var(--panel);
         border: 1px solid var(--border);
         border-radius: 8px;
         padding: 10px 12px;
@@ -1127,7 +1180,7 @@
         left: 12px;
         right: 12px;
         bottom: 12px;
-        background: rgba(20, 20, 28, 0.92);
+        background: var(--panel);
         border: 1px solid var(--border);
         border-radius: 8px;
         padding: 10px 12px 8px;
@@ -1176,8 +1229,8 @@
         vertical-align: baseline;
     }
     .profile-unit-toggle:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: #fff;
+        background: var(--hover-wash);
+        color: var(--text);
     }
     .profile-unit-toggle:focus-visible {
         outline: 1px solid var(--accent);
@@ -1194,7 +1247,7 @@
     }
     .profile-band input {
         width: 84px;
-        background: #3a3a4a;
+        background: var(--control);
         color: var(--text);
         border: 1px solid var(--border);
         border-radius: 5px;
@@ -1213,7 +1266,7 @@
         border: 1px solid var(--border);
         border-radius: 6px;
         overflow: hidden;
-        background: #3a3a4a;
+        background: var(--control);
     }
     .profile-icon-group button,
     .profile-icon-btn {
@@ -1235,7 +1288,7 @@
     .profile-icon-group button:hover,
     .profile-icon-btn:hover {
         color: var(--text);
-        background: #4a4a5c;
+        background: var(--control-hover);
     }
     .profile-icon-group button.active {
         background: var(--accent);
@@ -1250,7 +1303,7 @@
     }
 
     .profile-icon-btn {
-        background: #3a3a4a;
+        background: var(--control);
         border: 1px solid var(--border);
         border-radius: 6px;
         flex-shrink: 0;
@@ -1269,6 +1322,8 @@
         display: block;
         width: 100%;
         height: 160px;
+        background: var(--plot);
+        border-radius: 4px;
     }
     .profile-plot.measure-mode,
     .profile-plot.measure-mode #profileCanvas,
@@ -1354,7 +1409,7 @@
         border: none;
         cursor: pointer;
     }
-    .info-header .info-close:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+    .info-header .info-close:hover { color: var(--text); background: var(--hover-wash); }
 
     .info-body {
         padding: 16px 18px 20px;
@@ -1442,7 +1497,7 @@
         font-size: 12px;
         line-height: 1.55;
         color: var(--text);
-        background: rgba(255, 255, 255, 0.04);
+        background: var(--hover-wash);
         border: 1px solid var(--border);
         border-radius: 6px;
         padding: 8px 10px;
@@ -1460,7 +1515,7 @@
     .csv-unit-grid select,
     .csv-unit-grid input {
         width: 100%;
-        background: #1e1e28;
+        background: var(--bg);
         color: var(--text);
         border: 1px solid var(--border);
         border-radius: 6px;
@@ -1528,7 +1583,7 @@
         line-height: 1;
         border-radius: 4px;
     }
-    .calc-header .calc-close:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+    .calc-header .calc-close:hover { color: var(--text); background: var(--hover-wash); }
 
     .calc-body { padding: 16px 18px 18px; }
     .calc-desc { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
@@ -1547,7 +1602,7 @@
         flex-shrink: 0;
     }
     .calc-ops button {
-        background: #3a3a4a;
+        background: var(--control);
         color: var(--text);
         width: 38px;
         height: 38px;
@@ -1557,7 +1612,7 @@
         border-radius: 6px;
         font-family: Consolas, monospace;
     }
-    .calc-ops button:hover { background: #4a4a5c; }
+    .calc-ops button:hover { background: var(--control-hover); }
     .calc-ops button.active {
         background: var(--accent);
         color: #fff;
@@ -1566,7 +1621,7 @@
     .calc-operand {
         flex: 1 1 120px;
         min-width: 0;
-        background: #1e1e28;
+        background: var(--bg);
         color: var(--text);
         border: 1px solid var(--border);
         border-radius: 6px;
@@ -1589,10 +1644,10 @@
         font-size: 13px;
     }
     .calc-actions .btn-secondary {
-        background: #3a3a4a;
+        background: var(--control);
         color: var(--text);
     }
-    .calc-actions .btn-secondary:hover { background: #4a4a5c; }
+    .calc-actions .btn-secondary:hover { background: var(--control-hover); }
     .calc-actions .btn-secondary:disabled {
         opacity: 0.45;
         cursor: not-allowed;
@@ -1620,7 +1675,7 @@
         align-items: center;
         gap: 4px;
         padding: 8px 24px 0;
-        background: #15151d;
+        background: var(--chrome);
         border-bottom: 1px solid var(--border);
     }
 
@@ -1637,9 +1692,9 @@
         cursor: pointer;
         transition: background 0.15s ease, color 0.15s ease;
     }
-    .app-tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+    .app-tab:hover { color: var(--text); background: var(--hover-wash); }
     .app-tab.active {
-        color: #fff;
+        color: var(--text);
         background: var(--panel);
         border-color: var(--border);
         position: relative;
@@ -1647,7 +1702,21 @@
     }
 
     /* ???????????????? */
+    .app-tabs .theme-toggle { margin-bottom: 6px; }
     .app-tabs .lang-toggle { margin-left: 8px; margin-bottom: 6px; }
+    .theme-toggle button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 30px;
+        padding: 0;
+    }
+    .theme-toggle button svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+    }
 
     /* ??????????? */
     .info-btn {
@@ -1661,7 +1730,7 @@
         padding: 0;
         border: 1px solid var(--border);
         border-radius: 50%;
-        background: #3a3a4a;
+        background: var(--control);
         color: var(--muted);
         cursor: pointer;
         flex-shrink: 0;
@@ -1673,8 +1742,8 @@
     }
     .info-btn:hover {
         color: var(--text);
-        background: #454558;
-        border-color: #555568;
+        background: var(--hover-strong);
+        border-color: var(--border-strong);
     }
 
     /* ?????????????? */
@@ -1730,7 +1799,7 @@
         border: 1px solid var(--border);
         border-radius: 6px;
         overflow: hidden;
-        background: #3a3a4a;
+        background: var(--control);
     }
     .ed-icon-group button {
         background: transparent;
@@ -1742,7 +1811,7 @@
         line-height: 1;
         min-width: 40px;
     }
-    .ed-icon-group button:hover:not(:disabled) { background: #4a4a5c; }
+    .ed-icon-group button:hover:not(:disabled) { background: var(--control-hover); }
     .ed-icon-group button:disabled { opacity: 0.35; cursor: not-allowed; }
 
     /* ????????? / ??? */
@@ -1770,13 +1839,13 @@
     /* 裁切套用／取消：僅在啟用方形或圓形裁切時顯示 */
     .ed-crop-actions[hidden] { display: none !important; }
     .ed-crop-actions button {
-        background: #3a3a4a;
+        background: var(--control);
         color: var(--text);
         border: 1px solid var(--border);
         padding: 6px 12px;
         font-size: 13px;
     }
-    .ed-crop-actions button:hover:not(:disabled) { background: #4a4a5c; }
+    .ed-crop-actions button:hover:not(:disabled) { background: var(--control-hover); }
     .ed-crop-actions button:disabled { opacity: 0.35; cursor: not-allowed; }
     #edCropApply:not(:disabled) {
         background: var(--accent);
@@ -1790,7 +1859,7 @@
     #edDenoise,
     #batchPreviewEnable,
     #btnMinMax {
-        background: #3a3a4a;
+        background: var(--control);
         color: var(--text);
         border: 1px solid var(--border);
         position: relative;
@@ -1800,7 +1869,7 @@
     }
     #edDenoise:hover:not(:disabled),
     #batchPreviewEnable:hover:not(:disabled),
-    #btnMinMax:hover:not(:disabled) { background: #4a4a5c; }
+    #btnMinMax:hover:not(:disabled) { background: var(--control-hover); }
     #edDenoise:disabled,
     #batchPreviewEnable:disabled,
     #btnMinMax:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -1854,14 +1923,14 @@
     }
     .more-menu-actions button {
         width: 100%;
-        background: #3a3a4a;
+        background: var(--control);
         color: var(--text);
         border: 1px solid var(--border);
         text-align: left;
         padding: 8px 12px;
         font-size: 13px;
     }
-    .more-menu-actions button:hover:not(:disabled) { background: #4a4a5c; }
+    .more-menu-actions button:hover:not(:disabled) { background: var(--control-hover); }
     .more-menu-actions button:disabled {
         opacity: 0.4;
         cursor: not-allowed;
@@ -1987,7 +2056,7 @@
         display: block;
         width: 100%;
         height: 100%;
-        background: #15151d;
+        background: var(--plot);
         border: 1px solid var(--border);
         border-radius: 4px;
     }
@@ -2023,7 +2092,7 @@
         line-height: 1;
         font-family: Consolas, monospace;
         color: var(--text);
-        background: #2a2a38;
+        background: var(--panel);
         border: 1px solid var(--border);
         border-radius: 3px;
         padding: 2px 4px;
@@ -2150,6 +2219,23 @@
     #edViewer.uni-level-active .seg-level-panel#edUniLevelPanel {
         display: flex;
     }
+    #edViewer.profile-poly-active #edCanvas,
+    #edViewer.profile-poly-active #edZoomHint,
+    #edViewer.profile-poly-active #edZoomIndicator,
+    #edViewer.profile-poly-active #edCropOverlay,
+    #edViewer.profile-poly-active #edDropHint,
+    #edViewer.profile-poly-active .viewer-cursor-toolbar,
+    #edViewer.profile-poly-active .mode-indicator,
+    #edViewer.profile-poly-active .value-indicator,
+    #edViewer.profile-poly-active .overlay,
+    #edViewer.profile-poly-active .profile-panel,
+    #edViewer.profile-poly-active .measure-panel {
+        display: none !important;
+    }
+    #edViewer.profile-poly-active .seg-level-panel#edProfilePolyPanel {
+        display: flex;
+    }
+    #edProfilePolyOrder { min-width: 4.5em; }
     #edViewer.seg-level-active .seg-level-panel#edSegLevelPanel,
     #edViewer.seg-skew-active .seg-level-panel#edSegSkewPanel,
     #edViewer.median-filter-active .seg-level-panel#edMedianFilterPanel,
@@ -2244,7 +2330,7 @@
         padding: 4px 6px;
         font-size: 12px;
         font-family: Consolas, monospace;
-        background: #15151d;
+        background: var(--field);
         border: 1px solid var(--border);
         border-radius: 4px;
         color: var(--text);
@@ -2473,7 +2559,7 @@
         padding: 4px 6px;
         font-size: 12px;
         font-family: Consolas, monospace;
-        background: #15151d;
+        background: var(--field);
         border: 1px solid var(--border);
         border-radius: 4px;
         color: var(--text);
@@ -2513,7 +2599,7 @@
         padding: 4px 6px;
         font-size: 12px;
         font-family: Consolas, monospace;
-        background: #15151d;
+        background: var(--field);
         border: 1px solid var(--border);
         border-radius: 4px;
         color: var(--text);
@@ -2781,13 +2867,13 @@
         line-height: 1.3;
         border: 1px solid var(--border);
         border-radius: 4px;
-        background: #2a2a38;
+        background: var(--panel);
         color: var(--text);
         cursor: pointer;
     }
     .seg-level-cbar-btn:hover {
         border-color: var(--accent);
-        color: #fff;
+        color: var(--accent);
     }
     .seg-level-cbar-end {
         flex-shrink: 0;
@@ -2870,7 +2956,7 @@
         display: flex;
         align-items: flex-start;
         justify-content: flex-start;
-        background: #15151d;
+        background: var(--stage);
         border: 1px solid var(--border);
         border-radius: 6px;
         overflow: hidden;
@@ -2971,7 +3057,7 @@
         height: 118px;
         min-height: 96px;
         position: relative;
-        background: #15151d;
+        background: var(--plot);
         border: 1px solid var(--border);
         border-radius: 6px;
         overflow: hidden;
@@ -3148,13 +3234,13 @@
         font-size: 13px;
     }
     .batch-file-item:last-child { border-bottom: none; }
-    .batch-file-item:hover { background: rgba(255, 255, 255, 0.03); }
+    .batch-file-item:hover { background: var(--hover-wash); }
     .batch-file-item--preview { align-items: center; }
     .batch-file-thumb {
         flex-shrink: 0;
         width: 64px;
         height: 48px;
-        background: #1a1a22;
+        background: var(--inset);
         border: 1px solid var(--border);
         border-radius: 4px;
         overflow: hidden;
@@ -3188,7 +3274,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #3a3a4a;
+        background: var(--control);
         border-radius: 6px;
         font-family: Consolas, monospace;
         font-size: 12px;
@@ -3227,7 +3313,7 @@
         line-height: 1;
         cursor: pointer;
     }
-    .batch-file-remove:hover { background: #3a3a4a; color: #ff7a7a; }
+    .batch-file-remove:hover { background: var(--control); color: #ff7a7a; }
     .batch-file-download {
         flex-shrink: 0;
         position: relative;
@@ -3240,7 +3326,7 @@
         line-height: 1;
         cursor: pointer;
     }
-    .batch-file-download:hover:not(:disabled) { background: #3a3a4a; color: var(--accent); }
+    .batch-file-download:hover:not(:disabled) { background: var(--control); color: var(--accent); }
     .batch-file-download:disabled { opacity: 0.35; cursor: not-allowed; }
     .batch-edit-download-all {
         padding: 4px 10px;
@@ -3249,11 +3335,11 @@
     }
     .batch-side .status { white-space: pre-wrap; word-break: break-word; }
     button.btn-secondary {
-        background: #3a3a4a;
+        background: var(--control);
         color: var(--text);
         border: 1px solid var(--border);
     }
-    button.btn-secondary:hover { background: #4a4a5c; }
+    button.btn-secondary:hover { background: var(--control-hover); }
     button.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
 
     /* ===== ???? ===== */
@@ -3339,7 +3425,7 @@
     }
     .batch-edit-file-item:hover > .batch-edit-sticky-idx,
     .batch-edit-file-item:hover > .batch-edit-sticky-name {
-        background: #30303e;
+        background: var(--row-hover);
     }
     .batch-edit-colhead-file {
         font-weight: 600;
@@ -3410,7 +3496,7 @@
         flex-shrink: 0;
         justify-self: center;
         width: 72px;
-        background: #2a2a36;
+        background: var(--surface-2);
         border: 1px solid var(--border);
         border-radius: 4px;
         overflow: hidden;
@@ -3509,13 +3595,13 @@
         cursor: pointer;
     }
     button.batch-edit-zoom-close:hover {
-        background: #3a3a4a;
+        background: var(--control);
         color: var(--text);
     }
     .batch-edit-zoom-body {
         flex: 1;
         min-height: 0;
-        background: #1a1a22;
+        background: var(--inset);
         overflow: auto;
     }
     .batch-edit-zoom.is-zoomed .batch-edit-zoom-body { cursor: grab; }
@@ -3590,14 +3676,14 @@
         display: block;
         width: 100%;
         height: auto;
-        background: #1a1a22;
+        background: var(--inset);
     }
     .ctx-menu {
         position: fixed;
         z-index: 10080;
         min-width: 168px;
         padding: 4px 0;
-        background: #2a2a36;
+        background: var(--surface-2);
         border: 1px solid var(--border);
         border-radius: 6px;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
@@ -3628,7 +3714,7 @@
         display: inline-block;
         margin-top: 6px;
         padding: 4px 8px;
-        background: #3a3a4a;
+        background: var(--control);
         border-radius: 4px;
         font-size: 12px;
         color: var(--muted);
@@ -3640,7 +3726,7 @@
         margin-top: 14px;
         padding: 12px;
         border-radius: 8px;
-        background: #23232f;
+        background: var(--field);
         border: 1px solid var(--border);
         display: flex;
         flex-direction: column;
@@ -3699,7 +3785,7 @@
         flex-direction: column;
         width: 100%;
         max-height: min(420px, 42vh);
-        background: #2a2a36;
+        background: var(--surface-2);
         border: 1px solid var(--border);
         border-radius: 8px;
         overflow: hidden;
@@ -3864,7 +3950,7 @@
     }
     .bfm-step-drag-handle:active { cursor: grabbing; }
     .bfm-step-drag-handle:hover { color: var(--text); }
-    .bfm-step-item:hover { background: rgba(255, 255, 255, 0.03); }
+    .bfm-step-item:hover { background: var(--hover-wash); }
     .bfm-step-idx {
         flex-shrink: 0;
         width: 26px;
@@ -3872,7 +3958,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #3a3a4a;
+        background: var(--control);
         border-radius: 6px;
         font-family: Consolas, monospace;
         font-size: 12px;
@@ -3965,7 +4051,7 @@
     .bfm-name-input {
         flex: 1;
         min-width: 0;
-        background: #2a2a36;
+        background: var(--surface-2);
         border: 1px solid var(--border);
         color: var(--text);
         padding: 6px 10px;
@@ -3997,7 +4083,7 @@
         flex-direction: column;
         gap: 8px;
         padding: 10px 8px;
-        background: #22222e;
+        background: var(--sunken);
         border-right: 1px solid var(--border);
         overflow: hidden;
         min-width: 0;
@@ -4032,15 +4118,15 @@
         padding: 0;
         border: 1px solid var(--border);
         border-radius: 6px;
-        background: #2a2a38;
+        background: var(--panel);
         color: var(--muted);
         cursor: pointer;
         transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
     }
     .an-nav-toggle:hover {
         color: var(--text);
-        background: #343446;
-        border-color: #555568;
+        background: var(--surface-3);
+        border-color: var(--border-strong);
     }
     .an-nav-toggle-icon {
         width: 16px;
@@ -4086,12 +4172,12 @@
     }
     .an-nav-item:hover:not(:disabled) {
         color: var(--text);
-        background: rgba(255, 255, 255, 0.05);
+        background: var(--hover-wash);
     }
     .an-nav-item.active {
-        color: #fff;
-        background: rgba(79, 140, 255, 0.18);
-        border-color: rgba(79, 140, 255, 0.35);
+        color: var(--nav-active-fg);
+        background: var(--nav-active-bg);
+        border-color: var(--nav-active-border);
     }
     .an-nav-item:disabled {
         opacity: 0.45;
@@ -4124,7 +4210,7 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
-        background: #1a1a24;
+        background: var(--inset);
         border: 1px solid var(--border);
         border-radius: 10px;
         padding: 8px;
@@ -4139,9 +4225,9 @@
     .ov-pane-label {
         font-size: 12px;
         font-weight: 700;
-        color: #fff;
-        background: rgba(79, 140, 255, 0.22);
-        border: 1px solid rgba(79, 140, 255, 0.4);
+        color: var(--nav-active-fg);
+        background: var(--nav-active-bg);
+        border: 1px solid var(--nav-active-border);
         border-radius: 6px;
         padding: 3px 8px;
         flex-shrink: 0;
@@ -4233,7 +4319,7 @@
     }
     .ov-profile-panel {
         flex: 0 0 auto;
-        background: rgba(20, 20, 28, 0.92);
+        background: var(--panel);
         border: 1px solid var(--border);
         border-radius: 8px;
         padding: 8px 10px 6px;
@@ -4248,6 +4334,8 @@
         width: 100%;
         height: 100%;
         display: block;
+        background: var(--plot);
+        border-radius: 4px;
     }
     .an-check {
         display: flex;
@@ -4296,7 +4384,7 @@
         color: var(--muted);
     }
     .an-field select {
-        background: #22222e;
+        background: var(--field);
         border: 1px solid var(--border);
         color: var(--text);
         border-radius: 6px;
@@ -4328,7 +4416,7 @@
     }
     .an-lambda-row select,
     .an-lambda-row input[type="number"] {
-        background: #22222e;
+        background: var(--field);
         border: 1px solid var(--border);
         color: var(--text);
         border-radius: 6px;
@@ -4393,7 +4481,7 @@
         gap: 8px;
     }
     .an-param {
-        background: #22222e;
+        background: var(--sunken);
         border: 1px solid var(--border);
         border-radius: 8px;
         padding: 8px 10px;
@@ -4447,7 +4535,7 @@
         height: auto;
         border-radius: 6px;
         border: 1px solid var(--border);
-        background: #1a1a24;
+        background: var(--plot);
     }
     .an-hist-canvas {
         cursor: zoom-in;
@@ -4537,7 +4625,7 @@
         height: auto;
         border-radius: 6px;
         border: 1px solid var(--border);
-        background: #1a1a24;
+        background: var(--plot);
         cursor: zoom-in;
     }
     .info-panel--plot {
@@ -4575,7 +4663,7 @@
         font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
         font-size: 13px;
         color: var(--text);
-        background: #22222e;
+        background: var(--sunken);
         border: 1px solid var(--border);
         border-radius: 6px;
         padding: 8px 10px;
@@ -4618,4 +4706,32 @@
             border-top: 1px solid var(--border);
             max-height: none;
         }
+    }
+
+    /* 疊在影像上的浮層維持深色底，文字不跟著頁面主題變深 */
+    .viewer-cursor-toolbar,
+    .value-indicator,
+    .mode-indicator,
+    .zoom-indicator,
+    .hint3d,
+    .crop-hint,
+    .profile-tip,
+    .hist-tip,
+    .seg-level-profile-hover-tip,
+    #bcRoot .layer-panel,
+    #bcRoot .minimap,
+    #bcRoot .result-view-tabs,
+    #bcRoot .bc-measure-panel,
+    #bcRoot .bc-viewer-cursor-toolbar,
+    #bcRoot .peek-btn,
+    #bcRoot .load-progress-label,
+    #bcRoot .overlay-tip,
+    #bcRoot .bc-profile-tip,
+    #bcRoot .hist-tip,
+    #bcRoot .pane > span,
+    #bcRoot .bc-value-indicator {
+        --text: #ececf4;
+        --muted: #a8a8bc;
+        --border: rgba(255, 255, 255, 0.16);
+        color: #ececf4;
     }

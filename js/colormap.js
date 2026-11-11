@@ -291,6 +291,7 @@ function renderPcdScatter(dataset, cmap) {
 
     const img = ctx.createImageData(bw, bh);
     const px = img.data;
+    if (typeof fillMissingPixels === 'function') fillMissingPixels(px);
     const lut = buildColormapLut(cmap);
     const { cmin, crange } = effectiveColorRange(dataset);
     const rBuf = R > 0 ? R * dpr : 0;

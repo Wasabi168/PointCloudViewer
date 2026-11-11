@@ -253,8 +253,7 @@ const OverlayAnalysis = (() => {
             const po = i * 4;
             const v = data[i];
             if (!Number.isFinite(v)) {
-                px[po] = px[po + 1] = px[po + 2] = 0;
-                px[po + 3] = 255;
+                paintMissingPixel(px, po);
                 continue;
             }
             let t = (v - vmin) / crange;
@@ -2576,6 +2575,11 @@ const OverlayAnalysis = (() => {
         hasData,
         onColormapChange,
         refit,
+        repaint() {
+            if (st.dsA) renderPixels('a');
+            if (st.dsB) renderPixels('b');
+            if (st.dsA || st.dsB) applyTransform();
+        },
         syncLang,
         isActive: () => st.active,
     };

@@ -1,13 +1,52 @@
 /**
  * 2D 繪製
  * 依賴：colormap.js
- * 匯出（全域）：canvas 繪製函式
+ * 匯出（全域）：canvas 繪製函式、paintMissingPixel()
  */
 /* =========================================================================
  *  3. 繪製
  * ========================================================================= */
 
 let currentDataset = null;   // { data, width, height, vmin, vmax, header }
+
+/** 缺測（NaN）像素色，跟著主題。暗色維持黑，亮色貼近檢視區底色。 */
+let missingPixelRgb = [0, 0, 0];
+let missingPixelTheme = '';
+
+function readMissingPixelRgb() {
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+    if (theme === missingPixelTheme) return missingPixelRgb;
+    missingPixelTheme = theme;
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--nan').trim();
+    const m = /^#([0-9a-f]{6})$/i.exec(raw);
+    if (m) {
+        const n = parseInt(m[1], 16);
+        missingPixelRgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    } else {
+        missingPixelRgb = theme === 'light' ? [224, 228, 236] : [0, 0, 0];
+    }
+    return missingPixelRgb;
+}
+
+function paintMissingPixel(px, po) {
+    const c = readMissingPixelRgb();
+    px[po] = c[0];
+    px[po + 1] = c[1];
+    px[po + 2] = c[2];
+    px[po + 3] = 255;
+}
+
+/** 把整張點陣先塗成缺測底色（散布點雲的空白區） */
+function fillMissingPixels(px) {
+    const c = readMissingPixelRgb();
+    const r = c[0], g = c[1], b = c[2];
+    for (let i = 0; i < px.length; i += 4) {
+        px[i] = r;
+        px[i + 1] = g;
+        px[i + 2] = b;
+        px[i + 3] = 255;
+    }
+}
 
 /* 色階顯示範圍：以資料 [vmin, vmax] 的比例表示（0~1）。
  * 拖曳 colorbar 上的兩個標籤即可調整哪段數值對應整條色帶。*/
@@ -242,8 +281,7 @@ function renderPixels(dataset, cmap) {
         const po = i * 4;
         const v = data[i];
         if (!Number.isFinite(v)) {
-            px[po] = px[po + 1] = px[po + 2] = 0;
-            px[po + 3] = 255;
+            paintMissingPixel(px, po);
             continue;
         }
         let t = (v - cmin) / crange;
@@ -284,8 +322,7 @@ async function renderPixelsAsync(dataset, cmap, onProgress, canvasEl, colorRange
                 const po = i * 4;
                 const v = data[i];
                 if (!Number.isFinite(v)) {
-                    px[po] = px[po + 1] = px[po + 2] = 0;
-                    px[po + 3] = 255;
+                    paintMissingPixel(px, po);
                     continue;
                 }
                 let t = (v - cmin) / crange;

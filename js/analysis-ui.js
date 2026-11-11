@@ -91,7 +91,7 @@ const AnalysisView = (() => {
 
     const st = {
         dataset: null,
-        tool: 'profile', // 'roughness' | 'profile' | 'overlay'
+        tool: 'profile', // 'roughness' | 'profile' | 'overlay' | 'bump'
         view: { scale: 1, tx: 0, ty: 0 },
         roiMode: false,
         roiSel: null,       // 視埠 CSS px
@@ -343,11 +343,10 @@ const AnalysisView = (() => {
             const { width: rw, height: rh } = st.result.residualSize;
             const rect = st.result.meta.roi;
             const absMax = st.result.residualRange.absMax || 1;
-            // 先填黑
+            // 先填缺測底色
             for (let i = 0; i < width * height; i++) {
                 const po = i * 4;
-                px[po] = px[po + 1] = px[po + 2] = 20;
-                px[po + 3] = 255;
+                paintMissingPixel(px, po);
             }
             let ri = 0;
             for (let py = 0; py < rh; py++) {
@@ -357,8 +356,7 @@ const AnalysisView = (() => {
                     const iy = rect.y0 + py;
                     const po = (iy * width + ix) * 4;
                     if (!Number.isFinite(v)) {
-                        px[po] = px[po + 1] = px[po + 2] = 0;
-                        px[po + 3] = 255;
+                        paintMissingPixel(px, po);
                         continue;
                     }
                     let t = (v / absMax) * 0.5 + 0.5;
@@ -381,8 +379,7 @@ const AnalysisView = (() => {
                 const po = i * 4;
                 const v = data[i];
                 if (!Number.isFinite(v)) {
-                    px[po] = px[po + 1] = px[po + 2] = 0;
-                    px[po + 3] = 255;
+                    paintMissingPixel(px, po);
                     continue;
                 }
                 let t = (v - vmin) / crange;
@@ -1336,8 +1333,7 @@ const AnalysisView = (() => {
                 const v = residual[sy * srcW + sx];
                 const po = (y * dw + x) * 4;
                 if (!Number.isFinite(v)) {
-                    img.data[po] = img.data[po + 1] = img.data[po + 2] = 0;
-                    img.data[po + 3] = 255;
+                    paintMissingPixel(img.data, po);
                     continue;
                 }
                 let t = (v / absMax) * 0.5 + 0.5;
@@ -1962,9 +1958,14 @@ const AnalysisView = (() => {
         el.subtitle.textContent = t(key);
     }
 
-    function setTool(tool) {
+    function setTool(tool, opts) {
+        opts = opts || {};
         if (!AN_TOOLS.includes(tool)) return;
+        const prevTool = st.tool;
         st.tool = tool;
+        if (opts.persist !== false && typeof setUserPref === 'function') {
+            setUserPref('anTool', tool);
+        }
         document.querySelectorAll('.an-nav-item[data-an-tool]').forEach((b) => {
             b.classList.toggle('active', b.getAttribute('data-an-tool') === tool);
         });
@@ -2005,6 +2006,12 @@ const AnalysisView = (() => {
         syncLineFromImage();
         updateButtons();
         if (tool !== 'overlay' && st.dataset) applyTransform();
+
+        if (opts.offerLoad && tool === 'bump' && prevTool !== 'bump') {
+            if (typeof offerEditorToBumpLoad === 'function') offerEditorToBumpLoad();
+        } else if (prevTool === 'bump' && tool !== 'bump' && typeof dismissEditorToBumpLoad === 'function') {
+            dismissEditorToBumpLoad();
+        }
     }
 
     function syncHeaderForTool() {
@@ -2588,7 +2595,7 @@ const AnalysisView = (() => {
             btn.addEventListener('click', () => {
                 if (btn.disabled) return;
                 const tool = btn.getAttribute('data-an-tool');
-                if (AN_TOOLS.includes(tool)) setTool(tool);
+                if (AN_TOOLS.includes(tool)) setTool(tool, { offerLoad: true });
             });
         });
 
@@ -2599,7 +2606,9 @@ const AnalysisView = (() => {
         setupPfPlotInteraction();
         setupResidualThumbInteraction();
         setupHistInteraction();
-        setTool(st.tool);
+        const savedTool = typeof getUserPref === 'function' ? getUserPref('anTool') : st.tool;
+        if (AN_TOOLS.includes(savedTool)) st.tool = savedTool;
+        setTool(st.tool, { persist: false });
         rebuildLambdaPresets({ keepValue: false });
         updateButtons();
         renderColorbar();
@@ -2699,6 +2708,7 @@ const AnalysisView = (() => {
         updateRoiButtons();
     }
 
+    function getTool() { return st.tool; }
     function hasData() { return !!st.dataset; }
     function getDataset() {
         if (!st.dataset) return null;
@@ -2715,8 +2725,14 @@ const AnalysisView = (() => {
         clearData,
         hasData,
         getDataset,
+        getTool,
         setTool,
         refit,
+        repaint() {
+            if (!st.dataset) return;
+            render(false);
+            if (st.result && st.result.ok) drawResidualThumb(st.result);
+        },
         syncLang,
         compute,
     };
