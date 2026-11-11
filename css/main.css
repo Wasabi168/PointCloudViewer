@@ -2281,6 +2281,12 @@
     #edSegSkewCount {
         width: 56px;
     }
+    .seg-level-auto-btn {
+        padding: 4px 12px;
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: nowrap;
+    }
     #edSegLevelDir:focus,
     #edSegLevelCount:focus,
     #edUniLevelK:focus,
@@ -2376,12 +2382,14 @@
         gap: 14px;
         flex-wrap: wrap;
     }
-    #edSegLevelTune[aria-hidden="false"] {
+    #edSegLevelTune[aria-hidden="false"],
+    #edSegSkewTune[aria-hidden="false"] {
         flex-direction: row;
         align-items: stretch;
         gap: 0;
     }
-    #edSegLevelTune .seg-level-tune-col {
+    #edSegLevelTune .seg-level-tune-col,
+    #edSegSkewTune .seg-level-tune-col {
         flex: 1 1 340px;
         min-width: 260px;
         display: flex;
@@ -2401,15 +2409,18 @@
         border-left: 1px solid var(--border);
     }
     @media (max-width: 860px) {
-        #edSegLevelTune[aria-hidden="false"] {
+        #edSegLevelTune[aria-hidden="false"],
+        #edSegSkewTune[aria-hidden="false"] {
             flex-direction: column;
             gap: 8px;
         }
-        #edSegLevelTune .seg-level-tune-col {
+        #edSegLevelTune .seg-level-tune-col,
+        #edSegSkewTune .seg-level-tune-col {
             min-width: 0;
             padding-right: 0;
         }
-        #edSegLevelTune .seg-level-band-offsets {
+        #edSegLevelTune .seg-level-band-offsets,
+        #edSegSkewTune .seg-level-band-offsets {
             min-width: 0;
             padding: 8px 0 0;
             border-left: none;
@@ -2433,7 +2444,8 @@
         flex: 1 1 16em;
         min-width: 12em;
     }
-    #edSegLevelBandOffsetReset {
+    #edSegLevelBandOffsetReset,
+    #edSegSkewBandShiftReset {
         flex-shrink: 0;
     }
     .seg-level-band-offset-list {
@@ -2471,7 +2483,8 @@
         outline: none;
     }
     .seg-level-tune.is-busy .seg-level-band-offset input,
-    .seg-level-tune.is-busy #edSegLevelBandOffsetReset {
+    .seg-level-tune.is-busy #edSegLevelBandOffsetReset,
+    .seg-level-tune.is-busy #edSegSkewBandShiftReset {
         opacity: 0.55;
         pointer-events: none;
     }

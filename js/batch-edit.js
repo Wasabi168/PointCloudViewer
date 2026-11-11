@@ -1162,7 +1162,7 @@
         const bounds = zoomViewPixelBounds();
         const items = buildPreviewSendMenuItems({
             ds,
-            onBeforeAction: hidePreviewCtxMenu,
+            onBeforeAction: closeZoomPreview,
         });
         items.push({ separator: true });
         items.push(

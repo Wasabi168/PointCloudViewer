@@ -627,18 +627,56 @@ function batchApplySegmentLevel(ds, step) {
     return { ok: true };
 }
 
+/** 讀出分區錯位校正步驟裡確認過的方向、邊界、共用 shift 與各帶平移。 */
+function batchReadSegmentSkewStep(step) {
+    if (!step || step.type !== 'segmentSkew') return null;
+    const direction = step.direction === 'vertical' ? 'vertical'
+        : (step.direction === 'horizontal' ? 'horizontal' : '');
+    if (!direction) return null;
+    const shiftPx = Number(step.shiftPx);
+    if (!Number.isFinite(shiftPx)) return null;
+    const boundaries = Array.isArray(step.boundaries)
+        ? step.boundaries.map((n) => Math.round(Number(n))).filter((n) => Number.isFinite(n))
+        : [];
+    const bandShifts = Array.isArray(step.bandShifts)
+        ? step.bandShifts.map((v) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? Math.round(n) : 0;
+        })
+        : [];
+    const segmentCount = Math.round(Number(step.segmentCount));
+    return {
+        direction,
+        shiftPx: Math.round(shiftPx),
+        boundaries,
+        bandShifts,
+        segmentCount: Number.isFinite(segmentCount) ? segmentCount : 0,
+    };
+}
+
 function batchApplySegmentSkew(ds, step) {
     if (isPcdScatterDataset(ds)) return { ok: false, reason: 'scatter' };
-    if (typeof analyzeSegmentSkewWithParams !== 'function') return { ok: false, reason: 'invalid' };
-    const direction = step.direction === 'vertical' ? 'vertical' : 'horizontal';
-    const segmentCount = Math.round(step.segmentCount);
-    const shiftPx = Number(step.shiftPx);
-    if (!Number.isFinite(segmentCount) || segmentCount < 2) return { ok: false, reason: 'invalid' };
-    if (!Number.isFinite(shiftPx)) return { ok: false, reason: 'invalid' };
-    const analysis = analyzeSegmentSkewWithParams(ds, direction, segmentCount, shiftPx);
-    if (!analysis.ok) return { ok: false, reason: analysis.reason || 'insufficient' };
+    if (typeof applySegmentSkew !== 'function') return { ok: false, reason: 'invalid' };
+    const recorded = batchReadSegmentSkewStep(step);
+    if (!recorded) return { ok: false, reason: 'invalid' };
+
+    const { width, height } = ds;
+    const axisLen = recorded.direction === 'horizontal' ? height : width;
+    let boundaries = recorded.boundaries;
+    if (!batchSegmentLevelBoundariesFit(boundaries, axisLen)) {
+        if (typeof analyzeSegmentSkewWithParams !== 'function') return { ok: false, reason: 'invalid' };
+        if (recorded.segmentCount < 2) return { ok: false, reason: 'invalid' };
+        const analysis = analyzeSegmentSkewWithParams(
+            ds, recorded.direction, recorded.segmentCount, recorded.shiftPx,
+        );
+        if (!analysis.ok) return { ok: false, reason: analysis.reason || 'insufficient' };
+        boundaries = analysis.boundaries;
+    }
+
     batchEnsureFloatPixels(ds);
-    ds.data = analysis.correctedData.slice();
+    ds.data = applySegmentSkew(
+        ds.data, width, height, recorded.direction, boundaries, recorded.shiftPx, null, recorded.bandShifts,
+    );
     batchRefreshRange(ds);
     return { ok: true };
 }
@@ -785,6 +823,45 @@ function segmentLevelStepInfo(step) {
     };
 }
 
+/** 分區錯位校正步驟的簡短列示與懸停完整參數。參數不足時回傳 null。 */
+function segmentSkewStepInfo(step) {
+    if (!step || step.type !== 'segmentSkew') return null;
+    const hasDir = step.direction === 'vertical' || step.direction === 'horizontal';
+    const boundaries = Array.isArray(step.boundaries)
+        ? step.boundaries.filter((n) => Number.isFinite(Number(n))).map((n) => Math.round(Number(n)))
+        : [];
+    const shifts = Array.isArray(step.bandShifts) ? step.bandShifts.map((v) => Number(v)) : [];
+    const shiftPx = Number(step.shiftPx);
+    const hasShift = Number.isFinite(shiftPx);
+    const countFromStep = Math.round(Number(step.segmentCount));
+    const count = Number.isFinite(countFromStep) && countFromStep >= 2
+        ? countFromStep
+        : (boundaries.length ? boundaries.length + 1 : shifts.length);
+    if (!hasDir && !hasShift && !boundaries.length && !shifts.length) return null;
+
+    const direction = step.direction === 'vertical' ? 'vertical' : 'horizontal';
+    const dirLabel = direction === 'vertical' ? t('segSkewDirVertical') : t('segSkewDirHorizontal');
+    const dirShort = direction === 'vertical' ? t('bfmSegSkewDirVertical') : t('bfmSegSkewDirHorizontal');
+    const shiftText = hasShift ? String(Math.round(shiftPx)) : '—';
+    const brief = t('bfmSegSkewBrief', dirShort, count || '—', shiftText);
+    const chips = [];
+    const n = count || shifts.length;
+    for (let i = 0; i < n; i++) {
+        const v = Number.isFinite(shifts[i]) ? Math.round(shifts[i]) : 0;
+        chips.push('#' + (i + 1) + ' ' + v);
+    }
+    return {
+        brief,
+        rows: [
+            { label: t('segSkewDirLabel'), value: dirLabel },
+            { label: t('segSkewCountLabel'), value: String(count || '—') },
+            { label: t('bfmSegSkewShiftLabel'), value: hasShift ? (shiftText + ' px') : '—' },
+            { label: t('segSkewBandShiftTitle'), chips: chips.length ? chips : ['—'] },
+            { label: t('bfmSegLevelBounds'), value: boundaries.length ? (boundaries.join(', ') + ' px') : '—' },
+        ],
+    };
+}
+
 function describeBatchStep(step) {
     if (!step) return '';
     switch (step.type) {
@@ -796,10 +873,7 @@ function describeBatchStep(step) {
         }
         case 'roiLevel': return t('bfmStepRoiLevel');
         case 'segmentLevel': return t('bfmStepSegmentLevel');
-        case 'segmentSkew': {
-            const dir = step.direction === 'vertical' ? t('bfmSegSkewDirVertical') : t('bfmSegSkewDirHorizontal');
-            return t('bfmStepSegmentSkew', dir, step.segmentCount, step.shiftPx);
-        }
+        case 'segmentSkew': return t('bfmStepSegmentSkew');
         case 'denoise':
             if (step.auto) return t('bfmStepDenoiseAuto');
             return t('bfmStepDenoise', (step.lo * 100).toFixed(0) + '%', (step.hi * 100).toFixed(0) + '%');

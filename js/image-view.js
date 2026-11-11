@@ -2084,17 +2084,19 @@ function createImageView(ids, options) {
         const segProbeToggleOn = !!(has && st.edit.segLevel && !st.edit.segLevelBusy);
         if (el.segLevelShowProbeBefore) el.segLevelShowProbeBefore.disabled = !segProbeToggleOn;
         if (el.segLevelShowProbeAfter) el.segLevelShowProbeAfter.disabled = !segProbeToggleOn;
-        const segConfigLocked = !(has && st.edit.segLevel && !st.edit.segLevelBusy && !st.edit.segLevelTuneBusy && st.edit.segLevelResult);
+        const segConfigLocked = !(has && st.edit.segLevel && !st.edit.segLevelBusy && !st.edit.segLevelTuneBusy);
         if (el.segLevelDir) el.segLevelDir.disabled = segConfigLocked;
         if (el.segLevelCount) el.segLevelCount.disabled = segConfigLocked;
+        if (el.segLevelAuto) el.segLevelAuto.disabled = segConfigLocked;
         if (el.segSkewApply) el.segSkewApply.disabled = !(has && st.edit.segSkew && !st.edit.segSkewBusy && !st.edit.segSkewTuneBusy && st.edit.segSkewResult);
         if (el.segSkewCancel) el.segSkewCancel.disabled = !(has && st.edit.segSkew);
         if (el.segSkewShowBounds) {
             el.segSkewShowBounds.disabled = !(has && st.edit.segSkew && !st.edit.segSkewBusy);
         }
-        const segSkewConfigLocked = !(has && st.edit.segSkew && !st.edit.segSkewBusy && !st.edit.segSkewTuneBusy && st.edit.segSkewResult);
+        const segSkewConfigLocked = !(has && st.edit.segSkew && !st.edit.segSkewBusy && !st.edit.segSkewTuneBusy);
         if (el.segSkewDir) el.segSkewDir.disabled = segSkewConfigLocked;
         if (el.segSkewCount) el.segSkewCount.disabled = segSkewConfigLocked;
+        if (el.segSkewAuto) el.segSkewAuto.disabled = segSkewConfigLocked;
         if (el.medianFilterApply) el.medianFilterApply.disabled = !(has && st.edit.medianFilter && !st.edit.medianFilterBusy && st.edit.medianFilterResult);
         if (el.medianFilterCancel) el.medianFilterCancel.disabled = !(has && st.edit.medianFilter);
         const medianFilterConfigLocked = !(has && st.edit.medianFilter && !st.edit.medianFilterBusy && st.edit.medianFilterResult);
@@ -4253,6 +4255,18 @@ function createImageView(ids, options) {
         if (el.segLevelConfig) el.segLevelConfig.setAttribute('aria-hidden', visible ? 'false' : 'true');
     }
 
+    /** 進入模式時只帶出方向與等份數，不啟動分析。 */
+    function resetSegLevelManualConfig() {
+        setSegLevelConfigUI(true);
+        if (el.segLevelDir) el.segLevelDir.value = 'horizontal';
+        const limits = segLevelConfigLimits('horizontal');
+        if (el.segLevelCount) {
+            el.segLevelCount.min = '2';
+            el.segLevelCount.max = String(limits ? limits.maxBands : 20);
+            el.segLevelCount.value = '2';
+        }
+    }
+
     function syncSegLevelConfigUI() {
         const result = st.edit.segLevelResult;
         if (!result) return;
@@ -6155,8 +6169,73 @@ function createImageView(ids, options) {
     }
 
     function onSegLevelConfigChange() {
-        if (!st.edit.segLevel || st.edit.segLevelBusy || st.edit.segLevelTuneBusy || !st.edit.segLevelResult) return;
+        if (!st.edit.segLevel || st.edit.segLevelBusy || st.edit.segLevelTuneBusy) return;
         recomputeSegLevelWithConfig({ resetView: true });
+    }
+
+    async function runSegLevelAuto() {
+        if (!st.edit.segLevel || st.edit.segLevelBusy || st.edit.segLevelTuneBusy || !st.dataset) return;
+        if (typeof analyzeSegmentLevelingAsync !== 'function') return;
+
+        st.edit.segLevelBusy = true;
+        st.edit.segLevelTuneRunId++;
+        segLevelCancelProbeCorrection();
+        const runId = ++st.edit.segLevelRunId;
+        setSegLevelBusyUI(true, 0);
+        setSegLevelTuneUI(false);
+        updateEditButtons();
+        el.status.textContent = t('segLevelAnalyzing');
+
+        await segLevelYield();
+
+        try {
+            const analysis = await analyzeSegmentLevelingAsync(
+                st.dataset,
+                (p) => {
+                    if (runId !== st.edit.segLevelRunId) return;
+                    setSegLevelBusyUI(true, p);
+                },
+                () => runId !== st.edit.segLevelRunId,
+            );
+
+            if (runId !== st.edit.segLevelRunId) return;
+
+            if (!analysis.ok) {
+                if (analysis.reason !== 'cancelled') {
+                    if (analysis.reason === 'scatter') showToast(t('segLevelScatter'), 'info');
+                    else if (analysis.reason === 'tooSmall') showToast(t('segLevelTooSmall'), 'error');
+                    else showToast(t('segLevelInsufficient'), 'error');
+                }
+                return;
+            }
+
+            st.edit.segLevelResult = analysis;
+            segLevelResetProbeIndices();
+            st.edit.segLevelBusy = false;
+            setSegLevelBusyUI(false);
+            setSegLevelConfigUI(true);
+            buildSegLevelTuneUI(analysis);
+            renderSegLevelCompare({ resetView: true });
+            updateEditButtons();
+            el.status.textContent = segLevelStatusText(analysis);
+        } catch (err) {
+            console.error(err);
+            if (runId === st.edit.segLevelRunId) showToast(String(err.message || err), 'error');
+        } finally {
+            if (runId === st.edit.segLevelRunId && st.edit.segLevelBusy) {
+                st.edit.segLevelBusy = false;
+                setSegLevelBusyUI(false);
+                if (st.edit.segLevelResult) {
+                    setSegLevelConfigUI(true);
+                    buildSegLevelTuneUI(st.edit.segLevelResult);
+                    syncSegLevelConfigUI();
+                    el.status.textContent = segLevelStatusText(st.edit.segLevelResult);
+                } else {
+                    el.status.textContent = t('segLevelIdle');
+                }
+                updateEditButtons();
+            }
+        }
     }
 
     function onSegLevelCountKeydown(e) {
@@ -6290,15 +6369,15 @@ function createImageView(ids, options) {
         segLevelCancelProbeCorrection();
         st.edit.segLevel = true;
         st.edit.segLevelShowBounds = false;
-        st.edit.segLevelBusy = true;
+        st.edit.segLevelBusy = false;
         st.edit.segLevelResult = null;
-        const runId = ++st.edit.segLevelRunId;
+        st.edit.segLevelRunId++;
 
         enterSegLevelUI(true);
         syncSegLevelBoundsToggle();
-        setSegLevelBusyUI(true, 0);
+        setSegLevelBusyUI(false);
         setSegLevelTuneUI(false);
-        setSegLevelConfigUI(false);
+        resetSegLevelManualConfig();
         if (st.edit.segLevelBase && st.dataset) {
             const { data, vmin, vmax } = st.edit.segLevelBase;
             const dr = segLevelDisplayRange(vmin, vmax, segLevelClipFor('before'));
@@ -6320,53 +6399,7 @@ function createImageView(ids, options) {
             clearSegLevelProfileCanvas(el.segLevelAfterProfile);
         }
         updateEditButtons();
-        el.status.textContent = t('segLevelAnalyzing');
-
-        await segLevelYield();
-
-        try {
-            const analysis = await analyzeSegmentLevelingAsync(
-                st.dataset,
-                (p) => {
-                    if (runId !== st.edit.segLevelRunId) return;
-                    setSegLevelBusyUI(true, p);
-                },
-                () => runId !== st.edit.segLevelRunId,
-            );
-
-            if (runId !== st.edit.segLevelRunId) return;
-
-            if (!analysis.ok) {
-                const reason = analysis.reason;
-                if (reason !== 'cancelled') {
-                    if (reason === 'scatter') showToast(t('segLevelScatter'), 'info');
-                    else if (reason === 'tooSmall') showToast(t('segLevelTooSmall'), 'error');
-                    else showToast(t('segLevelInsufficient'), 'error');
-                }
-                st.edit.segLevelBase = null;
-                exitSegLevelMode();
-                if (st.dataset) {
-                    el.status.textContent = t('statusLoaded', st.dataset.filename, st.dataset.width, st.dataset.height);
-                }
-                return;
-            }
-
-            st.edit.segLevelResult = analysis;
-            segLevelResetProbeIndices();
-            st.edit.segLevelBusy = false;
-            setSegLevelBusyUI(false);
-            setSegLevelConfigUI(true);
-            buildSegLevelTuneUI(analysis);
-            renderSegLevelCompare({ resetView: true });
-            updateEditButtons();
-            el.status.textContent = segLevelStatusText(analysis);
-        } catch (err) {
-            console.error(err);
-            if (runId === st.edit.segLevelRunId) {
-                showToast(String(err.message || err), 'error');
-                exitSegLevelMode();
-            }
-        }
+        el.status.textContent = t('segLevelIdle');
     }
 
     function applySegLevel() {
@@ -6408,6 +6441,18 @@ function createImageView(ids, options) {
 
     function setSegSkewConfigUI(visible) {
         if (el.segSkewConfig) el.segSkewConfig.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+
+    /** 進入模式時只帶出方向與等份數，不啟動分析。 */
+    function resetSegSkewManualConfig() {
+        setSegSkewConfigUI(true);
+        if (el.segSkewDir) el.segSkewDir.value = 'horizontal';
+        const limits = segSkewConfigLimits('horizontal');
+        if (el.segSkewCount) {
+            el.segSkewCount.min = '2';
+            el.segSkewCount.max = String(limits ? limits.maxBands : 20);
+            el.segSkewCount.value = '2';
+        }
     }
 
     function syncSegSkewConfigUI() {
@@ -6718,10 +6763,10 @@ function createImageView(ids, options) {
         result.shiftPx = Number.isFinite(v) ? Math.round(v) : result.autoShiftPx;
     }
 
-    function syncSegSkewShiftInput() {
-        const result = st.edit.segSkewResult;
-        if (!result || !el.segSkewTuneShift) return;
-        el.segSkewTuneShift.value = String(result.shiftPx);
+    function syncSegSkewShiftInput(result) {
+        const src = result || st.edit.segSkewResult;
+        if (!src || !el.segSkewTuneShift) return;
+        el.segSkewTuneShift.value = String(src.shiftPx);
     }
 
     function setSegSkewTuneBusyUI(busy) {
@@ -6734,6 +6779,12 @@ function createImageView(ids, options) {
         }
         if (el.segSkewTuneShift) el.segSkewTuneShift.disabled = !!busy;
         if (el.segSkewTuneReset) el.segSkewTuneReset.disabled = !!busy;
+        if (el.segSkewBandShiftReset) el.segSkewBandShiftReset.disabled = !!busy;
+        if (el.segSkewBandShiftList) {
+            el.segSkewBandShiftList.querySelectorAll('input').forEach((input) => {
+                input.disabled = !!busy;
+            });
+        }
         updateEditButtons();
     }
 
@@ -6768,16 +6819,17 @@ function createImageView(ids, options) {
         }
 
         try {
+            const bandShifts = segSkewEnsureBandShifts(result);
             if (typeof applySegmentSkewAsync === 'function') {
                 const out = await applySegmentSkewAsync(
                     base.data, width, height, result.direction, result.boundaries, result.shiftPx,
-                    outBuf, 64, () => tuneRunId !== st.edit.segSkewTuneRunId,
+                    outBuf, 64, () => tuneRunId !== st.edit.segSkewTuneRunId, bandShifts,
                 );
                 if (!out || tuneRunId !== st.edit.segSkewTuneRunId) return;
                 result.correctedData = out;
             } else {
                 result.correctedData = applySegmentSkew(
-                    base.data, width, height, result.direction, result.boundaries, result.shiftPx, outBuf,
+                    base.data, width, height, result.direction, result.boundaries, result.shiftPx, outBuf, bandShifts,
                 );
             }
             renderSegSkewAfterOnly();
@@ -6787,9 +6839,93 @@ function createImageView(ids, options) {
         }
     }
 
+    function segSkewEnsureBandShifts(result) {
+        const n = Math.max(1, result.segmentCount || ((result.boundaries ? result.boundaries.length : 0) + 1));
+        if (!result.bandShifts || result.bandShifts.length !== n) {
+            result.bandShifts = new Array(n).fill(0);
+        }
+        return result.bandShifts;
+    }
+
+    function readSegSkewBandShiftsFromUI() {
+        const result = st.edit.segSkewResult;
+        const list = el.segSkewBandShiftList;
+        if (!result || !list) return;
+        const shifts = segSkewEnsureBandShifts(result);
+        list.querySelectorAll('input').forEach((input) => {
+            const i = parseInt(input.dataset.band, 10);
+            if (!Number.isInteger(i) || i < 0 || i >= shifts.length) return;
+            const v = parseFloat(input.value);
+            shifts[i] = Number.isFinite(v) ? Math.round(v) : 0;
+        });
+    }
+
+    function syncSegSkewBandShiftInputs(result) {
+        const list = el.segSkewBandShiftList;
+        if (!list || !result) return;
+        const shifts = segSkewEnsureBandShifts(result);
+        const inputs = list.querySelectorAll('input');
+        if (inputs.length !== shifts.length) {
+            buildSegSkewBandShiftInputs(result);
+            return;
+        }
+        inputs.forEach((input) => {
+            if (document.activeElement === input) return;
+            const i = parseInt(input.dataset.band, 10);
+            if (Number.isInteger(i) && i >= 0 && i < shifts.length) input.value = String(shifts[i]);
+        });
+    }
+
+    function syncSegSkewBandShiftHint(result) {
+        if (!el.segSkewBandShiftHint || !result) return;
+        el.segSkewBandShiftHint.textContent = result.direction === 'vertical'
+            ? t('segSkewBandShiftHintVertical')
+            : t('segSkewBandShiftHintHorizontal');
+    }
+
+    function buildSegSkewBandShiftInputs(result) {
+        const list = el.segSkewBandShiftList;
+        if (!list || !result) return;
+        const shifts = segSkewEnsureBandShifts(result);
+        list.replaceChildren();
+        for (let i = 0; i < shifts.length; i++) {
+            const label = document.createElement('label');
+            label.className = 'seg-level-band-offset';
+            const swatch = document.createElement('span');
+            swatch.className = 'seg-level-band-offset-swatch';
+            swatch.style.background = segLevelBandFitColor(i);
+            const name = document.createElement('span');
+            name.textContent = t('segSkewBandShiftItem', i + 1);
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.step = '1';
+            input.value = String(shifts[i]);
+            input.dataset.band = String(i);
+            input.addEventListener('keydown', onSegSkewTuneKeydown);
+            label.append(swatch, name, input);
+            list.appendChild(label);
+        }
+    }
+
+    function resetSegSkewBandShifts() {
+        if (st.edit.segSkewTuneBusy || st.edit.segSkewBusy) return;
+        const result = st.edit.segSkewResult;
+        if (!result) {
+            if (el.segSkewBandShiftList) {
+                el.segSkewBandShiftList.querySelectorAll('input').forEach((input) => { input.value = '0'; });
+            }
+            return;
+        }
+        const shifts = segSkewEnsureBandShifts(result);
+        shifts.fill(0);
+        syncSegSkewBandShiftInputs(result);
+        recomputeSegSkewPreview();
+    }
+
     function commitSegSkewTune() {
         if (!st.edit.segSkew || st.edit.segSkewBusy || st.edit.segSkewTuneBusy) return;
         readSegSkewShiftFromUI();
+        readSegSkewBandShiftsFromUI();
         recomputeSegSkewPreview();
     }
 
@@ -6803,12 +6939,78 @@ function createImageView(ids, options) {
     function buildSegSkewTuneUI(result) {
         if (!result) return;
         setSegSkewTuneUI(true);
-        syncSegSkewShiftInput();
+        segSkewEnsureBandShifts(result);
+        syncSegSkewShiftInput(result);
+        syncSegSkewBandShiftHint(result);
+        buildSegSkewBandShiftInputs(result);
+    }
+
+    /** 剛進入模式、還沒計算時，先用目前方向與等份數把微調欄位秀出來。 */
+    function showSegSkewTuneDefaults() {
+        const direction = el.segSkewDir?.value === 'vertical' ? 'vertical' : 'horizontal';
+        const count = Math.max(2, parseInt(el.segSkewCount?.value, 10) || 2);
+        buildSegSkewTuneUI({
+            direction,
+            segmentCount: count,
+            shiftPx: 0,
+            bandShifts: new Array(count).fill(0),
+        });
+    }
+
+    function segSkewDraftShift() {
+        const v = parseFloat(el.segSkewTuneShift?.value);
+        if (Number.isFinite(v)) return Math.round(v);
+        const prev = st.edit.segSkewResult;
+        return prev && Number.isFinite(prev.shiftPx) ? prev.shiftPx : 0;
+    }
+
+    function segSkewDraftBandShifts(count) {
+        const n = Math.max(1, count || 1);
+        const shifts = new Array(n).fill(0);
+        const inputs = el.segSkewBandShiftList ? el.segSkewBandShiftList.querySelectorAll('input') : [];
+        if (inputs.length) {
+            inputs.forEach((input) => {
+                const i = parseInt(input.dataset.band, 10);
+                if (!Number.isInteger(i) || i < 0 || i >= n) return;
+                const v = parseFloat(input.value);
+                shifts[i] = Number.isFinite(v) ? Math.round(v) : 0;
+            });
+            return shifts;
+        }
+        const prev = st.edit.segSkewResult;
+        if (prev && Array.isArray(prev.bandShifts)) {
+            for (let i = 0; i < n && i < prev.bandShifts.length; i++) {
+                const v = prev.bandShifts[i];
+                shifts[i] = Number.isFinite(v) ? Math.round(v) : 0;
+            }
+        }
+        return shifts;
+    }
+
+    async function segSkewApplyDraftBands(analysis, runId) {
+        const bandShifts = segSkewDraftBandShifts(analysis.segmentCount);
+        analysis.bandShifts = bandShifts;
+        if (!bandShifts.some((v) => v) || !st.edit.segSkewBase || typeof applySegmentSkewAsync !== 'function') {
+            return runId === st.edit.segSkewRunId;
+        }
+        const base = st.edit.segSkewBase;
+        const out = await applySegmentSkewAsync(
+            base.data, st.dataset.width, st.dataset.height,
+            analysis.direction, analysis.boundaries, analysis.shiftPx,
+            null, 64, () => runId !== st.edit.segSkewRunId, bandShifts,
+        );
+        if (runId !== st.edit.segSkewRunId) return false;
+        if (out) analysis.correctedData = out;
+        return true;
     }
 
     function resetSegSkewShift() {
+        if (st.edit.segSkewTuneBusy) return;
         const result = st.edit.segSkewResult;
-        if (!result || !Number.isFinite(result.autoShiftPx) || st.edit.segSkewTuneBusy) return;
+        if (!result || !Number.isFinite(result.autoShiftPx)) {
+            if (el.segSkewTuneShift) el.segSkewTuneShift.value = '0';
+            return;
+        }
         result.shiftPx = result.autoShiftPx;
         syncSegSkewShiftInput();
         recomputeSegSkewPreview();
@@ -6840,11 +7042,12 @@ function createImageView(ids, options) {
         await segLevelYield();
 
         try {
+            const keepShift = segSkewDraftShift();
             const analysis = await analyzeSegmentSkewWithParamsAsync(
                 st.dataset,
                 direction,
                 segmentCount,
-                undefined,
+                keepShift,
                 (p) => {
                     if (runId !== st.edit.segSkewRunId) return;
                     setSegSkewBusyUI(true, p);
@@ -6864,6 +7067,8 @@ function createImageView(ids, options) {
                 syncSegSkewConfigUI();
                 return;
             }
+
+            if (!(await segSkewApplyDraftBands(analysis, runId))) return;
 
             st.edit.segSkewResult = analysis;
             st.edit.segSkewBusy = false;
@@ -6889,8 +7094,93 @@ function createImageView(ids, options) {
     }
 
     function onSegSkewConfigChange() {
-        if (!st.edit.segSkew || st.edit.segSkewBusy || st.edit.segSkewTuneBusy || !st.edit.segSkewResult) return;
+        if (!st.edit.segSkew || st.edit.segSkewBusy || st.edit.segSkewTuneBusy) return;
         recomputeSegSkewWithConfig({ resetView: true });
+    }
+
+    async function runSegSkewAuto() {
+        if (!st.edit.segSkew || st.edit.segSkewBusy || st.edit.segSkewTuneBusy || !st.dataset) return;
+        if (typeof analyzeSegmentSkewWithParamsAsync !== 'function'
+            || typeof segSkewDetectBandCountAsync !== 'function') return;
+
+        st.edit.segSkewBusy = true;
+        st.edit.segSkewTuneRunId++;
+        const runId = ++st.edit.segSkewRunId;
+        setSegSkewBusyUI(true, 0);
+        setSegSkewTuneUI(false);
+        updateEditButtons();
+        el.status.textContent = t('segSkewAnalyzing');
+
+        await segLevelYield();
+
+        try {
+            const { direction } = readSegSkewConfigFromUI();
+            const keepShift = segSkewDraftShift();
+            const segmentCount = typeof segSkewDetectBandCountAsync === 'function'
+                ? await segSkewDetectBandCountAsync(
+                    st.dataset.data, st.dataset.width, st.dataset.height, direction,
+                    () => runId !== st.edit.segSkewRunId,
+                )
+                : 0;
+
+            if (runId !== st.edit.segSkewRunId) return;
+            if (!segmentCount) return;
+
+            const analysis = await analyzeSegmentSkewWithParamsAsync(
+                st.dataset,
+                direction,
+                segmentCount,
+                keepShift,
+                (p) => {
+                    if (runId !== st.edit.segSkewRunId) return;
+                    setSegSkewBusyUI(true, p);
+                },
+                () => runId !== st.edit.segSkewRunId,
+            );
+
+            if (runId !== st.edit.segSkewRunId) return;
+
+            if (!analysis.ok) {
+                if (analysis.reason !== 'cancelled') {
+                    if (analysis.reason === 'invalidParams') {
+                        const limits = segSkewConfigLimits(direction);
+                        showToast(t('segSkewInvalidCount', limits ? limits.maxBands : segmentCount), 'info');
+                    } else if (analysis.reason === 'scatter') showToast(t('segSkewScatter'), 'info');
+                    else if (analysis.reason === 'tooSmall') showToast(t('segSkewTooSmall'), 'error');
+                    else showToast(t('segSkewInsufficient'), 'error');
+                }
+                return;
+            }
+
+            if (!(await segSkewApplyDraftBands(analysis, runId))) return;
+
+            st.edit.segSkewResult = analysis;
+            st.edit.segSkewBusy = false;
+            setSegSkewBusyUI(false);
+            setSegSkewConfigUI(true);
+            buildSegSkewTuneUI(analysis);
+            renderSegSkewCompare({ resetView: true });
+            updateEditButtons();
+            el.status.textContent = segSkewStatusText(analysis);
+        } catch (err) {
+            console.error(err);
+            if (runId === st.edit.segSkewRunId) showToast(String(err.message || err), 'error');
+        } finally {
+            if (runId === st.edit.segSkewRunId && st.edit.segSkewBusy) {
+                st.edit.segSkewBusy = false;
+                setSegSkewBusyUI(false);
+                if (st.edit.segSkewResult) {
+                    setSegSkewConfigUI(true);
+                    buildSegSkewTuneUI(st.edit.segSkewResult);
+                    syncSegSkewConfigUI();
+                    el.status.textContent = segSkewStatusText(st.edit.segSkewResult);
+                } else {
+                    setSegSkewTuneUI(true);
+                    el.status.textContent = t('segSkewIdle');
+                }
+                updateEditButtons();
+            }
+        }
     }
 
     function onSegSkewCountKeydown(e) {
@@ -6960,15 +7250,15 @@ function createImageView(ids, options) {
         segSkewResetViews();
         st.edit.segSkew = true;
         st.edit.segSkewShowBounds = false;
-        st.edit.segSkewBusy = true;
+        st.edit.segSkewBusy = false;
         st.edit.segSkewResult = null;
-        const runId = ++st.edit.segSkewRunId;
+        st.edit.segSkewRunId++;
 
         enterSegSkewUI(true);
         syncSegSkewBoundsToggle();
-        setSegSkewBusyUI(true, 0);
-        setSegSkewTuneUI(false);
-        setSegSkewConfigUI(false);
+        setSegSkewBusyUI(false);
+        resetSegSkewManualConfig();
+        showSegSkewTuneDefaults();
         if (st.edit.segSkewBase && st.dataset) {
             const { data, vmin, vmax } = st.edit.segSkewBase;
             const dr = segLevelDisplayRange(vmin, vmax, st.colorClip);
@@ -6987,52 +7277,7 @@ function createImageView(ids, options) {
             }
         }
         updateEditButtons();
-        el.status.textContent = t('segSkewAnalyzing');
-
-        await segLevelYield();
-
-        try {
-            const analysis = await analyzeSegmentSkewAsync(
-                st.dataset,
-                (p) => {
-                    if (runId !== st.edit.segSkewRunId) return;
-                    setSegSkewBusyUI(true, p);
-                },
-                () => runId !== st.edit.segSkewRunId,
-            );
-
-            if (runId !== st.edit.segSkewRunId) return;
-
-            if (!analysis.ok) {
-                const reason = analysis.reason;
-                if (reason !== 'cancelled') {
-                    if (reason === 'scatter') showToast(t('segSkewScatter'), 'info');
-                    else if (reason === 'tooSmall') showToast(t('segSkewTooSmall'), 'error');
-                    else showToast(t('segSkewInsufficient'), 'error');
-                }
-                st.edit.segSkewBase = null;
-                exitSegSkewMode();
-                if (st.dataset) {
-                    el.status.textContent = t('statusLoaded', st.dataset.filename, st.dataset.width, st.dataset.height);
-                }
-                return;
-            }
-
-            st.edit.segSkewResult = analysis;
-            st.edit.segSkewBusy = false;
-            setSegSkewBusyUI(false);
-            setSegSkewConfigUI(true);
-            buildSegSkewTuneUI(analysis);
-            renderSegSkewCompare({ resetView: true });
-            updateEditButtons();
-            el.status.textContent = segSkewStatusText(analysis);
-        } catch (err) {
-            console.error(err);
-            if (runId === st.edit.segSkewRunId) {
-                showToast(String(err.message || err), 'error');
-                exitSegSkewMode();
-            }
-        }
+        el.status.textContent = t('segSkewIdle');
     }
 
     function applySegSkew() {
@@ -7049,6 +7294,7 @@ function createImageView(ids, options) {
             boundaries: result.boundaries.slice(),
             shiftPx: result.shiftPx,
             segmentCount: result.segmentCount,
+            bandShifts: result.bandShifts ? result.bandShifts.slice() : [],
         });
         const msg = t('segSkewDone', result.segmentCount, segSkewDirLabel(result.direction), result.shiftPx);
         el.status.textContent = msg;
@@ -9294,18 +9540,21 @@ function createImageView(ids, options) {
             el.segLevelCount.addEventListener('change', onSegLevelConfigChange);
             el.segLevelCount.addEventListener('keydown', onSegLevelCountKeydown);
         }
+        if (el.segLevelAuto) el.segLevelAuto.addEventListener('click', runSegLevelAuto);
         setupSegLevelZoom();
         if (el.segSkew) el.segSkew.addEventListener('click', startSegSkewMode);
         if (el.segSkewApply) el.segSkewApply.addEventListener('click', applySegSkew);
         if (el.segSkewCancel) el.segSkewCancel.addEventListener('click', cancelSegSkew);
         if (el.segSkewTuneShift) el.segSkewTuneShift.addEventListener('keydown', onSegSkewTuneKeydown);
         if (el.segSkewTuneReset) el.segSkewTuneReset.addEventListener('click', resetSegSkewShift);
+        if (el.segSkewBandShiftReset) el.segSkewBandShiftReset.addEventListener('click', resetSegSkewBandShifts);
         if (el.segSkewShowBounds) el.segSkewShowBounds.addEventListener('change', onSegSkewBoundsToggle);
         if (el.segSkewDir) el.segSkewDir.addEventListener('change', onSegSkewConfigChange);
         if (el.segSkewCount) {
             el.segSkewCount.addEventListener('change', onSegSkewConfigChange);
             el.segSkewCount.addEventListener('keydown', onSegSkewCountKeydown);
         }
+        if (el.segSkewAuto) el.segSkewAuto.addEventListener('click', runSegSkewAuto);
         setupSegSkewZoom();
         if (el.medianFilter) el.medianFilter.addEventListener('click', startMedianFilterMode);
         if (el.medianFilterApply) el.medianFilterApply.addEventListener('click', applyMedianFilterEdit);
@@ -9499,6 +9748,7 @@ const editorView = createImageView({
     segLevel: 'edSegLevel',
     segLevelPanel: 'edSegLevelPanel', segLevelConfig: 'edSegLevelConfig',
     segLevelDir: 'edSegLevelDir', segLevelCount: 'edSegLevelCount',
+    segLevelAuto: 'edSegLevelAuto',
     segLevelCompare: 'edSegLevelCompare', segLevelBusy: 'edSegLevelBusy',
     segLevelBusyText: 'edSegLevelBusyText',
     segLevelBefore: 'edSegLevelBefore', segLevelAfter: 'edSegLevelAfter',
@@ -9522,6 +9772,7 @@ const editorView = createImageView({
     segSkew: 'edSegSkew',
     segSkewPanel: 'edSegSkewPanel', segSkewConfig: 'edSegSkewConfig',
     segSkewDir: 'edSegSkewDir', segSkewCount: 'edSegSkewCount',
+    segSkewAuto: 'edSegSkewAuto',
     segSkewCompare: 'edSegSkewCompare', segSkewBusy: 'edSegSkewBusy',
     segSkewBusyText: 'edSegSkewBusyText',
     segSkewBefore: 'edSegSkewBefore', segSkewAfter: 'edSegSkewAfter',
@@ -9532,6 +9783,8 @@ const editorView = createImageView({
     segSkewTune: 'edSegSkewTune',
     segSkewTuneShift: 'edSegSkewTuneShift',
     segSkewTuneReset: 'edSegSkewTuneReset', segSkewTuneHint: 'edSegSkewTuneHint',
+    segSkewBandShifts: 'edSegSkewBandShifts', segSkewBandShiftList: 'edSegSkewBandShiftList',
+    segSkewBandShiftReset: 'edSegSkewBandShiftReset', segSkewBandShiftHint: 'edSegSkewBandShiftHint',
     segSkewTuneBusy: 'edSegSkewTuneBusy', segSkewTuneBusyText: 'edSegSkewTuneBusyText',
     segSkewShowBounds: 'edSegSkewShowBounds', segSkewBoundsWrap: 'edSegSkewBoundsWrap',
     segSkewApply: 'edSegSkewApply', segSkewCancel: 'edSegSkewCancel',

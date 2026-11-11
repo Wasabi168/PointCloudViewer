@@ -943,6 +943,7 @@
                             <span data-i18n="segLevelCountLabel">等份數</span>
                             <input type="number" id="edSegLevelCount" min="2" step="1" />
                         </label>
+                        <button type="button" id="edSegLevelAuto" class="seg-level-auto-btn" data-i18n="segLevelAuto" data-i18n-title="segLevelAutoTitle">自動</button>
                     </div>
                     <label class="seg-level-bounds-toggle" id="edSegLevelBoundsWrap">
                         <input type="checkbox" id="edSegLevelShowBounds" />
@@ -1105,6 +1106,7 @@
                             <span data-i18n="segSkewCountLabel">等份數</span>
                             <input type="number" id="edSegSkewCount" min="2" step="1" />
                         </label>
+                        <button type="button" id="edSegSkewAuto" class="seg-level-auto-btn" data-i18n="segSkewAuto" data-i18n-title="segSkewAutoTitle">自動</button>
                     </div>
                     <label class="seg-level-bounds-toggle" id="edSegSkewBoundsWrap">
                         <input type="checkbox" id="edSegSkewShowBounds" />
@@ -1116,14 +1118,24 @@
                     </div>
                 </div>
                 <div class="seg-level-tune" id="edSegSkewTune" aria-hidden="true">
-                    <div class="seg-level-tune-head">
-                        <span class="seg-level-tune-title" data-i18n="segSkewTuneTitle">位移微調</span>
-                        <span class="seg-level-tune-hint" id="edSegSkewTuneHint" data-i18n="segSkewTuneHint">全圖各帶共用同一 shift（像素），按 Enter 更新右側結果圖</span>
-                        <button type="button" id="edSegSkewTuneReset" class="btn-secondary btn-small" data-i18n="segSkewTuneReset" data-i18n-title="segSkewTuneResetTitle">重設 shift</button>
+                    <div class="seg-level-tune-col">
+                        <div class="seg-level-tune-head">
+                            <span class="seg-level-tune-title" data-i18n="segSkewTuneTitle">位移微調</span>
+                            <span class="seg-level-tune-hint" id="edSegSkewTuneHint" data-i18n="segSkewTuneHint">全圖各帶共用同一 shift（像素），按 Enter 更新右側結果圖</span>
+                            <button type="button" id="edSegSkewTuneReset" class="btn-secondary btn-small" data-i18n="segSkewTuneReset" data-i18n-title="segSkewTuneResetTitle">重設 shift</button>
+                        </div>
+                        <div class="seg-level-tune-control">
+                            <label class="seg-level-tune-slope" for="edSegSkewTuneShift" data-i18n="segSkewTuneShift">共用 shift（pixel）</label>
+                            <input type="number" id="edSegSkewTuneShift" step="1" />
+                        </div>
                     </div>
-                    <div class="seg-level-tune-control">
-                        <label class="seg-level-tune-slope" for="edSegSkewTuneShift" data-i18n="segSkewTuneShift">共用 shift（pixel）</label>
-                        <input type="number" id="edSegSkewTuneShift" step="1" />
+                    <div class="seg-level-band-offsets" id="edSegSkewBandShifts">
+                        <div class="seg-level-band-offsets-head">
+                            <span class="seg-level-tune-title" data-i18n="segSkewBandShiftTitle">各帶平移</span>
+                            <span class="seg-level-band-offset-hint" id="edSegSkewBandShiftHint" data-i18n="segSkewBandShiftHintHorizontal">剪切之後再整帶左右平移。正值往右、負值往左，帶內每個像素移動相同距離，按 Enter 更新</span>
+                            <button type="button" id="edSegSkewBandShiftReset" class="btn-secondary btn-small" data-i18n="segSkewBandShiftReset" data-i18n-title="segSkewBandShiftResetTitle">重設平移</button>
+                        </div>
+                        <div class="seg-level-band-offset-list" id="edSegSkewBandShiftList"></div>
                     </div>
                 </div>
                 <div class="seg-level-compare seg-skew-compare" id="edSegSkewCompare">
@@ -3245,7 +3257,7 @@
                 <h4 data-i18n="segLevelInfoWorkflowHeading">操作流程</h4>
                 <ol class="info-steps">
                     <li data-i18n="segLevelInfoStep1">載入高度圖後，點選工具列「分區水平校正」進入此模式。</li>
-                    <li data-i18n="segLevelInfoStep2">系統自動分析分割方向與等份數，並顯示校正前後對照與中央剖面折線圖。</li>
+                    <li data-i18n="segLevelInfoStep2">進入後不會自動計算。按「自動」偵測分割方向與等份數，或自行設定後即開始計算。完成後會在校正前後影像正中間放上一條剖線；下方折線圖顯示該剖線的高度與各帶斜率。</li>
                     <li data-i18n="segLevelInfoStep3">可調整「分割方向」「等份數」，或於「斜率微調」修改共用斜率後按 Enter 更新預覽。</li>
                     <li data-i18n="segLevelInfoStep4">勾選「顯示分割線」可疊加等分邊界；影像與剖面圖支援滾輪縮放、拖曳平移、雙擊還原。</li>
                     <li data-i18n="segLevelInfoStep5">確認結果後按「套用」寫入資料並離開；按「取消」則放棄預覽、還原原始資料。</li>
@@ -3280,14 +3292,14 @@
         <div class="info-body">
             <section class="info-section">
                 <h4 data-i18n="segSkewInfoPurposeHeading">功能目的</h4>
-                <p data-i18n="segSkewInfoPurposeText">針對多帶拼接高度圖的平面錯位（skew／剪切），自動偵測接縫方向與帶數，對各帶套用共用的線性像素位移後拼回，消除掃描拼接造成的幾何錯位。</p>
+                <p data-i18n="segSkewInfoPurposeText">針對多帶拼接高度圖的平面錯位（skew／剪切）。分割方向由使用者選擇；「自動」只偵測該方向的等份數。共用 shift 由使用者設定（預設 0），各帶套用線性剪切後拼回。</p>
             </section>
             <section class="info-section">
                 <h4 data-i18n="segSkewInfoWorkflowHeading">操作流程</h4>
                 <ol class="info-steps">
                     <li data-i18n="segSkewInfoStep1">載入高度圖後，點選工具列「分區錯位校正」進入此模式。</li>
-                    <li data-i18n="segSkewInfoStep2">系統自動分析接縫方向、等份數與共用 shift，並顯示校正前後對照影像。</li>
-                    <li data-i18n="segSkewInfoStep3">可調整「分割方向」「等份數」，或於「位移微調」修改共用 shift（像素）後按 Enter 更新預覽。</li>
+                    <li data-i18n="segSkewInfoStep2">進入後不會自動計算。按「自動」只依目前分割方向偵測等份數，不計算共用 shift；或自行設定分割方向與等份數後即開始計算，並顯示校正前後對照影像。</li>
+                    <li data-i18n="segSkewInfoStep3">可調整「分割方向」「等份數」。左側修改共用 shift，右側可讓各帶再整帶平移相同像素，按 Enter 更新預覽。</li>
                     <li data-i18n="segSkewInfoStep4">勾選「顯示分割線」可疊加等分邊界；影像支援滾輪縮放、拖曳平移、雙擊還原。</li>
                     <li data-i18n="segSkewInfoStep5">確認結果後按「套用」寫入資料並離開；按「取消」則放棄預覽、還原原始資料。</li>
                 </ol>
@@ -3295,12 +3307,12 @@
             <section class="info-section">
                 <h4 data-i18n="segSkewInfoPrincipleHeading">演算法原理</h4>
                 <ol class="info-steps">
-                    <li data-i18n="segSkewInfoPrinciple1">方向偵測：分別建立水平與垂直方向的接縫能量剖面（相鄰像素高度差），比較各方向等分邊界與接縫峰值的對齊分數後選定分割方向。</li>
-                    <li data-i18n="segSkewInfoPrinciple2">帶數決定：在 2～N 等份候選中，挑選等分邊界最對齊接縫能量峰值的帶數（弱接縫會拉低分數，避免過度分割）。</li>
+                    <li data-i18n="segSkewInfoPrinciple1">分割方向由使用者選擇（水平或垂直）。自動不會改寫方向。</li>
+                    <li data-i18n="segSkewInfoPrinciple2">帶數決定：自動只看目前分割方向的接縫能量，在 2～N 等份候選中挑選等分邊界最對齊接縫峰值的帶數（弱接縫會拉低分數，避免過度分割）。</li>
                     <li data-i18n="segSkewInfoPrinciple3">邊界位置：採幾何等分，與分區水平校正相同，確保各帶寬度均勻。</li>
-                    <li data-i18n="segSkewInfoPrinciple4">位移估計：各帶沿 skew 軸抽取平均剖面，與帶邊緣參考做互相關搜尋，線性擬合估算該帶總位移（pixel）；以首帶估算為主（較不受接縫干擾）。</li>
-                    <li data-i18n="segSkewInfoPrinciple5">共用 shift：彙整各帶估算值為全圖共用的像素位移，並在接縫殘餘錯位意義下做窄範圍微調。</li>
-                    <li data-i18n="segSkewInfoPrinciple6">Skew 變換：各帶內沿 skew 軸從起點 0 線性漸增至 totalShift（水平分割沿 X、垂直分割沿 Y），以雙線性插值重採樣像素後寫回。</li>
+                    <li data-i18n="segSkewInfoPrinciple4">共用 shift 由使用者輸入，預設為 0，不會自動估算。</li>
+                    <li data-i18n="segSkewInfoPrinciple5">各帶使用同一個共用 shift，作為該帶剪切從起點到終點的位移量。</li>
+                    <li data-i18n="segSkewInfoPrinciple6">Skew 變換：各帶先沿 skew 軸從起點 0 線性漸增至共用 shift，再可加上該帶自己的固定平移（帶內每個像素同向移動相同距離）。正負位移規則相同，超出範圍的兩側都填 NaN。</li>
                     <li data-i18n="segSkewInfoPrinciple7">拼回：將各帶校正結果寫回完整影像，空缺處以 NaN 填補。</li>
                 </ol>
             </section>

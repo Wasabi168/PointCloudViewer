@@ -200,15 +200,17 @@ const BatchFileManager = (() => {
             const title = document.createElement('strong');
             title.textContent = (idx + 1) + '. ' + describeBatchStep(step);
             desc.appendChild(title);
-            if (step && step.type === 'segmentLevel' && typeof segmentLevelStepInfo === 'function') {
-                const info = segmentLevelStepInfo(step);
-                if (info) {
-                    const brief = document.createElement('small');
-                    brief.className = 'bfm-step-brief';
-                    brief.textContent = info.brief;
-                    desc.appendChild(brief);
-                    desc._bfmTip = info.rows;
-                }
+            const stepInfo = step && step.type === 'segmentLevel' && typeof segmentLevelStepInfo === 'function'
+                ? segmentLevelStepInfo(step)
+                : (step && step.type === 'segmentSkew' && typeof segmentSkewStepInfo === 'function'
+                    ? segmentSkewStepInfo(step)
+                    : null);
+            if (stepInfo) {
+                const brief = document.createElement('small');
+                brief.className = 'bfm-step-brief';
+                brief.textContent = stepInfo.brief;
+                desc.appendChild(brief);
+                desc._bfmTip = stepInfo.rows;
             }
 
             const actions = document.createElement('div');

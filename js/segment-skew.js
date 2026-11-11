@@ -6,7 +6,7 @@
  *   segSkewDetectDirection(), segSkewDetectDirectionAsync()
  */
 /* =========================================================================
- *  分區錯位校正：偵測分割方向與帶數 → 各帶套用共用 pixel shift（線性漸變位移）→ 拼回
+ *  分區錯位校正：使用者選分割方向；自動只偵測等份數。各帶套用使用者設定的共用 shear（預設 0），再加上該帶的固定平移 → 拼回
  *  對應 BLUEPICK Skew Correction（split + skew + stitch）
  * ========================================================================= */
 
@@ -27,64 +27,66 @@ function segSkewCountValid(data) {
 }
 
 /**
- * 對單一帶高度圖做 skew（與 BLUEPICK skew.py 相同語意）
+ * 沿一維座標取樣。落在資料範圍外的兩側都回傳 fillValue，不複製邊緣像素。
+ * 整數座標直接取該點；小數座標用相鄰兩點線性內插。
+ */
+function segSkewSample(getAt, n, src, fillValue) {
+    if (!(src >= 0 && src <= n - 1)) return fillValue;
+    const i0 = Math.floor(src);
+    const t = src - i0;
+    if (t === 0 || i0 >= n - 1) {
+        const a = getAt(i0);
+        return Number.isFinite(a) ? a : fillValue;
+    }
+    const a = getAt(i0);
+    const b = getAt(i0 + 1);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return fillValue;
+    return a + t * (b - a);
+}
+
+/** 該列／行的位移 = 共用 shear（0→totalShift）+ 這一帶的固定平移。 */
+function segSkewOffsetAt(index, length, totalShift, bandShift) {
+    const shear = length <= 1 ? totalShift : totalShift * index / (length - 1);
+    const extra = Number.isFinite(bandShift) ? bandShift : 0;
+    return shear + extra;
+}
+
+function segSkewBandShiftAt(bandShifts, index) {
+    if (!bandShifts) return 0;
+    const v = Number(bandShifts[index]);
+    return Number.isFinite(v) ? v : 0;
+}
+
+/**
+ * 對單一帶高度圖做 skew。正負位移使用同一規則：移出範圍的空位填 fillValue（NaN）。
+ * bandShift 讓這一帶每個像素再往同方向移動相同距離。
  * @param {Float32Array|Float64Array} band flat band data
  * @param {number} w band width
  * @param {number} h band height
  * @param {'horizontal'|'vertical'} direction
  * @param {number} totalShift pixels, linear from 0 at start to totalShift at end of skew axis
  * @param {number} fillValue
+ * @param {number} [bandShift] 整帶固定平移（pixel）
  */
-function segSkewTransformBand(band, w, h, direction, totalShift, fillValue) {
+function segSkewTransformBand(band, w, h, direction, totalShift, fillValue, bandShift) {
     const out = new Float32Array(band.length);
     out.fill(fillValue);
 
     if (direction === 'horizontal') {
         const L = h;
         for (let y = 0; y < h; y++) {
-            const offset = L <= 1 ? totalShift : totalShift * y / (L - 1);
+            const offset = segSkewOffsetAt(y, L, totalShift, bandShift);
             const rowBase = y * w;
             for (let x = 0; x < w; x++) {
-                const srcX = x - offset;
-                if (srcX <= 0) {
-                    out[rowBase + x] = Number.isFinite(band[rowBase]) ? band[rowBase] : fillValue;
-                } else if (srcX >= w - 1) {
-                    out[rowBase + x] = fillValue;
-                } else {
-                    const i0 = Math.floor(srcX);
-                    const i1 = i0 + 1;
-                    const a = band[rowBase + i0];
-                    const b = band[rowBase + i1];
-                    if (!Number.isFinite(a) || !Number.isFinite(b)) out[rowBase + x] = fillValue;
-                    else {
-                        const t = srcX - i0;
-                        out[rowBase + x] = a + t * (b - a);
-                    }
-                }
+                out[rowBase + x] = segSkewSample((i) => band[rowBase + i], w, x - offset, fillValue);
             }
         }
     } else {
         const L = w;
         for (let x = 0; x < w; x++) {
-            const offset = L <= 1 ? totalShift : totalShift * x / (L - 1);
+            const offset = segSkewOffsetAt(x, L, totalShift, bandShift);
             for (let y = 0; y < h; y++) {
-                const srcY = y - offset;
-                const dstIdx = y * w + x;
-                if (srcY <= 0) {
-                    out[dstIdx] = Number.isFinite(band[x]) ? band[x] : fillValue;
-                } else if (srcY >= h - 1) {
-                    out[dstIdx] = fillValue;
-                } else {
-                    const i0 = Math.floor(srcY);
-                    const i1 = i0 + 1;
-                    const a = band[i0 * w + x];
-                    const b = band[i1 * w + x];
-                    if (!Number.isFinite(a) || !Number.isFinite(b)) out[dstIdx] = fillValue;
-                    else {
-                        const t = srcY - i0;
-                        out[dstIdx] = a + t * (b - a);
-                    }
-                }
+                out[y * w + x] = segSkewSample((i) => band[i * w + x], h, y - offset, fillValue);
             }
         }
     }
@@ -134,9 +136,9 @@ function segSkewWriteBand(out, width, height, direction, i0, i1, band, bw, bh) {
 }
 
 /**
- * 分割 → 各帶 skew → 拼回（共用 totalShift）
+ * 分割 → 各帶 skew → 拼回（共用 totalShift，可再加每帶固定平移）
  */
-function applySegmentSkew(data, width, height, direction, boundaries, totalShift, outBuf) {
+function applySegmentSkew(data, width, height, direction, boundaries, totalShift, outBuf, bandShifts) {
     const fillValue = NaN;
     const axisLen = direction === 'horizontal' ? height : width;
     const splits = segSkewBandSplits(boundaries, axisLen);
@@ -150,13 +152,15 @@ function applySegmentSkew(data, width, height, direction, boundaries, totalShift
         const i0 = splits[bi];
         const i1 = splits[bi + 1];
         const { band, w, h } = segSkewExtractBand(data, width, height, direction, i0, i1);
-        const corrected = segSkewTransformBand(band, w, h, direction, shift, fillValue);
+        const corrected = segSkewTransformBand(
+            band, w, h, direction, shift, fillValue, segSkewBandShiftAt(bandShifts, bi),
+        );
         segSkewWriteBand(out, width, height, direction, i0, i1, corrected, w, h);
     }
     return out;
 }
 
-async function applySegmentSkewAsync(data, width, height, direction, boundaries, totalShift, outBuf, yieldEvery, isCancelled) {
+async function applySegmentSkewAsync(data, width, height, direction, boundaries, totalShift, outBuf, yieldEvery, isCancelled, bandShifts) {
     const fillValue = NaN;
     const axisLen = direction === 'horizontal' ? height : width;
     const splits = segSkewBandSplits(boundaries, axisLen);
@@ -173,7 +177,9 @@ async function applySegmentSkewAsync(data, width, height, direction, boundaries,
         const i0 = splits[bi];
         const i1 = splits[bi + 1];
         const { band, w, h } = segSkewExtractBand(data, width, height, direction, i0, i1);
-        const corrected = segSkewTransformBand(band, w, h, direction, shift, fillValue);
+        const corrected = segSkewTransformBand(
+            band, w, h, direction, shift, fillValue, segSkewBandShiftAt(bandShifts, bi),
+        );
         segSkewWriteBand(out, width, height, direction, i0, i1, corrected, w, h);
         if (large) await segSkewYield();
     }
@@ -259,7 +265,44 @@ function segSkewPickEqualBandCount(edgeProf, axisLen, options) {
     return { bandCount: bestBands, score: bestScore };
 }
 
-/** 錯位校正專用：以接縫邊緣剖面決定方向與等分帶數（不用高度平台變異） */
+/** 依目前分割方向，用接縫能量挑等份數。不估算共用 shift。 */
+function segSkewDetectBandCountFromProfile(edgeProf, width, height, direction) {
+    const opts = segSkewBoundaryOptionsForDirection(width, height, direction);
+    const maxBands = typeof segLevelMaxValidBandCount === 'function'
+        ? segLevelMaxValidBandCount(opts.axisLen, opts.minDist, opts.edgeMargin) : 8;
+    const pick = segSkewPickEqualBandCount(edgeProf, opts.axisLen, {
+        minDist: opts.minDist,
+        edgeMargin: opts.edgeMargin,
+        maxBands,
+    });
+    return Math.max(2, pick.bandCount || 2);
+}
+
+function segSkewDetectBandCount(data, width, height, direction) {
+    const dir = direction === 'vertical' ? 'vertical' : 'horizontal';
+    const axisLen = dir === 'horizontal' ? height : width;
+    const edge = typeof segLevelEdgeProfile === 'function'
+        ? segLevelEdgeProfile(data, width, height, dir)
+        : new Float64Array(axisLen);
+    return segSkewDetectBandCountFromProfile(edge, width, height, dir);
+}
+
+async function segSkewDetectBandCountAsync(data, width, height, direction, isCancelled) {
+    const dir = direction === 'vertical' ? 'vertical' : 'horizontal';
+    const axisLen = dir === 'horizontal' ? height : width;
+    if (segSkewIsLarge(width, height)) await segSkewYield();
+    if (isCancelled && isCancelled()) return 0;
+    let edge;
+    if (typeof segLevelEdgeProfileAsync === 'function') {
+        edge = await segLevelEdgeProfileAsync(data, width, height, dir, 64);
+    } else if (typeof segLevelEdgeProfile === 'function') {
+        edge = segLevelEdgeProfile(data, width, height, dir);
+    } else {
+        edge = new Float64Array(axisLen);
+    }
+    if (isCancelled && isCancelled()) return 0;
+    return segSkewDetectBandCountFromProfile(edge, width, height, dir);
+}
 function segSkewDetectDirection(data, width, height) {
     const edgeH = typeof segLevelEdgeProfile === 'function'
         ? segLevelEdgeProfile(data, width, height, 'horizontal')
@@ -671,8 +714,7 @@ function analyzeSegmentSkewWithParams(ds, direction, segmentCount, totalShift) {
         return { ok: false, reason: 'invalidParams' };
     }
 
-    const autoShift = Math.round(segSkewEstimateSharedShift(data, width, height, dir, boundaries));
-    const shift = Number.isFinite(totalShift) ? Math.round(totalShift) : autoShift;
+    const shift = Number.isFinite(totalShift) ? Math.round(totalShift) : 0;
     const correctedData = applySegmentSkew(data, width, height, dir, boundaries, shift);
 
     return {
@@ -682,7 +724,7 @@ function analyzeSegmentSkewWithParams(ds, direction, segmentCount, totalShift) {
         segmentCount: boundaries.length + 1,
         correctedData,
         shiftPx: shift,
-        autoShiftPx: autoShift,
+        autoShiftPx: 0,
         validPoints: segSkewCountValid(data),
     };
 }
@@ -708,11 +750,7 @@ async function analyzeSegmentSkewWithParamsAsync(ds, direction, segmentCount, to
     await segSkewYield();
     if (isCancelled && isCancelled()) return { ok: false, reason: 'cancelled' };
 
-    const autoShift = Math.round(await segSkewEstimateSharedShiftAsync(
-        data, width, height, dir, boundaries, isCancelled,
-    ));
-    if (isCancelled && isCancelled()) return { ok: false, reason: 'cancelled' };
-    const shift = Number.isFinite(totalShift) ? Math.round(totalShift) : autoShift;
+    const shift = Number.isFinite(totalShift) ? Math.round(totalShift) : 0;
 
     if (onProgress) onProgress(0.35);
     await segSkewYield();
@@ -733,7 +771,7 @@ async function analyzeSegmentSkewWithParamsAsync(ds, direction, segmentCount, to
         segmentCount: boundaries.length + 1,
         correctedData,
         shiftPx: shift,
-        autoShiftPx: autoShift,
+        autoShiftPx: 0,
         validPoints: segSkewCountValid(data),
     };
 }
@@ -749,8 +787,7 @@ function analyzeSegmentSkew(ds) {
         : { direction: 'vertical', boundaries: segSkewEqualBoundaries(width, 3) };
     const { direction, boundaries } = det;
     const segmentCount = boundaries.length + 1;
-    const shift = Math.round(segSkewEstimateSharedShift(data, width, height, direction, boundaries));
-    const correctedData = applySegmentSkew(data, width, height, direction, boundaries, shift);
+    const correctedData = applySegmentSkew(data, width, height, direction, boundaries, 0);
 
     return {
         ok: true,
@@ -758,8 +795,8 @@ function analyzeSegmentSkew(ds) {
         boundaries: boundaries.slice(),
         segmentCount,
         correctedData,
-        shiftPx: shift,
-        autoShiftPx: shift,
+        shiftPx: 0,
+        autoShiftPx: 0,
         validPoints: segSkewCountValid(data),
     };
 }
@@ -780,21 +817,12 @@ async function analyzeSegmentSkewAsync(ds, onProgress, isCancelled) {
     const { direction, boundaries } = det;
     const segmentCount = boundaries.length + 1;
 
-    if (onProgress) onProgress(0.2);
-    await segSkewYield();
-    if (isCancelled && isCancelled()) return { ok: false, reason: 'cancelled' };
-
-    const shift = Math.round(await segSkewEstimateSharedShiftAsync(
-        data, width, height, direction, boundaries, isCancelled,
-    ));
-    if (isCancelled && isCancelled()) return { ok: false, reason: 'cancelled' };
-
     if (onProgress) onProgress(0.35);
     await segSkewYield();
     if (isCancelled && isCancelled()) return { ok: false, reason: 'cancelled' };
 
     const correctedData = await applySegmentSkewAsync(
-        data, width, height, direction, boundaries, shift, null, 64, isCancelled,
+        data, width, height, direction, boundaries, 0, null, 64, isCancelled,
     );
     if (!correctedData || (isCancelled && isCancelled())) {
         return { ok: false, reason: 'cancelled' };
@@ -807,8 +835,8 @@ async function analyzeSegmentSkewAsync(ds, onProgress, isCancelled) {
         boundaries: boundaries.slice(),
         segmentCount,
         correctedData,
-        shiftPx: shift,
-        autoShiftPx: shift,
+        shiftPx: 0,
+        autoShiftPx: 0,
         validPoints: segSkewCountValid(data),
     };
 }
