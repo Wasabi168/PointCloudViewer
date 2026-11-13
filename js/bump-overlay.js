@@ -1883,7 +1883,8 @@ const BumpOverlay = (() => {
         const plotH = Math.max(1, height - padT - padB);
         const geom = { padL: padL, padT: padT, plotW: plotW, plotH: plotH, width: width, height: height };
         pane.geom = geom;
-        ctx.fillStyle = 'rgba(255,255,255,0.03)';
+        const ink = chartChrome();
+        ctx.fillStyle = ink.fill;
         ctx.fillRect(padL, padT, plotW, plotH);
         ctx.font = '11px Consolas, monospace';
         ctx.textAlign = 'right';
@@ -1891,24 +1892,24 @@ const BumpOverlay = (() => {
         const span = (data.vmax - data.vmin) || 1;
         for (let i = 0; i <= 4; i++) {
             const py = padT + plotH * (i / 4);
-            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+            ctx.strokeStyle = ink.grid;
             ctx.beginPath();
             ctx.moveTo(padL, py);
             ctx.lineTo(padL + plotW, py);
             ctx.stroke();
-            ctx.fillStyle = '#9a9ab0';
+            ctx.fillStyle = ink.label;
             ctx.fillText(formatNum(data.vmax - span * (i / 4), 2), padL - 6, py);
         }
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         for (let i = 0; i <= 5; i++) {
             const px = padL + plotW * (i / 5);
-            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.strokeStyle = ink.gridFaint;
             ctx.beginPath();
             ctx.moveTo(px, padT);
             ctx.lineTo(px, padT + plotH);
             ctx.stroke();
-            ctx.fillStyle = '#9a9ab0';
+            ctx.fillStyle = ink.label;
             ctx.fillText((data.distPx * (i / 5)).toFixed(0), px, padT + plotH + 4);
         }
         ctx.save();

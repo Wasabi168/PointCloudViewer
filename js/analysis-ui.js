@@ -911,7 +911,8 @@ const AnalysisView = (() => {
         const ctx = canvas.getContext('2d');
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, cssW, cssH);
-        ctx.fillStyle = opts.bg || '#1a1a24';
+        const ink = chartChrome();
+        ctx.fillStyle = opts.bg || ink.bg;
         ctx.fillRect(0, 0, cssW, cssH);
 
         const padL = opts.padL != null ? opts.padL : 42;
@@ -931,7 +932,7 @@ const AnalysisView = (() => {
             { v: 0, align: 'mid' },
             { v: -absMax, align: 'bot' },
         ];
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.strokeStyle = ink.grid;
         ctx.lineWidth = 1;
         for (const tick of yTicks) {
             const y = yOf(tick.v);
@@ -942,7 +943,7 @@ const AnalysisView = (() => {
         }
 
         // 零線加粗
-        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.strokeStyle = ink.zero;
         ctx.beginPath();
         ctx.moveTo(padL, yOf(0) + 0.5);
         ctx.lineTo(padL + plotW, yOf(0) + 0.5);
@@ -966,7 +967,7 @@ const AnalysisView = (() => {
         ctx.stroke();
 
         // Y 軸刻度文字
-        ctx.fillStyle = 'rgba(220,220,230,0.9)';
+        ctx.fillStyle = ink.ink;
         ctx.font = (opts.fontSize || 10) + 'px ui-sans-serif, system-ui, sans-serif';
         ctx.textAlign = 'right';
         for (const tick of yTicks) {
@@ -983,10 +984,10 @@ const AnalysisView = (() => {
             { v: sMax, align: 'right' },
         ];
         ctx.textBaseline = 'top';
-        ctx.fillStyle = 'rgba(220,220,230,0.85)';
+        ctx.fillStyle = ink.inkMid;
         for (const tick of xTicks) {
             const x = xOf(tick.v);
-            ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+            ctx.strokeStyle = ink.tick;
             ctx.beginPath();
             ctx.moveTo(x + 0.5, padT + plotH);
             ctx.lineTo(x + 0.5, padT + plotH + 3);
@@ -1069,7 +1070,6 @@ const AnalysisView = (() => {
             padB: 32,
             fontSize: 11,
             lineWidth: 1.8,
-            bg: '#14141c',
             cursorS: st.pfPlotCursorS,
         });
         const unit = st.pfResult.meta?.zunit || '';
@@ -1366,7 +1366,8 @@ const AnalysisView = (() => {
         const H = opts.height || 98;
         const bins = opts.bins || 48;
         const fontSize = opts.fontSize || 10;
-        const bg = opts.bg || '#1a1a24';
+        const ink = chartChrome();
+        const bg = opts.bg || ink.bg;
         const cursorBin = Number.isInteger(opts.cursorBin) ? opts.cursorBin : null;
         canvas.width = W;
         canvas.height = H;
@@ -1406,16 +1407,16 @@ const AnalysisView = (() => {
         if (cursorBin != null && cursorBin >= 0 && cursorBin < bins) {
             const h = maxC > 0 ? (counts[cursorBin] / maxC) * barMaxH : 0;
             const x = cursorBin * barW;
-            ctx.fillStyle = 'rgba(255,255,255,0.18)';
+            ctx.fillStyle = ink.cursorFill;
             ctx.fillRect(x, 0, Math.max(1, barW), plotH);
-            ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+            ctx.strokeStyle = ink.cursor;
             ctx.lineWidth = 1.5;
             ctx.strokeRect(x + 0.5, Math.max(0, plotH - h) + 0.5, Math.max(1, barW - 1), Math.max(0, h - 1));
         }
 
         // 零線（貫穿繪圖區）
         const zx = ((0 - lo) / span) * W;
-        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.strokeStyle = ink.zeroStrong;
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(zx + 0.5, 0);
@@ -1428,8 +1429,8 @@ const AnalysisView = (() => {
             { v: 0, align: 'center' },
             { v: hi, align: 'right' },
         ];
-        ctx.strokeStyle = 'rgba(255,255,255,0.28)';
-        ctx.fillStyle = 'rgba(220,220,230,0.85)';
+        ctx.strokeStyle = ink.tick;
+        ctx.fillStyle = ink.inkMid;
         ctx.font = `${fontSize}px ui-sans-serif, system-ui, sans-serif`;
         ctx.textBaseline = 'top';
         for (const tick of ticks) {
@@ -1447,9 +1448,9 @@ const AnalysisView = (() => {
                 ctx.fillText(label, Math.min(W - 2, x - 2), plotH + 5);
             } else {
                 ctx.textAlign = 'center';
-                ctx.fillStyle = 'rgba(255,255,255,0.95)';
+                ctx.fillStyle = ink.inkStrong;
                 ctx.fillText(label, x, plotH + 5);
-                ctx.fillStyle = 'rgba(220,220,230,0.85)';
+                ctx.fillStyle = ink.inkMid;
             }
         }
 
@@ -1535,7 +1536,6 @@ const AnalysisView = (() => {
             axisH: 28,
             bins: 96,
             fontSize: 12,
-            bg: '#14141c',
             cursorBin: st.histCursorBin,
         });
         const unit = st.result.meta?.zunit || '';
@@ -2731,7 +2731,15 @@ const AnalysisView = (() => {
         repaint() {
             if (!st.dataset) return;
             render(false);
-            if (st.result && st.result.ok) drawResidualThumb(st.result);
+            if (st.result && st.result.ok) {
+                drawResidualThumb(st.result);
+                drawHist(st.result);
+                if (isHistOpen()) redrawHistLarge();
+            }
+            if (st.pfResult && st.pfResult.ok) {
+                drawPfPlot(st.pfResult);
+                if (isPfPlotOpen()) redrawPfPlotLarge();
+            }
         },
         syncLang,
         compute,

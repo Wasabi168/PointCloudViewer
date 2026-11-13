@@ -901,7 +901,7 @@ const BumpInspection = (() => {
         if (canvas.width !== width) canvas.width = width;
         if (canvas.height !== height) canvas.height = height;
         const ctx = canvas.getContext('2d', { alpha: false });
-        ctx.fillStyle = '#1e1e28';
+        ctx.fillStyle = chartChrome().figure;
         ctx.fillRect(0, 0, width, height);
         const radius = scatterScreenRadius();
         const kept = [];
@@ -1311,7 +1311,7 @@ const BumpInspection = (() => {
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d', { alpha: false });
-        ctx.fillStyle = '#1e1e28';
+        ctx.fillStyle = chartChrome().figure;
         ctx.fillRect(0, 0, width, height);
         const radius = Math.max(1.25, scatterImageRadius() * width / dataset.width);
         for (let index = 0; index < state.centers.length; index++) {
@@ -4153,7 +4153,8 @@ const BumpInspection = (() => {
         const plotH = Math.max(1, height - padT - padB);
         const geom = { padL, padT, plotW, plotH, width, height, vmin: data.vmin, vmax: data.vmax };
         state.profile.geom = geom;
-        ctx.fillStyle = 'rgba(255,255,255,0.03)';
+        const ink = chartChrome();
+        ctx.fillStyle = ink.fill;
         ctx.fillRect(padL, padT, plotW, plotH);
         ctx.font = '11px Consolas, monospace';
         ctx.textAlign = 'right';
@@ -4161,24 +4162,24 @@ const BumpInspection = (() => {
         const span = (data.vmax - data.vmin) || 1;
         for (let i = 0; i <= 4; i++) {
             const py = padT + plotH * (i / 4);
-            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+            ctx.strokeStyle = ink.grid;
             ctx.beginPath();
             ctx.moveTo(padL, py);
             ctx.lineTo(padL + plotW, py);
             ctx.stroke();
-            ctx.fillStyle = '#9a9ab0';
+            ctx.fillStyle = ink.label;
             ctx.fillText(formatValue(data.vmax - span * (i / 4)), padL - 6, py);
         }
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         for (let i = 0; i <= 5; i++) {
             const px = padL + plotW * (i / 5);
-            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.strokeStyle = ink.gridFaint;
             ctx.beginPath();
             ctx.moveTo(px, padT);
             ctx.lineTo(px, padT + plotH);
             ctx.stroke();
-            ctx.fillStyle = '#9a9ab0';
+            ctx.fillStyle = ink.label;
             ctx.fillText((data.distPx * (i / 5)).toFixed(0), px, padT + plotH + 4);
         }
         ctx.save();
@@ -5640,6 +5641,7 @@ const BumpInspection = (() => {
             const stage = state.step === 3 ? el.stageCompare : el.stageSingle;
             if (!stage || stage.clientWidth < 2) return;
             requestRender();
+            if (state.step === 4 && state.profile.data) renderProfileChart();
             if (resultView.order.length) renderResultWindow(true);
         },
         hasData() {

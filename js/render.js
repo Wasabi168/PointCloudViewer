@@ -1,7 +1,7 @@
 /**
  * 2D 繪製
  * 依賴：colormap.js
- * 匯出（全域）：canvas 繪製函式、paintMissingPixel()
+ * 匯出（全域）：canvas 繪製函式、paintMissingPixel()、chartChrome()
  */
 /* =========================================================================
  *  3. 繪製
@@ -34,6 +34,60 @@ function paintMissingPixel(px, po) {
     px[po + 1] = c[1];
     px[po + 2] = c[2];
     px[po + 3] = 255;
+}
+
+/** 剖面圖、直方圖、散布底的繪圖色。暗色維持原樣，亮色改淺底與深色刻度。 */
+let chartChromeTheme = '';
+let chartChromeCache = null;
+
+function cssVarColor(name, fallback) {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return raw || fallback;
+}
+
+function chartChrome() {
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+    if (theme === chartChromeTheme && chartChromeCache) return chartChromeCache;
+    chartChromeTheme = theme;
+    const light = theme === 'light';
+    chartChromeCache = light ? {
+        bg: cssVarColor('--plot', '#eef1f6'),
+        fill: 'rgba(28,34,48,0.04)',
+        grid: 'rgba(28,34,48,0.14)',
+        gridFaint: 'rgba(28,34,48,0.10)',
+        gridSoft: 'rgba(28,34,48,0.12)',
+        gridHair: 'rgba(28,34,48,0.08)',
+        zero: 'rgba(28,34,48,0.40)',
+        zeroStrong: 'rgba(28,34,48,0.50)',
+        tick: 'rgba(28,34,48,0.32)',
+        label: '#5c6474',
+        labelDim: '#6a7284',
+        ink: 'rgba(28,34,48,0.88)',
+        inkMid: 'rgba(28,34,48,0.82)',
+        inkStrong: 'rgba(28,34,48,0.92)',
+        cursor: 'rgba(28,34,48,0.55)',
+        cursorFill: 'rgba(28,34,48,0.10)',
+        figure: cssVarColor('--figure', '#e4e7ef'),
+    } : {
+        bg: cssVarColor('--plot', '#15151d'),
+        fill: 'rgba(255,255,255,0.03)',
+        grid: 'rgba(255,255,255,0.12)',
+        gridFaint: 'rgba(255,255,255,0.08)',
+        gridSoft: 'rgba(255,255,255,0.10)',
+        gridHair: 'rgba(255,255,255,0.06)',
+        zero: 'rgba(255,255,255,0.40)',
+        zeroStrong: 'rgba(255,255,255,0.55)',
+        tick: 'rgba(255,255,255,0.28)',
+        label: '#9a9ab0',
+        labelDim: '#7a7a94',
+        ink: 'rgba(220,220,230,0.90)',
+        inkMid: 'rgba(220,220,230,0.85)',
+        inkStrong: 'rgba(255,255,255,0.95)',
+        cursor: 'rgba(255,255,255,0.85)',
+        cursorFill: 'rgba(255,255,255,0.18)',
+        figure: cssVarColor('--figure', '#1e1e28'),
+    };
+    return chartChromeCache;
 }
 
 /** 把整張點陣先塗成缺測底色（散布點雲的空白區） */

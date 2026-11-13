@@ -297,6 +297,10 @@ function refreshThemeSurfaces() {
         if (!scatterHidden) render(currentDataset, cmapEl ? cmapEl.value : 'jet', false);
     }
     if (typeof editorView !== 'undefined' && editorView && editorView.repaint) editorView.repaint();
+    if (typeof renderProfileChart === 'function' && typeof profileState !== 'undefined' && profileState.data) {
+        const profileCanvas = document.getElementById('profileCanvas');
+        if (profileCanvas && profileCanvas.clientWidth >= 2) renderProfileChart();
+    }
     if (typeof AnalysisView !== 'undefined' && AnalysisView.repaint) AnalysisView.repaint();
     if (typeof OverlayAnalysis !== 'undefined' && OverlayAnalysis.repaint) OverlayAnalysis.repaint();
     if (typeof BumpInspection !== 'undefined' && BumpInspection.repaint) BumpInspection.repaint();

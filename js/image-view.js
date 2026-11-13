@@ -2863,7 +2863,8 @@ function createImageView(ids, options) {
         const n = vals.length;
         const distPx = Math.max(1, n - 1);
         uniLevelStoreProfileChart(zoomKey, { vals, cmin, crange, lineDir });
-        ctx.fillStyle = 'rgba(255,255,255,0.03)';
+        const ink = chartChrome();
+        ctx.fillStyle = ink.fill;
         ctx.fillRect(x0, y0, plotW, plotH);
         ctx.font = '10px Consolas, monospace';
         ctx.lineWidth = 1;
@@ -2872,12 +2873,12 @@ function createImageView(ids, options) {
         for (let i = 0; i <= 4; i++) {
             const tt = i / 4;
             const py = y0 + plotH * tt;
-            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.strokeStyle = ink.gridSoft;
             ctx.beginPath();
             ctx.moveTo(x0, py);
             ctx.lineTo(x0 + plotW, py);
             ctx.stroke();
-            ctx.fillStyle = '#9a9ab0';
+            ctx.fillStyle = ink.label;
             ctx.fillText(segLevelFmt(cmax - yRange * tt), x0 - 5, py);
         }
         ctx.textAlign = 'center';
@@ -2885,10 +2886,10 @@ function createImageView(ids, options) {
         for (let i = 0; i <= 4; i++) {
             const tt = i / 4;
             const px = x0 + plotW * tt;
-            ctx.fillStyle = '#9a9ab0';
+            ctx.fillStyle = ink.label;
             ctx.fillText(String(Math.round(distPx * tt)), px, y0 + plotH + 4);
         }
-        ctx.fillStyle = '#7a7a94';
+        ctx.fillStyle = ink.labelDim;
         ctx.font = '10px sans-serif';
         const axis = lineDir === 'horizontal' ? t('segLevelProfileAxisX') : t('segLevelProfileAxisY');
         ctx.fillText(axis, x0 + plotW * 0.5, ch - 2);
@@ -6034,7 +6035,8 @@ function createImageView(ids, options) {
         const n = vals.length;
         const distPx = Math.max(1, n - 1);
 
-        ctx.fillStyle = 'rgba(255,255,255,0.03)';
+        const ink = chartChrome();
+        ctx.fillStyle = ink.fill;
         ctx.fillRect(x0, y0, plotW, plotH);
 
         ctx.font = '10px Consolas, monospace';
@@ -6046,13 +6048,13 @@ function createImageView(ids, options) {
         for (let i = 0; i <= yticks; i++) {
             const tt = i / yticks;
             const py = y0 + plotH * tt;
-            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.strokeStyle = ink.gridSoft;
             ctx.beginPath();
             ctx.moveTo(x0, py);
             ctx.lineTo(x0 + plotW, py);
             ctx.stroke();
             const val = cmax - yRange * tt;
-            ctx.fillStyle = '#9a9ab0';
+            ctx.fillStyle = ink.label;
             ctx.fillText(segLevelFmt(val), x0 - 5, py);
         }
 
@@ -6063,15 +6065,15 @@ function createImageView(ids, options) {
         for (let i = 0; i <= xticks; i++) {
             const tt = i / xticks;
             const px = x0 + plotW * tt;
-            ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+            ctx.strokeStyle = ink.gridHair;
             ctx.beginPath();
             ctx.moveTo(px, y0);
             ctx.lineTo(px, y0 + plotH);
             ctx.stroke();
-            ctx.fillStyle = '#9a9ab0';
+            ctx.fillStyle = ink.label;
             ctx.fillText(String(Math.round(distPx * tt)), px, y0 + plotH + 4);
         }
-        ctx.fillStyle = '#7a7a94';
+        ctx.fillStyle = ink.labelDim;
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(axisX, x0 + plotW * 0.5, ch - 2);
@@ -10335,6 +10337,7 @@ function createImageView(ids, options) {
             if (!st.dataset) return;
             if (isScatter(st.dataset) && (!el.viewer || el.viewer.clientWidth < 2)) return;
             render(st.dataset, el.colormap.value, false);
+            if (st.refreshTools && el.viewer && el.viewer.clientWidth >= 2) st.refreshTools(false);
             if (st.edit.denoise) renderHist();
             if (st.edit.segLevel) renderSegLevelCompare({ resetView: false });
             if (st.edit.uniLevel) renderUniLevelCompare({ resetView: false });

@@ -731,7 +731,8 @@ const OverlayAnalysis = (() => {
         const geom = { padL, padT, plotW, plotH, cw, ch, vmin, vmax, win };
         if (side === 'a') st.geomA = geom; else st.geomB = geom;
 
-        ctx.fillStyle = 'rgba(255,255,255,0.03)';
+        const ink = chartChrome();
+        ctx.fillStyle = ink.fill;
         ctx.fillRect(x0, y0, plotW, plotH);
         ctx.font = '11px Consolas, monospace';
         ctx.lineWidth = 1;
@@ -742,10 +743,10 @@ const OverlayAnalysis = (() => {
         for (let i = 0; i <= yticks; i++) {
             const tt = i / yticks;
             const py = y0 + plotH * tt;
-            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+            ctx.strokeStyle = ink.grid;
             ctx.beginPath(); ctx.moveTo(x0, py); ctx.lineTo(x0 + plotW, py); ctx.stroke();
             const val = vmax - range * tt;
-            ctx.fillStyle = '#9a9ab0';
+            ctx.fillStyle = ink.label;
             ctx.fillText(fmtVal(val), x0 - 6, py);
         }
 
@@ -754,9 +755,9 @@ const OverlayAnalysis = (() => {
         for (let i = 0; i <= xticks; i++) {
             const tt = i / xticks;
             const px = x0 + plotW * tt;
-            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.strokeStyle = ink.gridFaint;
             ctx.beginPath(); ctx.moveTo(px, y0); ctx.lineTo(px, y0 + plotH); ctx.stroke();
-            ctx.fillStyle = '#9a9ab0';
+            ctx.fillStyle = ink.label;
             ctx.fillText((win.d0 + win.span * tt).toFixed(0), px, y0 + plotH + 5);
         }
 
@@ -2579,6 +2580,7 @@ const OverlayAnalysis = (() => {
             if (st.dsA) renderPixels('a');
             if (st.dsB) renderPixels('b');
             if (st.dsA || st.dsB) applyTransform();
+            if (st.lineImage) renderProfileCharts();
         },
         syncLang,
         isActive: () => st.active,

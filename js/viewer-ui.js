@@ -2189,7 +2189,8 @@ function paintProfileChart(canvas, state, chartStyle, layouts) {
     const vmin = yr.vmin, vmax = yr.vmax;
     state.geom = { padL, padT, plotW, plotH, cw, ch, vmin, vmax };
 
-    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    const ink = chartChrome();
+    ctx.fillStyle = ink.fill;
     ctx.fillRect(x0, y0, plotW, plotH);
 
     ctx.font = '11px Consolas, monospace';
@@ -2201,10 +2202,10 @@ function paintProfileChart(canvas, state, chartStyle, layouts) {
     for (let i = 0; i <= yticks; i++) {
         const tt = i / yticks;
         const py = y0 + plotH * tt;
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.strokeStyle = ink.grid;
         ctx.beginPath(); ctx.moveTo(x0, py); ctx.lineTo(x0 + plotW, py); ctx.stroke();
         const val = vmax - range * tt;
-        ctx.fillStyle = '#9a9ab0';
+        ctx.fillStyle = ink.label;
         ctx.fillText(formatValue(val), x0 - 6, py);
     }
 
@@ -2214,9 +2215,9 @@ function paintProfileChart(canvas, state, chartStyle, layouts) {
     for (let i = 0; i <= xticks; i++) {
         const tt = i / xticks;
         const px = x0 + plotW * tt;
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.strokeStyle = ink.gridFaint;
         ctx.beginPath(); ctx.moveTo(px, y0); ctx.lineTo(px, y0 + plotH); ctx.stroke();
-        ctx.fillStyle = '#9a9ab0';
+        ctx.fillStyle = ink.label;
         const lbl = d.scatter ? formatValue(d.distPx * tt) : (d.distPx * tt).toFixed(0);
         ctx.fillText(lbl, px, y0 + plotH + 5);
     }

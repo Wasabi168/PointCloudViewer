@@ -24,6 +24,7 @@
         --stage: #14151c;
         --stage-glow: #20222e;
         --plot: #15151d;
+        --figure: #1e1e28;
         --nan: #000000;
         --canvas-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
         --hover-wash: rgba(255, 255, 255, 0.06);
@@ -56,6 +57,8 @@
         --field: #ffffff;
         --stage: #e4e7ef;
         --stage-glow: #f4f6fa;
+        --plot: #eef1f6;
+        --figure: #e4e7ef;
         --nan: #e0e4ec;
         --canvas-shadow: 0 0 0 1px rgba(36, 44, 64, 0.45), 0 4px 16px rgba(28, 34, 48, 0.18);
         --hover-wash: rgba(20, 24, 40, 0.06);
@@ -4649,7 +4652,7 @@
         min-height: 280px;
         border-radius: 8px;
         border: 1px solid var(--border);
-        background: #14141c;
+        background: var(--plot);
         overflow: hidden;
     }
     .an-pf-plot-large-canvas {
