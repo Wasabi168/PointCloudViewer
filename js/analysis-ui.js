@@ -22,6 +22,8 @@ const AnalysisView = (() => {
         dropText: document.getElementById('anDropText'),
         fileInput: document.getElementById('anFileInput'),
         btnClear: document.getElementById('anBtnClear'),
+        btnCopy: document.getElementById('anBtnCopy'),
+        copyBadge: document.getElementById('anCopyBadge'),
         colormap: document.getElementById('anColormap'),
         progress: document.getElementById('anProgress'),
         progressBar: document.getElementById('anProgressBar'),
@@ -681,6 +683,9 @@ const AnalysisView = (() => {
             } else {
                 el.btnClear.disabled = !has;
             }
+        }
+        if (el.btnCopy) {
+            el.btnCopy.disabled = isOv || st.tool === 'bump' || !has;
         }
         if (el.btnRoi) el.btnRoi.disabled = !has;
         if (el.btnRoiClear) el.btnRoiClear.disabled = !has || st.useFullImage;
@@ -2021,6 +2026,7 @@ const AnalysisView = (() => {
             const label = el.fileInput.closest('label');
             if (label) label.style.display = isOv ? 'none' : '';
         }
+        if (el.btnCopy) el.btnCopy.style.display = isOv ? 'none' : '';
         if (el.btnClear) {
             // 疊圖模式：有任一圖即可清除全部
             if (isOv) {
@@ -2441,6 +2447,9 @@ const AnalysisView = (() => {
             }
             clearData();
         });
+        if (el.btnCopy && el.canvas && typeof bindCopyImageButton === 'function') {
+            bindCopyImageButton(el.btnCopy, () => el.canvas, el.copyBadge);
+        }
         if (el.colormap) {
             el.colormap.addEventListener('change', () => {
                 if (st.tool === 'overlay' && typeof OverlayAnalysis !== 'undefined') {

@@ -418,6 +418,127 @@
         flex-shrink: 0;
     }
 
+    /* 複製圖像：圖示切換成打勾後再回到複製圖示 */
+    .copy-icon-btn .copy-icon-stack {
+        position: relative;
+        width: 18px;
+        height: 18px;
+        display: block;
+    }
+    .copy-icon-btn .copy-icon-stack svg {
+        position: absolute;
+        inset: 0;
+        transition: opacity 0.22s ease, transform 0.32s cubic-bezier(0.34, 1.45, 0.64, 1);
+    }
+    .copy-icon-btn .copy-icon-default {
+        opacity: 1;
+        transform: scale(1);
+    }
+    .copy-icon-btn .copy-icon-check {
+        opacity: 0;
+        transform: scale(0.4);
+    }
+    .copy-icon-btn .copy-icon-check path {
+        stroke-dasharray: 1;
+        stroke-dashoffset: 0;
+    }
+    .copy-icon-btn.is-copied,
+    .copy-icon-btn.is-copied:hover {
+        background: #2ea86a;
+    }
+    .copy-icon-btn.is-copied .copy-icon-default {
+        opacity: 0;
+        transform: scale(0.4);
+    }
+    .copy-icon-btn.is-copied .copy-icon-check {
+        opacity: 1;
+        transform: scale(1);
+    }
+    .copy-icon-btn.is-copied .copy-icon-check path {
+        animation: copy-check-draw 0.42s cubic-bezier(0.22, 0.8, 0.3, 1) 0.06s both;
+    }
+    /* 大圖壓縮期間：按鈕先轉圈，避免乾等打勾 */
+    .copy-icon-btn.is-copying {
+        position: relative;
+        pointer-events: none;
+        cursor: progress;
+    }
+    .copy-icon-btn.is-copying .copy-icon-stack { visibility: hidden; }
+    .copy-icon-btn.is-copying::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 15px;
+        height: 15px;
+        margin: -8px 0 0 -8px;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: ui-spin 0.6s linear infinite;
+    }
+    @keyframes copy-check-draw {
+        from { stroke-dashoffset: 1; }
+        to { stroke-dashoffset: 0; }
+    }
+
+    /* 圖像左下角：複製成功提示，停留後慢慢淡出 */
+    .copy-badge {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        z-index: 12;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        padding: 6px 12px 6px 9px;
+        border-radius: 8px;
+        background: rgba(22, 24, 32, 0.84);
+        color: #fff;
+        font-size: 13px;
+        line-height: 1;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(8px);
+        transition: opacity 1.7s ease, transform 1.7s ease, visibility 1.7s linear;
+    }
+    .copy-badge.show {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s;
+    }
+    .copy-badge svg {
+        width: 15px;
+        height: 15px;
+        flex-shrink: 0;
+        color: #8dffb0;
+    }
+    .copy-badge-spin {
+        display: none;
+        width: 13px;
+        height: 13px;
+        flex-shrink: 0;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: ui-spin 0.6s linear infinite;
+    }
+    .copy-badge.is-working svg { display: none; }
+    .copy-badge.is-working .copy-badge-spin { display: block; }
+    @media (prefers-reduced-motion: reduce) {
+        .copy-icon-btn .copy-icon-stack svg,
+        .copy-badge {
+            transition-duration: 0.01s;
+        }
+        .copy-icon-btn.is-copied .copy-icon-check path {
+            animation: none;
+        }
+    }
+
     /* ?????????????????????????? */
     @keyframes ui-spin { to { transform: rotate(360deg); } }
     .is-busy {
@@ -1295,6 +1416,11 @@
     }
     .profile-icon-group button.active {
         background: var(--accent);
+        color: #fff;
+    }
+    .profile-icon-btn.copy-icon-btn.is-copied,
+    .profile-icon-btn.copy-icon-btn.is-copied:hover {
+        background: #2ea86a;
         color: #fff;
     }
     .profile-icon-group button svg,

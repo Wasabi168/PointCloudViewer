@@ -123,6 +123,613 @@ function showToast(message, type = 'error') {
     toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2500);
 }
 
+const copyIconTimers = new WeakMap();
+const copyBadgeTimers = new WeakMap();
+
+/** 超過這個像素數就先顯示處理中，並把 PNG 壓縮丟到背景，避免畫面停住 */
+const COPY_OFFTHREAD_PIXELS = 1_000_000;
+let pngEncodeWorker = null;
+
+function canvasToPngBlob(canvas) {
+    return new Promise((resolve, reject) => {
+        if (!canvas || canvas.width < 1 || canvas.height < 1) {
+            reject(new Error('empty'));
+            return;
+        }
+        canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('blob'));
+        }, 'image/png');
+    });
+}
+
+function canEncodePngOffThread() {
+    return typeof Worker === 'function'
+        && typeof OffscreenCanvas === 'function'
+        && typeof createImageBitmap === 'function';
+}
+
+function getPngEncodeWorker() {
+    if (pngEncodeWorker) return pngEncodeWorker;
+    const src = `
+        self.onmessage = async (event) => {
+            const bitmap = event.data && event.data.bitmap;
+            try {
+                const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+                const ctx = canvas.getContext('2d', { alpha: false });
+                ctx.drawImage(bitmap, 0, 0);
+                bitmap.close();
+                const blob = await canvas.convertToBlob({ type: 'image/png' });
+                self.postMessage({ ok: true, blob });
+            } catch (err) {
+                try { if (bitmap) bitmap.close(); } catch (_) {}
+                self.postMessage({ ok: false, message: String(err && err.message || err) });
+            }
+        };
+    `;
+    pngEncodeWorker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+    return pngEncodeWorker;
+}
+
+/** 大圖在背景執行緒壓成 PNG，主畫面可以繼續轉圈 */
+function encodeCanvasPngOffThread(canvas) {
+    return createImageBitmap(canvas).then((bitmap) => new Promise((resolve, reject) => {
+        const worker = getPngEncodeWorker();
+        const finish = (err, blob) => {
+            worker.removeEventListener('message', onMsg);
+            worker.removeEventListener('error', onErr);
+            if (err) reject(err);
+            else resolve(blob);
+        };
+        const onMsg = (event) => {
+            const data = event.data || {};
+            if (data.ok && data.blob) finish(null, data.blob);
+            else finish(new Error(data.message || 'blob'));
+        };
+        const onErr = () => {
+            pngEncodeWorker = null;
+            finish(new Error('blob'));
+        };
+        worker.addEventListener('message', onMsg);
+        worker.addEventListener('error', onErr);
+        worker.postMessage({ bitmap }, [bitmap]);
+    }));
+}
+
+/** 把畫布存成 PNG。3D 畫面先補畫一幀再轉成 2D，避免讀到空白緩衝。 */
+function rasterCanvasPng(canvas) {
+    let source = canvas;
+    const is3d = canvas && canvas.id === 'canvas3d'
+        && typeof Viewer3D !== 'undefined' && Viewer3D.isActive();
+    const isProfile = canvas && canvas.closest
+        && canvas.closest('.profile-plot, .ov-profile-plot, .bc-profile-plot');
+    if (is3d) {
+        if (Viewer3D.paintNow) Viewer3D.paintNow();
+        const tmp = document.createElement('canvas');
+        tmp.width = Math.max(1, canvas.width);
+        tmp.height = Math.max(1, canvas.height);
+        tmp.getContext('2d').drawImage(canvas, 0, 0);
+        source = tmp;
+    } else if (!isProfile) {
+        source = canvasWithMarks(canvas);
+    }
+    const pixels = source.width * source.height;
+    if (pixels >= COPY_OFFTHREAD_PIXELS && canEncodePngOffThread()) {
+        return encodeCanvasPngOffThread(source).catch(() => canvasToPngBlob(source));
+    }
+    return canvasToPngBlob(source);
+}
+
+function isPainted(el) {
+    if (!el) return false;
+    const cs = getComputedStyle(el);
+    return cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity) !== 0;
+}
+
+/**
+ * 依點陣逐格複製。不要用 drawImage：來源畫布被 CSS 縮小顯示時，
+ * drawImage 可能抓到畫面上的小圖再放大，複製結果就會又小又糊。
+ */
+function blitCanvasSharp(src, destCtx, dx, dy) {
+    const ox = dx || 0;
+    const oy = dy || 0;
+    const srcCtx = src.getContext('2d');
+    if (!srcCtx) {
+        destCtx.imageSmoothingEnabled = false;
+        destCtx.drawImage(src, 0, 0, src.width, src.height, ox, oy, src.width, src.height);
+        return;
+    }
+    const chunk = 256;
+    for (let y = 0; y < src.height; y += chunk) {
+        const h = Math.min(chunk, src.height - y);
+        destCtx.putImageData(srcCtx.getImageData(0, y, src.width, h), ox, oy + y);
+    }
+}
+
+/** 疊加層上有畫到的範圍（viewer CSS 像素）。Max／Min 文字常會超出圖像邊緣。 */
+function layerInkCssBounds(layer, cssW, cssH) {
+    const w = layer.width;
+    const h = layer.height;
+    if (w < 2 || h < 2 || cssW < 1 || cssH < 1) return null;
+    const ctx = layer.getContext('2d');
+    if (!ctx) return null;
+    let pixels;
+    try {
+        pixels = ctx.getImageData(0, 0, w, h).data;
+    } catch (_) {
+        return null;
+    }
+    let minX = w, minY = h, maxX = -1, maxY = -1;
+    for (let y = 0; y < h; y++) {
+        const row = y * w * 4;
+        for (let x = 0; x < w; x++) {
+            if (pixels[row + x * 4 + 3] < 12) continue;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+        }
+    }
+    if (maxX < 0) return null;
+    const sx = cssW / w;
+    const sy = cssH / h;
+    return { x: minX * sx, y: minY * sy, x1: (maxX + 1) * sx, y1: (maxY + 1) * sy };
+}
+
+/** 圖像在檢視區裡的範圍，再加上伸出圖像外的標記（含文字標籤） */
+function copyFrameCss(imageX, imageY, imageW, imageH, viewerW, viewerH, overlays) {
+    let x0 = imageX;
+    let y0 = imageY;
+    let x1 = imageX + imageW;
+    let y1 = imageY + imageH;
+    const pad = 4;
+    overlays.forEach((layer) => {
+        const b = layerInkCssBounds(layer, viewerW, viewerH);
+        if (!b) return;
+        if (b.x < x0) x0 = Math.max(0, b.x - pad);
+        if (b.y < y0) y0 = Math.max(0, b.y - pad);
+        if (b.x1 > x1) x1 = Math.min(viewerW, b.x1 + pad);
+        if (b.y1 > y1) y1 = Math.min(viewerH, b.y1 + pad);
+    });
+    return { x0, y0, x1, y1 };
+}
+
+/** 複製解析度：不小於資料像素，畫面被放大時改依螢幕像素輸出，避免貼上後變成小圖 */
+const COPY_UPSCALE_DENSITY = 2;
+const COPY_MAX_SIDE = 8192;
+
+function copyOutputSize(canvas) {
+    const bitmapW = Math.max(1, canvas.width);
+    const bitmapH = Math.max(1, canvas.height);
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return { width: bitmapW, height: bitmapH, rect };
+    const density = Math.max(window.devicePixelRatio || 1, COPY_UPSCALE_DENSITY);
+    const scaleUp = Math.max((rect.width * density) / bitmapW, (rect.height * density) / bitmapH, 1);
+    let width = Math.round(bitmapW * scaleUp);
+    let height = Math.round(bitmapH * scaleUp);
+    const longest = Math.max(width, height);
+    if (scaleUp > 1 && longest > COPY_MAX_SIDE) {
+        const fit = COPY_MAX_SIDE / longest;
+        width = Math.max(1, Math.round(width * fit));
+        height = Math.max(1, Math.round(height * fit));
+    }
+    return { width, height, rect };
+}
+
+/** 把檢視區上的量測標記，依目前縮放與平移對回圖像像素 */
+function canvasWithMarks(canvas) {
+    const viewer = canvas && canvas.closest ? canvas.closest('.viewer') : null;
+    if (!viewer) return canvas;
+    const overlays = [...viewer.querySelectorAll('canvas.overlay')].filter((layer) => (
+        isPainted(layer) && layer.width > 1 && layer.height > 1
+    ));
+    const svgs = [...viewer.querySelectorAll('svg.an-line-svg')].filter((svg) => (
+        isPainted(svg) && isPainted(svg.parentElement)
+    ));
+    const shapes = [...viewer.querySelectorAll('.crop-shape')].filter((shape) => (
+        isPainted(shape) && isPainted(shape.parentElement)
+    ));
+    const sized = copyOutputSize(canvas);
+    const upscale = sized.width !== canvas.width || sized.height !== canvas.height;
+    if (!overlays.length && !svgs.length && !shapes.length && !upscale) return canvas;
+
+    const canvasRect = sized.rect;
+    const viewerRect = viewer.getBoundingClientRect();
+    if (canvasRect.width < 1 || canvasRect.height < 1 || viewerRect.width < 1) return canvas;
+
+    const scaleX = sized.width / canvasRect.width;
+    const scaleY = sized.height / canvasRect.height;
+    const imageX = canvasRect.left - viewerRect.left;
+    const imageY = canvasRect.top - viewerRect.top;
+    const frame = copyFrameCss(
+        imageX, imageY, canvasRect.width, canvasRect.height,
+        viewerRect.width, viewerRect.height, overlays
+    );
+    const imgDx = Math.round((imageX - frame.x0) * scaleX);
+    const imgDy = Math.round((imageY - frame.y0) * scaleY);
+    const outW = Math.max(1, Math.round((frame.x1 - frame.x0) * scaleX));
+    const outH = Math.max(1, Math.round((frame.y1 - frame.y0) * scaleY));
+    const out = document.createElement('canvas');
+    out.width = outW;
+    out.height = outH;
+    const ctx = out.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    if (imgDx > 0 || imgDy > 0 || outW > sized.width + 1 || outH > sized.height + 1) {
+        const bg = getComputedStyle(viewer).backgroundColor;
+        ctx.fillStyle = (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') ? bg : '#1c1c24';
+        ctx.fillRect(0, 0, outW, outH);
+    }
+    if (upscale) {
+        ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, imgDx, imgDy, sized.width, sized.height);
+    } else {
+        blitCanvasSharp(canvas, ctx, imgDx, imgDy);
+    }
+    if (!overlays.length && !svgs.length && !shapes.length) return out;
+    ctx.save();
+    ctx.setTransform(scaleX, 0, 0, scaleY, imgDx - imageX * scaleX, imgDy - imageY * scaleY);
+    overlays.forEach((layer) => {
+        ctx.drawImage(layer, 0, 0, layer.width, layer.height, 0, 0, viewerRect.width, viewerRect.height);
+    });
+    svgs.forEach((svg) => drawSvgMarks(ctx, svg));
+    shapes.forEach((shape) => drawCropShapeMark(ctx, shape, viewerRect));
+    ctx.restore();
+    return out;
+}
+
+function svgUserPoint(svg, el, x, y) {
+    try {
+        const pt = svg.createSVGPoint();
+        pt.x = x;
+        pt.y = y;
+        const from = el.getScreenCTM();
+        const to = svg.getScreenCTM();
+        if (!from || !to) return { x, y };
+        const local = pt.matrixTransform(from).matrixTransform(to.inverse());
+        return { x: local.x, y: local.y };
+    } catch (_) {
+        return { x, y };
+    }
+}
+
+function applyMarkPaint(ctx, el) {
+    const cs = getComputedStyle(el);
+    ctx.globalAlpha = parseFloat(cs.opacity);
+    if (!(ctx.globalAlpha > 0)) ctx.globalAlpha = 1;
+    ctx.strokeStyle = cs.stroke && cs.stroke !== 'none' ? cs.stroke : 'transparent';
+    ctx.fillStyle = cs.fill && cs.fill !== 'none' ? cs.fill : 'transparent';
+    ctx.lineWidth = parseFloat(cs.strokeWidth) || 1;
+    ctx.lineCap = cs.strokeLinecap || 'butt';
+    ctx.lineJoin = cs.strokeLinejoin || 'miter';
+    if (cs.strokeDasharray && cs.strokeDasharray !== 'none') {
+        const dashes = cs.strokeDasharray.split(/[,\s]+/).map(Number).filter((n) => n > 0);
+        ctx.setLineDash(dashes);
+    } else {
+        ctx.setLineDash([]);
+    }
+    return cs;
+}
+
+function drawSvgMarks(ctx, svg) {
+    svg.querySelectorAll('line, circle, ellipse, rect, polyline, polygon, path').forEach((el) => {
+        if (!isPainted(el) || el.closest('.ov-mark-delete')) return;
+        const tag = el.tagName.toLowerCase();
+        ctx.save();
+        const cs = applyMarkPaint(ctx, el);
+        const num = (name) => parseFloat(el.getAttribute(name)) || 0;
+        if (tag === 'line') {
+            const a = svgUserPoint(svg, el, num('x1'), num('y1'));
+            const b = svgUserPoint(svg, el, num('x2'), num('y2'));
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            if (cs.stroke !== 'none') ctx.stroke();
+        } else if (tag === 'circle' || tag === 'ellipse') {
+            const c = svgUserPoint(svg, el, num('cx'), num('cy'));
+            const rx = tag === 'circle' ? num('r') : num('rx');
+            const ry = tag === 'circle' ? num('r') : num('ry');
+            const edge = svgUserPoint(svg, el, num('cx') + rx, num('cy') + ry);
+            ctx.beginPath();
+            ctx.ellipse(c.x, c.y, Math.abs(edge.x - c.x) || rx, Math.abs(edge.y - c.y) || ry, 0, 0, Math.PI * 2);
+            if (cs.fill !== 'none') ctx.fill();
+            if (cs.stroke !== 'none') ctx.stroke();
+        } else if (tag === 'rect') {
+            const p = svgUserPoint(svg, el, num('x'), num('y'));
+            const q = svgUserPoint(svg, el, num('x') + num('width'), num('y') + num('height'));
+            const x = Math.min(p.x, q.x);
+            const y = Math.min(p.y, q.y);
+            const w = Math.abs(q.x - p.x);
+            const h = Math.abs(q.y - p.y);
+            if (cs.fill !== 'none') ctx.fillRect(x, y, w, h);
+            if (cs.stroke !== 'none') ctx.strokeRect(x, y, w, h);
+        } else if (tag === 'path' && el.getAttribute('d') && typeof Path2D === 'function') {
+            const path = new Path2D(el.getAttribute('d'));
+            if (cs.fill !== 'none') ctx.fill(path);
+            if (cs.stroke !== 'none') ctx.stroke(path);
+        }
+        ctx.restore();
+    });
+}
+
+/** ROI／裁切框：只畫框線與淡填色，不把視窗外的遮罩一起烤進去 */
+function drawCropShapeMark(ctx, shape, viewerRect) {
+    const rect = shape.getBoundingClientRect();
+    const cs = getComputedStyle(shape);
+    const x = rect.left - viewerRect.left;
+    const y = rect.top - viewerRect.top;
+    ctx.save();
+    ctx.fillStyle = 'rgba(79, 140, 255, 0.12)';
+    ctx.strokeStyle = cs.borderTopColor || '#4f8cff';
+    ctx.lineWidth = parseFloat(cs.borderTopWidth) || 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    if (cs.borderRadius && parseFloat(cs.borderRadius) > rect.width * 0.2) {
+        ctx.ellipse(x + rect.width / 2, y + rect.height / 2, rect.width / 2, rect.height / 2, 0, 0, Math.PI * 2);
+    } else {
+        ctx.rect(x, y, rect.width, rect.height);
+    }
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+}
+
+function afterNextPaint() {
+    return new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+}
+
+/** 把目前圖像寫入系統剪貼簿，方便貼到其他軟體 */
+async function copyCanvasToClipboard(canvas) {
+    if (!navigator.clipboard || typeof ClipboardItem !== 'function') {
+        throw new Error('unsupported');
+    }
+    const blobPromise = rasterCanvasPng(canvas);
+    try {
+        await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blobPromise }),
+        ]);
+    } catch (err) {
+        if (err && (err.message === 'blob' || err.message === 'empty')) throw err;
+        const blob = await blobPromise;
+        await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob }),
+        ]);
+    }
+}
+
+/** 複製圖示換成打勾，稍後再回到預設圖示 */
+function flashCopyIcon(btn) {
+    if (!btn) return;
+    const prev = copyIconTimers.get(btn);
+    if (prev) clearTimeout(prev);
+    btn.classList.remove('is-copied');
+    void btn.offsetWidth;
+    btn.classList.add('is-copied');
+    copyIconTimers.set(btn, setTimeout(() => {
+        btn.classList.remove('is-copied');
+        copyIconTimers.delete(btn);
+    }, 1150));
+}
+
+/** 剖面／量測面板或縮放提示打開時，把標籤抬到圖像區的左下角 */
+function placeCopyBadge(badge) {
+    const host = badge.parentElement;
+    if (!host) return;
+    const hostRect = host.getBoundingClientRect();
+    let bottom = 12;
+    host.querySelectorAll('.profile-panel.show, .measure-panel.show, .zoom-hint.show').forEach((panel) => {
+        const rect = panel.getBoundingClientRect();
+        const cover = hostRect.bottom - rect.top;
+        if (cover > 0) bottom = Math.max(bottom, cover + 8);
+    });
+    badge.style.bottom = bottom + 'px';
+}
+
+function copyBadgeLabel(badge) {
+    return badge ? badge.querySelector('[data-i18n]') : null;
+}
+
+function ensureCopyBadgeSpinner(badge) {
+    if (!badge || badge.querySelector('.copy-badge-spin')) return;
+    const spin = document.createElement('span');
+    spin.className = 'copy-badge-spin';
+    spin.setAttribute('aria-hidden', 'true');
+    const icon = badge.querySelector('svg');
+    if (icon) icon.insertAdjacentElement('afterend', spin);
+    else badge.prepend(spin);
+}
+
+function clearCopyBadgeTimers(badge) {
+    const timers = copyBadgeTimers.get(badge) || {};
+    if (timers.hold) clearTimeout(timers.hold);
+    if (timers.fade) clearTimeout(timers.fade);
+    timers.hold = null;
+    timers.fade = null;
+    copyBadgeTimers.set(badge, timers);
+    return timers;
+}
+
+function revealCopyBadge(badge) {
+    if (badge.classList.contains('show')) return;
+    badge.classList.remove('show');
+    void badge.offsetWidth;
+    badge.classList.add('show');
+}
+
+/** 大圖壓縮時，左下角先顯示「複製中…」 */
+function showCopyWorking(badge) {
+    if (!badge) return;
+    ensureCopyBadgeSpinner(badge);
+    const label = copyBadgeLabel(badge);
+    if (label) label.textContent = t('copyBadgeWorking');
+    badge.classList.add('is-working');
+    placeCopyBadge(badge);
+    clearCopyBadgeTimers(badge);
+    revealCopyBadge(badge);
+}
+
+function hideCopyBadge(badge) {
+    if (!badge) return;
+    clearCopyBadgeTimers(badge);
+    badge.classList.remove('show', 'is-working');
+    badge.style.bottom = '';
+}
+
+/** 圖像左下角顯示「已複製圖像」，停留後慢慢淡出 */
+function showCopyBadge(badge) {
+    if (!badge) return;
+    const label = copyBadgeLabel(badge);
+    if (label) label.textContent = t(label.getAttribute('data-i18n') || 'copyBadge');
+    badge.classList.remove('is-working');
+    placeCopyBadge(badge);
+    const timers = clearCopyBadgeTimers(badge);
+    revealCopyBadge(badge);
+    timers.hold = setTimeout(() => {
+        badge.classList.remove('show');
+        timers.fade = setTimeout(() => {
+            badge.style.bottom = '';
+        }, 1800);
+    }, 1600);
+    copyBadgeTimers.set(badge, timers);
+}
+
+function bindCopyImageButton(btn, getCanvas, badge) {
+    if (!btn || btn.dataset.copyBound) return;
+    btn.dataset.copyBound = '1';
+    btn.addEventListener('click', async () => {
+        if (btn.disabled || btn.dataset.copying === '1') return;
+        const canvas = typeof getCanvas === 'function' ? getCanvas() : null;
+        if (!canvas || canvas.width < 1 || canvas.height < 1) {
+            showToast(t('toastNoData'), 'error');
+            return;
+        }
+        btn.dataset.copying = '1';
+        const large = canvas.width * canvas.height >= COPY_OFFTHREAD_PIXELS;
+        if (large) {
+            btn.classList.add('is-copying');
+            btn.setAttribute('aria-busy', 'true');
+            showCopyWorking(badge);
+        }
+        try {
+            if (large) await afterNextPaint();
+            await copyCanvasToClipboard(canvas);
+            btn.classList.remove('is-copying');
+            btn.removeAttribute('aria-busy');
+            flashCopyIcon(btn);
+            showCopyBadge(badge);
+        } catch (err) {
+            console.error(err);
+            btn.classList.remove('is-copying');
+            btn.removeAttribute('aria-busy');
+            hideCopyBadge(badge);
+            const unsupported = !navigator.clipboard || typeof ClipboardItem !== 'function'
+                || (err && err.message === 'unsupported');
+            showToast(t(unsupported ? 'copyImageUnsupported' : 'copyImageFailed'), 'error');
+        } finally {
+            delete btn.dataset.copying;
+        }
+    });
+}
+
+/** 目前滑過的疊圖窗格，Ctrl+C 時優先複製這一側 */
+let overlayCopySide = 'a';
+
+function isCopyShortcutBlocked(event) {
+    if (event.repeat || event.altKey || event.shiftKey) return true;
+    const node = event.target;
+    if (node && (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA'
+        || node.tagName === 'SELECT' || node.isContentEditable)) return true;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed && sel.toString()) return true;
+    if (document.querySelector('.info-overlay.show, #calcOverlay.show, #csvUnitOverlay.show')) return true;
+    return false;
+}
+
+function enabledCopyButton(id) {
+    const btn = document.getElementById(id);
+    if (!btn || btn.disabled || btn.dataset.copying === '1') return null;
+    return btn;
+}
+
+/** 依目前頁面決定 Ctrl+C 要按哪一個複製鈕 */
+function copyButtonForShortcut() {
+    const page = document.querySelector('.page.active');
+    const id = page ? page.getAttribute('data-page') : '';
+    if (id === 'viewer') return enabledCopyButton('btnCopy');
+    if (id === 'editor') return enabledCopyButton('edBtnCopy');
+    if (id !== 'analysis') return null;
+    const header = document.getElementById('anBtnCopy');
+    if (header && header.style.display !== 'none') return enabledCopyButton('anBtnCopy');
+    const first = overlayCopySide === 'b' ? 'ovCopyB' : 'ovCopyA';
+    const second = overlayCopySide === 'b' ? 'ovCopyA' : 'ovCopyB';
+    return enabledCopyButton(first) || enabledCopyButton(second);
+}
+
+document.addEventListener('pointerover', (event) => {
+    const pane = event.target && event.target.closest && event.target.closest('[data-ov-side]');
+    if (!pane) return;
+    const side = pane.getAttribute('data-ov-side');
+    if (side === 'a' || side === 'b') overlayCopySide = side;
+});
+
+/** 滑鼠正在剖面視窗上時，Ctrl+C 複製剖面圖，而不是底下的圖像 */
+let hoveredProfileCopyBtn = null;
+
+function profilePanelOf(node) {
+    if (!node || !node.closest) return null;
+    return node.closest('.profile-panel.show, .ov-profile-panel.show');
+}
+
+document.addEventListener('pointerover', (event) => {
+    const panel = profilePanelOf(event.target);
+    if (!panel) return;
+    const btn = panel.querySelector('.profile-copy-btn');
+    if (btn) hoveredProfileCopyBtn = btn;
+});
+
+document.addEventListener('pointerout', (event) => {
+    if (!hoveredProfileCopyBtn) return;
+    const panel = hoveredProfileCopyBtn.closest('.profile-panel, .ov-profile-panel');
+    if (!panel || !event.target || !panel.contains(event.target)) return;
+    const next = event.relatedTarget;
+    if (next && panel.contains(next)) return;
+    hoveredProfileCopyBtn = null;
+});
+
+document.addEventListener('keydown', (event) => {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    if (event.key !== 'c' && event.key !== 'C') return;
+    if (isCopyShortcutBlocked(event)) return;
+    const profileBtn = hoveredProfileCopyBtn;
+    const profileOpen = profileBtn && profileBtn.offsetParent && !profileBtn.disabled
+        && profileBtn.dataset.copying !== '1';
+    const btn = profileOpen ? profileBtn : copyButtonForShortcut();
+    if (!btn) return;
+    event.preventDefault();
+    btn.click();
+});
+
+bindCopyImageButton(
+    document.getElementById('profileCopy'),
+    () => document.getElementById('profileCanvas'),
+    document.getElementById('profileCopyBadge')
+);
+bindCopyImageButton(
+    document.getElementById('edProfileCopy'),
+    () => document.getElementById('edProfileCanvas'),
+    document.getElementById('edProfileCopyBadge')
+);
+bindCopyImageButton(
+    document.getElementById('ovProfileCopyA'),
+    () => document.getElementById('ovProfileCanvasA'),
+    document.getElementById('ovProfileCopyBadgeA')
+);
+bindCopyImageButton(
+    document.getElementById('ovProfileCopyB'),
+    () => document.getElementById('ovProfileCanvasB'),
+    document.getElementById('ovProfileCopyBadgeB')
+);
+
 function getExt(name) {
     const i = name.lastIndexOf('.');
     return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
@@ -156,6 +763,7 @@ async function loadFile(file) {
     setProgress(0);
     setBusy(openLabel, true);
     if (typeof btnSave !== 'undefined' && btnSave) btnSave.disabled = true;
+    if (typeof btnCopy !== 'undefined' && btnCopy) btnCopy.disabled = true;
 
     try {
         currentDataset = await parseFileToDataset(file, setProgress);
@@ -205,6 +813,7 @@ async function loadFile(file) {
         if (typeof btnClear !== 'undefined' && btnClear) {
             btnClear.disabled = !currentDataset;
         }
+        if (typeof btnCopy !== 'undefined' && btnCopy) btnCopy.disabled = !currentDataset;
     }
 }
 
@@ -249,6 +858,7 @@ function clearViewerData() {
 
     if (typeof btnSendMenu !== 'undefined' && btnSendMenu) btnSendMenu.disabled = true;
     if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = true;
+    if (typeof btnCopy !== 'undefined' && btnCopy) btnCopy.disabled = true;
     if (typeof updateModeIndicator === 'function') updateModeIndicator();
     resetViewerPointSizeSession();
     showToast(t('statusCleared'), 'info');
@@ -308,6 +918,7 @@ function loadDatasetIntoViewer(ds, opts) {
     syncPointSizeControls();
     if (typeof btnSendMenu !== 'undefined' && btnSendMenu) btnSendMenu.disabled = false;
     if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = false;
+    if (typeof btnCopy !== 'undefined' && btnCopy) btnCopy.disabled = false;
     return true;
 }
 
@@ -410,6 +1021,7 @@ async function loadDatasetIntoViewerAsync(ds, onProgress, opts) {
     syncPointSizeControls();
     if (typeof btnSendMenu !== 'undefined' && btnSendMenu) btnSendMenu.disabled = false;
     if (typeof btnClear !== 'undefined' && btnClear) btnClear.disabled = false;
+    if (typeof btnCopy !== 'undefined' && btnCopy) btnCopy.disabled = false;
     return true;
 }
 
@@ -660,6 +1272,7 @@ function applyPreferredViewMode() {
     setViewMode('3d');
 }
 const btnSave = document.getElementById('btnSave');
+const btnCopy = document.getElementById('btnCopy');
 const btnClear = document.getElementById('btnClear');
 const btnSendMenu = document.getElementById('btnSendMenu');
 const btnSendToEditor = document.getElementById('btnSendToEditor');
@@ -829,6 +1442,14 @@ function saveViewerFromMenu(kind) {
 }
 
 btnSave.addEventListener('click', () => saveViewerFromMenu('full'));
+
+bindCopyImageButton(
+    btnCopy,
+    () => (typeof view3dActive !== 'undefined' && view3dActive)
+        ? document.getElementById('canvas3d')
+        : document.getElementById('canvas'),
+    document.getElementById('viewerCopyBadge')
+);
 
 if (btnClear) btnClear.addEventListener('click', clearViewerData);
 
@@ -3980,9 +4601,13 @@ function applyCursorMode(mode, opts) {
 }
 
 // 鼠標模式切換按鈕事件（頂部工具列 + 圖像區浮空工具列）
+// 剖面／測量／區域統計已啟用時再按一次，回到拖曳模式
 document.querySelectorAll(CURSOR_MODE_BTNS).forEach(btn => {
     btn.addEventListener('click', () => {
-        applyCursorMode(btn.getAttribute('data-cursor'));
+        const mode = btn.getAttribute('data-cursor');
+        const toggleOff = (mode === 'profile' || mode === 'measure' || mode === 'area')
+            && cursorMode === mode;
+        applyCursorMode(toggleOff ? 'pan' : mode);
     });
 });
 

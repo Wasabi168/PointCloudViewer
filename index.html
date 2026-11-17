@@ -94,6 +94,17 @@
                     <polyline points="7 3 7 8 15 8"/>
                 </svg>
             </button>
+            <button type="button" id="btnCopy" class="toolbar-icon-btn copy-icon-btn" data-i18n-title="btnCopyImage" data-i18n-aria="btnCopyImage" title="複製圖像 (Ctrl+C)" aria-label="複製圖像 (Ctrl+C)" disabled>
+                <span class="copy-icon-stack" aria-hidden="true">
+                    <svg class="copy-icon-default" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="8" y="8" width="12" height="12" rx="2"/>
+                        <path d="M4 16V6a2 2 0 0 1 2-2h10"/>
+                    </svg>
+                    <svg class="copy-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+                        <path pathLength="1" d="M5 12.5 9.5 17 19 7"/>
+                    </svg>
+                </span>
+            </button>
             <button type="button" id="btnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="btnClearTitle" data-i18n-aria="btnClearTitle" title="清除目前載入的資料" aria-label="清除目前載入的資料" disabled>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M4 7h16"/>
@@ -238,6 +249,12 @@
         <div class="hint3d" id="hint3d" data-i18n="hint3d">左鍵拖曳旋轉 · 滾輪縮放 · 右鍵 / Shift 拖曳平移 · 雙擊重設視角</div>
         <div class="zoom-hint" id="zoomHint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
         <div class="zoom-indicator" id="zoomIndicator">100%</div>
+        <div class="copy-badge" id="viewerCopyBadge" role="status">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12.5 9.5 17 19 7"/>
+            </svg>
+            <span data-i18n="copyBadge">已複製圖像</span>
+        </div>
         <div class="value-indicator" id="valueIndicator"></div>
         <div class="mode-indicator" id="modeIndicator">
             <span class="mi-dot" aria-hidden="true"></span>
@@ -335,6 +352,17 @@
                         <path d="M12.6 15 11.4 21"/>
                     </svg>
                 </button>
+                <button type="button" class="profile-icon-btn copy-icon-btn profile-copy-btn" id="profileCopy" data-i18n-title="btnCopyProfile" data-i18n-aria="btnCopyProfile" title="複製剖面 (Ctrl+C)" aria-label="複製剖面 (Ctrl+C)">
+                    <span class="copy-icon-stack" aria-hidden="true">
+                        <svg class="copy-icon-default" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="8" y="8" width="12" height="12" rx="2"/>
+                            <path d="M4 16V6a2 2 0 0 1 2-2h10"/>
+                        </svg>
+                        <svg class="copy-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+                            <path pathLength="1" d="M5 12.5 9.5 17 19 7"/>
+                        </svg>
+                    </span>
+                </button>
                 <button type="button" class="profile-clear profile-icon-btn" id="profileClear" data-i18n-title="profileClearTitle" title="清除剖面">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
                         <path d="M6 6l12 12M18 6L6 18"/>
@@ -344,6 +372,12 @@
             <div class="profile-plot">
                 <canvas id="profileCanvas"></canvas>
                 <div class="profile-tip" id="profileTip"></div>
+                <div class="copy-badge" id="profileCopyBadge" role="status">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 12.5 9.5 17 19 7"/>
+                    </svg>
+                    <span data-i18n="copyProfileBadge">已複製剖面</span>
+                </div>
             </div>
         </div>
         <div class="measure-panel" id="measurePanel">
@@ -430,6 +464,17 @@
                         <polyline points="17 21 17 13 7 13 7 21"/>
                         <polyline points="7 3 7 8 15 8"/>
                     </svg>
+                </button>
+                <button type="button" id="edBtnCopy" class="toolbar-icon-btn copy-icon-btn" data-i18n-title="btnCopyImage" data-i18n-aria="btnCopyImage" title="複製圖像 (Ctrl+C)" aria-label="複製圖像 (Ctrl+C)" disabled>
+                    <span class="copy-icon-stack" aria-hidden="true">
+                        <svg class="copy-icon-default" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="8" y="8" width="12" height="12" rx="2"/>
+                            <path d="M4 16V6a2 2 0 0 1 2-2h10"/>
+                        </svg>
+                        <svg class="copy-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+                            <path pathLength="1" d="M5 12.5 9.5 17 19 7"/>
+                        </svg>
+                    </span>
                 </button>
                 <button type="button" id="edBtnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="btnClearTitle" data-i18n-aria="btnClearTitle" title="清除目前載入的資料" aria-label="清除目前載入的資料" disabled>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -692,6 +737,17 @@
                             <path d="M12.6 15 11.4 21"/>
                         </svg>
                     </button>
+                    <button type="button" class="profile-icon-btn copy-icon-btn profile-copy-btn" id="edProfileCopy" data-i18n-title="btnCopyProfile" data-i18n-aria="btnCopyProfile" title="複製剖面 (Ctrl+C)" aria-label="複製剖面 (Ctrl+C)">
+                        <span class="copy-icon-stack" aria-hidden="true">
+                            <svg class="copy-icon-default" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="8" y="8" width="12" height="12" rx="2"/>
+                                <path d="M4 16V6a2 2 0 0 1 2-2h10"/>
+                            </svg>
+                            <svg class="copy-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+                                <path pathLength="1" d="M5 12.5 9.5 17 19 7"/>
+                            </svg>
+                        </span>
+                    </button>
                     <button type="button" class="profile-clear profile-icon-btn" id="edProfileClear" data-i18n-title="profileClearTitle" data-i18n-aria="profileClearTitle" title="清除剖面" aria-label="清除剖面">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
                             <path d="M6 6l12 12M18 6L6 18"/>
@@ -701,6 +757,12 @@
                 <div class="profile-plot">
                     <canvas id="edProfileCanvas"></canvas>
                     <div class="profile-tip" id="edProfileTip"></div>
+                    <div class="copy-badge" id="edProfileCopyBadge" role="status">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M5 12.5 9.5 17 19 7"/>
+                        </svg>
+                        <span data-i18n="copyProfileBadge">已複製剖面</span>
+                    </div>
                 </div>
             </div>
             <div class="measure-panel" id="edMeasurePanel">
@@ -716,6 +778,12 @@
             </div>
             <div class="zoom-hint" id="edZoomHint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
             <div class="zoom-indicator" id="edZoomIndicator">100%</div>
+            <div class="copy-badge" id="edCopyBadge" role="status">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M5 12.5 9.5 17 19 7"/>
+                </svg>
+                <span data-i18n="copyBadge">已複製圖像</span>
+            </div>
             <div class="crop-overlay" id="edCropOverlay">
                 <div class="crop-shape" id="edCropShape" style="display:none;">
                     <span class="crop-handle" data-h="nw"></span>
@@ -1650,6 +1718,17 @@
                     </svg>
                     <input type="file" id="anFileInput" accept=".bcrf,.asc,.tif,.tiff,.csv,.bmp,.png,.jpg,.jpeg" />
                 </label>
+                <button type="button" id="anBtnCopy" class="toolbar-icon-btn copy-icon-btn" data-i18n-title="btnCopyImage" data-i18n-aria="btnCopyImage" title="複製圖像 (Ctrl+C)" aria-label="複製圖像 (Ctrl+C)" disabled>
+                    <span class="copy-icon-stack" aria-hidden="true">
+                        <svg class="copy-icon-default" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="8" y="8" width="12" height="12" rx="2"/>
+                            <path d="M4 16V6a2 2 0 0 1 2-2h10"/>
+                        </svg>
+                        <svg class="copy-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+                            <path pathLength="1" d="M5 12.5 9.5 17 19 7"/>
+                        </svg>
+                    </span>
+                </button>
                 <button type="button" id="anBtnClear" class="toolbar-icon-btn btn-secondary" data-i18n-title="btnClearTitle" data-i18n-aria="btnClearTitle" title="清除目前載入的資料" aria-label="清除目前載入的資料" disabled>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M4 7h16"/>
@@ -1704,6 +1783,12 @@
                 <canvas id="anOverlay" class="overlay" style="display:none;"></canvas>
                 <div class="zoom-hint" id="anZoomHint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
                 <div class="zoom-indicator" id="anZoomIndicator">100%</div>
+                <div class="copy-badge" id="anCopyBadge" role="status">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 12.5 9.5 17 19 7"/>
+                    </svg>
+                    <span data-i18n="copyBadge">已複製圖像</span>
+                </div>
                 <div class="mode-indicator" id="anModeBadge" hidden>
                     <span class="mi-dot" aria-hidden="true"></span>
                     <span class="mi-label" data-i18n="anRoiMode">ROI 框選</span>
@@ -1749,6 +1834,17 @@
                                 </svg>
                                 <input type="file" id="ovFileA" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.csv,.bmp,.png,.jpg,.jpeg" />
                             </label>
+                            <button type="button" id="ovCopyA" class="toolbar-icon-btn copy-icon-btn" data-i18n-title="btnCopyImage" data-i18n-aria="btnCopyImage" title="複製圖像 (Ctrl+C)" aria-label="複製圖像 (Ctrl+C)" disabled>
+                                <span class="copy-icon-stack" aria-hidden="true">
+                                    <svg class="copy-icon-default" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="8" y="8" width="12" height="12" rx="2"/>
+                                        <path d="M4 16V6a2 2 0 0 1 2-2h10"/>
+                                    </svg>
+                                    <svg class="copy-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+                                        <path pathLength="1" d="M5 12.5 9.5 17 19 7"/>
+                                    </svg>
+                                </span>
+                            </button>
                             <button type="button" id="ovClearA" class="toolbar-icon-btn btn-secondary" data-i18n-title="ovClearA" data-i18n-aria="ovClearA" title="清除圖 A" aria-label="清除圖 A" disabled>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                     <path d="M4 7h16"/>
@@ -1779,6 +1875,12 @@
                         </div>
                         <div class="zoom-hint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
                         <div class="zoom-indicator" id="ovZoomA">100%</div>
+                        <div class="copy-badge" id="ovCopyBadgeA" role="status">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M5 12.5 9.5 17 19 7"/>
+                            </svg>
+                            <span data-i18n="copyBadge">已複製圖像</span>
+                        </div>
                         <div class="drop-hint" id="ovDropHintA">
                             <div class="icon">&#x2B07;</div>
                             <div data-i18n="dropSupported">放開以載入檔案</div>
@@ -1825,6 +1927,17 @@
                                     <path d="M12.6 15 11.4 21"/>
                                 </svg>
                             </button>
+                            <button type="button" class="profile-icon-btn copy-icon-btn profile-copy-btn" id="ovProfileCopyA" data-i18n-title="btnCopyProfile" data-i18n-aria="btnCopyProfile" title="複製剖面 (Ctrl+C)" aria-label="複製剖面 (Ctrl+C)">
+                                <span class="copy-icon-stack" aria-hidden="true">
+                                    <svg class="copy-icon-default" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="8" y="8" width="12" height="12" rx="2"/>
+                                        <path d="M4 16V6a2 2 0 0 1 2-2h10"/>
+                                    </svg>
+                                    <svg class="copy-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+                                        <path pathLength="1" d="M5 12.5 9.5 17 19 7"/>
+                                    </svg>
+                                </span>
+                            </button>
                             <button type="button" class="profile-clear profile-icon-btn" id="ovProfileClearA" data-i18n-title="profileClearTitle" title="清除剖面" disabled>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
                                     <path d="M6 6l12 12M18 6L6 18"/>
@@ -1834,6 +1947,12 @@
                         <div class="profile-plot ov-profile-plot" id="ovProfilePlotA">
                             <canvas id="ovProfileCanvasA"></canvas>
                             <div class="profile-tip" id="ovProfileTipA"></div>
+                            <div class="copy-badge" id="ovProfileCopyBadgeA" role="status">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M5 12.5 9.5 17 19 7"/>
+                                </svg>
+                                <span data-i18n="copyProfileBadge">已複製剖面</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1849,6 +1968,17 @@
                                 </svg>
                                 <input type="file" id="ovFileB" multiple accept=".bcrf,.asc,.tif,.tiff,.pcd,.txt,.csv,.bmp,.png,.jpg,.jpeg" />
                             </label>
+                            <button type="button" id="ovCopyB" class="toolbar-icon-btn copy-icon-btn" data-i18n-title="btnCopyImage" data-i18n-aria="btnCopyImage" title="複製圖像 (Ctrl+C)" aria-label="複製圖像 (Ctrl+C)" disabled>
+                                <span class="copy-icon-stack" aria-hidden="true">
+                                    <svg class="copy-icon-default" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="8" y="8" width="12" height="12" rx="2"/>
+                                        <path d="M4 16V6a2 2 0 0 1 2-2h10"/>
+                                    </svg>
+                                    <svg class="copy-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+                                        <path pathLength="1" d="M5 12.5 9.5 17 19 7"/>
+                                    </svg>
+                                </span>
+                            </button>
                             <button type="button" id="ovClearB" class="toolbar-icon-btn btn-secondary" data-i18n-title="ovClearB" data-i18n-aria="ovClearB" title="清除圖 B" aria-label="清除圖 B" disabled>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                     <path d="M4 7h16"/>
@@ -1879,6 +2009,12 @@
                         </div>
                         <div class="zoom-hint" data-i18n="zoomHint">滾輪縮放 · 拖曳平移 · 雙擊還原</div>
                         <div class="zoom-indicator" id="ovZoomB">100%</div>
+                        <div class="copy-badge" id="ovCopyBadgeB" role="status">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M5 12.5 9.5 17 19 7"/>
+                            </svg>
+                            <span data-i18n="copyBadge">已複製圖像</span>
+                        </div>
                         <div class="drop-hint" id="ovDropHintB">
                             <div class="icon">&#x2B07;</div>
                             <div data-i18n="dropSupported">放開以載入檔案</div>
@@ -1925,6 +2061,17 @@
                                     <path d="M12.6 15 11.4 21"/>
                                 </svg>
                             </button>
+                            <button type="button" class="profile-icon-btn copy-icon-btn profile-copy-btn" id="ovProfileCopyB" data-i18n-title="btnCopyProfile" data-i18n-aria="btnCopyProfile" title="複製剖面 (Ctrl+C)" aria-label="複製剖面 (Ctrl+C)">
+                                <span class="copy-icon-stack" aria-hidden="true">
+                                    <svg class="copy-icon-default" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="8" y="8" width="12" height="12" rx="2"/>
+                                        <path d="M4 16V6a2 2 0 0 1 2-2h10"/>
+                                    </svg>
+                                    <svg class="copy-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+                                        <path pathLength="1" d="M5 12.5 9.5 17 19 7"/>
+                                    </svg>
+                                </span>
+                            </button>
                             <button type="button" class="profile-clear profile-icon-btn" id="ovProfileClearB" data-i18n-title="profileClearTitle" title="清除剖面" disabled>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
                                     <path d="M6 6l12 12M18 6L6 18"/>
@@ -1934,6 +2081,12 @@
                         <div class="profile-plot ov-profile-plot" id="ovProfilePlotB">
                             <canvas id="ovProfileCanvasB"></canvas>
                             <div class="profile-tip" id="ovProfileTipB"></div>
+                            <div class="copy-badge" id="ovProfileCopyBadgeB" role="status">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M5 12.5 9.5 17 19 7"/>
+                                </svg>
+                                <span data-i18n="copyProfileBadge">已複製剖面</span>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -62,6 +62,8 @@ const OverlayAnalysis = (() => {
             zoom: $('ovZoomA'),
             name: $('ovNameA'),
             fileInput: $('ovFileA'),
+            btnCopy: $('ovCopyA'),
+            copyBadge: $('ovCopyBadgeA'),
             btnClear: $('ovClearA'),
             lineOverlay: $('ovLineOverlayA'),
             lineSeg: $('ovLineSegA'),
@@ -89,6 +91,8 @@ const OverlayAnalysis = (() => {
             zoom: $('ovZoomB'),
             name: $('ovNameB'),
             fileInput: $('ovFileB'),
+            btnCopy: $('ovCopyB'),
+            copyBadge: $('ovCopyBadgeB'),
             btnClear: $('ovClearB'),
             lineOverlay: $('ovLineOverlayB'),
             lineSeg: $('ovLineSegB'),
@@ -1553,6 +1557,8 @@ const OverlayAnalysis = (() => {
         if (el.btnLineClear) el.btnLineClear.disabled = !ready || !st.lineImage;
         if (sides.a.btnClear) sides.a.btnClear.disabled = !st.dsA;
         if (sides.b.btnClear) sides.b.btnClear.disabled = !st.dsB;
+        if (sides.a.btnCopy) sides.a.btnCopy.disabled = !st.dsA;
+        if (sides.b.btnCopy) sides.b.btnCopy.disabled = !st.dsB;
         if (sides.a.profileClear) sides.a.profileClear.disabled = !st.lineImage;
         if (sides.b.profileClear) sides.b.profileClear.disabled = !st.lineImage;
         // 同步分析頁表頭清除鈕
@@ -2457,6 +2463,9 @@ const OverlayAnalysis = (() => {
                 });
             }
             if (s.btnClear) s.btnClear.addEventListener('click', () => clearSide(side));
+            if (s.btnCopy && s.canvas && typeof bindCopyImageButton === 'function') {
+                bindCopyImageButton(s.btnCopy, () => s.canvas, s.copyBadge);
+            }
             if (s.profileClear) s.profileClear.addEventListener('click', clearLine);
             if (s.chartStyle) {
                 s.chartStyle.addEventListener('click', (e) => {

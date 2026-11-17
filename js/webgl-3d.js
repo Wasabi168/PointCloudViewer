@@ -102,8 +102,8 @@ const Viewer3D = (() => {
     function initGL() {
         if (supported !== null) return supported;
         try {
-            gl = canvas.getContext('webgl', { antialias: true, alpha: false }) ||
-                 canvas.getContext('experimental-webgl', { antialias: true, alpha: false });
+            gl = canvas.getContext('webgl', { antialias: true, alpha: false, preserveDrawingBuffer: true }) ||
+                 canvas.getContext('experimental-webgl', { antialias: true, alpha: false, preserveDrawingBuffer: true });
         } catch (_) { gl = null; }
         if (!gl) { supported = false; return false; }
 
@@ -398,6 +398,11 @@ const Viewer3D = (() => {
     return {
         isSupported() { return initGL(); },
         isActive() { return active; },
+        /** 立刻畫一幀，供複製到剪貼簿時讀取畫面 */
+        paintNow() {
+            if (!active || !gl) return;
+            draw();
+        },
         enter(ds) {
             if (!initGL()) return false;
             if (!buildGeometry(ds)) return false;

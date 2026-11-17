@@ -531,6 +531,7 @@ function createImageView(ids, options) {
         const edOpenLabel = el.fileInput ? el.fileInput.closest('label.file-btn') : null;
         setBusy(edOpenLabel, true);
         if (el.btnSave) el.btnSave.disabled = true;
+        if (el.btnCopy) el.btnCopy.disabled = true;
         try {
             const result = await readDatasetByExt(ext, file, setProgress);
             const rangeSrc = result.type === 'pcd-scatter' ? result.z : result.data;
@@ -545,6 +546,7 @@ function createImageView(ids, options) {
             else el.status.textContent = t('statusLoaded', file.name, result.width, result.height);
             if (typeof editAfterLoad === 'function') editAfterLoad();
             if (el.btnClear) el.btnClear.disabled = false;
+            if (el.btnCopy) el.btnCopy.disabled = false;
             syncPointSizeControls();
         } catch (err) {
             if (isLoadCancelled(err)) {
@@ -562,6 +564,7 @@ function createImageView(ids, options) {
             hideProgress();
             setBusy(edOpenLabel, false);
             if (el.btnSave) el.btnSave.disabled = false;
+            if (el.btnCopy) el.btnCopy.disabled = !st.dataset;
         }
     }
 
@@ -876,6 +879,9 @@ function createImageView(ids, options) {
             useLiveCanvas: true,
         });
     });
+    if (el.btnCopy && el.canvas) {
+        bindCopyImageButton(el.btnCopy, () => el.canvas, el.copyBadge);
+    }
     el.viewer.addEventListener('contextmenu', (e) => {
         const source = editorImageUnderPointer(e);
         if (!source) return;
@@ -1621,7 +1627,12 @@ function createImageView(ids, options) {
         };
 
         el.cursorToolbar.querySelectorAll('button[data-cursor]').forEach((btn) => {
-            btn.addEventListener('click', () => syncMode(btn.getAttribute('data-cursor')));
+            btn.addEventListener('click', () => {
+                const mode = btn.getAttribute('data-cursor');
+                const toggleOff = (mode === 'profile' || mode === 'measure' || mode === 'area')
+                    && tool.mode === mode;
+                syncMode(toggleOff ? 'pan' : mode);
+            });
         });
         if (el.clearMarks) el.clearMarks.addEventListener('click', clearMarks);
         if (el.profileClear) el.profileClear.addEventListener('click', () => {
@@ -2087,6 +2098,7 @@ function createImageView(ids, options) {
             if (!el.scatterGridTip && scatterGridTip) el.scatterGridTip = scatterGridTip;
         }
         if (el.btnClear) el.btnClear.disabled = !has;
+        if (el.btnCopy) el.btnCopy.disabled = !has;
         const cropOn = !!(has && st.edit.cropMode);
         if (el.cropActions) {
             const wasHidden = el.cropActions.hidden;
@@ -2185,6 +2197,7 @@ function createImageView(ids, options) {
         el.status.textContent = t('statusIdle');
         if (el.fileInput) el.fileInput.value = '';
         if (el.btnClear) el.btnClear.disabled = true;
+        if (el.btnCopy) el.btnCopy.disabled = true;
         if (st.clearTools) st.clearTools();
         if (editing) updateEditButtons();
         syncPointSizeControls();
@@ -9618,6 +9631,7 @@ function createImageView(ids, options) {
         if (typeof editAfterLoad === 'function') editAfterLoad();
         if (el.btnSave) el.btnSave.disabled = false;
         if (el.btnClear) el.btnClear.disabled = false;
+        if (el.btnCopy) el.btnCopy.disabled = false;
         syncPointSizeControls();
         return true;
     }
@@ -9669,6 +9683,7 @@ function createImageView(ids, options) {
         if (el.btnSave) el.btnSave.disabled = false;
         syncPointSizeControls();
         if (el.btnClear) el.btnClear.disabled = false;
+        if (el.btnCopy) el.btnCopy.disabled = false;
         return true;
     }
 
@@ -10410,7 +10425,8 @@ const editorView = createImageView({
     measureMeta: 'edMeasureMeta', measureClear: 'edMeasureClear',
     dropIcon: 'edDropIcon', dropText: 'edDropText',
     fileInput: 'edFileInput', colormap: 'edColormap',
-    btnSave: 'edBtnSave', saveFormat: 'edSaveFormat', saveFormatItem: 'edSaveFormatItem',
+    btnSave: 'edBtnSave', btnCopy: 'edBtnCopy', copyBadge: 'edCopyBadge',
+    saveFormat: 'edSaveFormat', saveFormatItem: 'edSaveFormatItem',
     btnClear: 'edBtnClear',
     progress: 'edProgress', progressBar: 'edProgressBar', status: 'edStatus', infoList: 'edInfoList',
     sideToggle: 'edSideToggle',
