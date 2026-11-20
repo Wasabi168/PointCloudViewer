@@ -9,7 +9,7 @@
 
 let currentDataset = null;   // { data, width, height, vmin, vmax, header }
 
-/** 缺測（NaN）像素色，跟著主題。暗色維持黑，亮色貼近檢視區底色。 */
+/** 缺測（NaN）像素色，跟著主題。暗色維持黑，液態玻璃貼近檢視區底色。 */
 let missingPixelRgb = [0, 0, 0];
 let missingPixelTheme = '';
 
@@ -36,7 +36,7 @@ function paintMissingPixel(px, po) {
     px[po + 3] = 255;
 }
 
-/** 剖面圖、直方圖、散布底的繪圖色。暗色維持原樣，亮色改淺底與深色刻度。 */
+/** 剖面圖、直方圖、散布底的繪圖色。暗色維持原樣，液態玻璃改淺底與深色刻度。 */
 let chartChromeTheme = '';
 let chartChromeCache = null;
 

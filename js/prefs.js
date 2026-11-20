@@ -69,7 +69,7 @@ function resolveColorTheme(pref) {
     return (pref === 'light' || pref === 'dark') ? pref : systemColorTheme();
 }
 
-/** 套用主題。pref 為 light / dark / system；未指定時沿用已儲存值。 */
+/** 套用主題。pref 為 light（液態玻璃）/ dark / system；未指定時沿用已儲存值。 */
 function applyTheme(pref, opts) {
     if (pref == null) pref = getUserPref('theme');
     if (pref !== 'light' && pref !== 'dark' && pref !== 'system') pref = 'system';
