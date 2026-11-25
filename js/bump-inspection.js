@@ -5214,10 +5214,12 @@ const BumpInspection = (() => {
                 drag = handle === el.histLo ? 'lo' : 'hi';
                 changed = false;
                 handle.setPointerCapture(event.pointerId);
+                handle.classList.add('dragging');
             });
             handle.addEventListener('pointermove', move);
             handle.addEventListener('pointerup', stop);
             handle.addEventListener('pointercancel', stop);
+            handle.addEventListener('lostpointercapture', () => handle.classList.remove('dragging'));
         });
         document.getElementById('bcBtnAuto').addEventListener('click', () => {
             if (!state.dataset) return;
@@ -5278,10 +5280,12 @@ const BumpInspection = (() => {
                 if (state.step !== 4 || !isFilteredScatter() || !state.result || event.button !== 0) return;
                 drag = handle === el.rawHistLo ? 'lo' : 'hi';
                 handle.setPointerCapture(event.pointerId);
+                handle.classList.add('dragging');
             });
             handle.addEventListener('pointermove', move);
             handle.addEventListener('pointerup', stop);
             handle.addEventListener('pointercancel', stop);
+            handle.addEventListener('lostpointercapture', () => handle.classList.remove('dragging'));
         });
         el.showRawFiltered.addEventListener('change', () => {
             if (!isFilteredScatter()) return;

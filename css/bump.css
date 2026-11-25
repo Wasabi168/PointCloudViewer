@@ -802,7 +802,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
 #bcRoot .side-row,
 #bcRoot .result-grid { display: flex; align-items: center; gap: 8px; }
 #bcRoot .bc-hist-head { justify-content: space-between; }
-#bcRoot .hist-wrap { position: relative; height: 120px; margin-top: 8px; }
+#bcRoot .hist-wrap { position: relative; height: 120px; margin-top: 30px; }
 #bcRoot .hist-tip {
     position: absolute;
     z-index: 3;
@@ -821,28 +821,43 @@ body:has(#pageAnalysis.active.an-page-bump) {
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 14px;
-    margin-left: -7px;
+    width: 2px;
+    background: var(--accent);
+    transform: translateX(-50%);
     cursor: ew-resize;
+    z-index: 3;
     touch-action: none;
 }
 #bcRoot .bc-hist-handle::before {
     content: "";
     position: absolute;
-    left: 6px;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: white;
+    left: 50%;
+    top: -7px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    transform: translateX(-50%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 #bcRoot .bc-hist-handle span {
     position: absolute;
-    top: -2px;
-    left: 12px;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
     font-size: 11px;
+    line-height: 1;
+    font-family: Consolas, monospace;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 2px 4px;
     white-space: nowrap;
-    color: white;
+    pointer-events: none;
 }
+#bcRoot .bc-hist-handle:hover::before,
+#bcRoot .bc-hist-handle.dragging::before { background: var(--accent-hover); }
 #bcRoot .bc-hist-axis { justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 4px; }
 #bcRoot .bc-side {
     width: 340px;
