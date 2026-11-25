@@ -456,6 +456,30 @@
         background: rgba(79, 140, 255, 0.15);
         outline: none;
     }
+    .send-menu [hidden] { display: none !important; }
+    .send-menu-sep {
+        height: 1px;
+        margin: 4px 0;
+        background: var(--border);
+    }
+    .send-menu-label {
+        padding: 6px 14px 2px;
+        font-size: 11px;
+        color: var(--muted);
+    }
+    .send-menu .send-xwin-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .send-xwin-name {
+        max-width: 260px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .send-xwin-hint { font-size: 11px; color: var(--muted); }
+    .send-xwin-hint.warn { color: #e0a030; }
+    html[data-theme="light"] .send-xwin-hint.warn { color: #a86400; }
     .more-menu .send-wrap { width: 100%; }
     .more-menu .send-btn { width: 100%; }
     .more-menu .send-menu {
@@ -949,6 +973,98 @@
         text-align: center;
         pointer-events: none;
     }
+
+    /* 跨視窗載入：佔位文字上移，下方列出其他視窗的資料 */
+    .placeholder.xwin-shift {
+        bottom: 50%;
+        align-items: flex-end;
+        padding-bottom: 14px;
+    }
+    .xwin-panel {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 7;
+        width: min(380px, calc(100% - 32px));
+        max-height: calc(50% - 16px);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: auto;
+    }
+    .xwin-panel[hidden] { display: none; }
+    .viewer.drag-over .xwin-panel,
+    .viewer.drag-reject .xwin-panel { visibility: hidden; }
+    .xwin-panel-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+    }
+    .xwin-panel-title::before,
+    .xwin-panel-title::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+    }
+    .xwin-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 0;
+        overflow-y: auto;
+    }
+    .xwin-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 6px 10px 6px 6px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface-2);
+        color: var(--text);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .xwin-card:hover,
+    .xwin-card:focus-visible {
+        border-color: var(--accent);
+        background: rgba(79, 140, 255, 0.12);
+        outline: none;
+    }
+    .xwin-card:disabled { opacity: 0.6; cursor: progress; }
+    .xwin-thumb {
+        flex: none;
+        width: 56px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border-radius: 4px;
+        background: var(--inset);
+    }
+    .xwin-thumb img { display: block; max-width: 100%; max-height: 100%; }
+    .xwin-card-body {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .xwin-card-name {
+        font-size: 13px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .xwin-card-meta { font-size: 11px; color: var(--muted); }
 
     .zoom-indicator {
         position: absolute;

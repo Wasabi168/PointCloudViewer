@@ -46,7 +46,9 @@ alwaysApply: false
 22. `bump-overlay.js` — Bump 分析「疊圖分析」子頁 UI
 23. `bump-analysis.js` — `BumpAnalysis`：子頁切換、關於對話框、與 `AnalysisView` 的整合
 24. `analysis-ui.js` — 點雲分析頁
-25. `app.js` — 頁面切換與啟動初始化
+25. `info-dialog.js` — 資訊對話框
+26. `cross-window.js` — `CrossWindow`：跨視窗傳送資料（BroadcastChannel；空白頁的「從其他視窗載入」、傳送選單的「新視窗／其他視窗」）
+27. `app.js` — 頁面切換與啟動初始化
 
 ## 編輯慣例
 

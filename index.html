@@ -203,6 +203,9 @@
                     <button type="button" role="menuitem" id="btnSendToAnalysis" data-i18n="sendToAnalysis" data-i18n-title="sendToAnalysisTitle">分析</button>
                     <button type="button" role="menuitem" id="btnSendToOverlayA" data-i18n="sendToOverlayA" data-i18n-title="sendToOverlayATitle">疊圖分析圖 A</button>
                     <button type="button" role="menuitem" id="btnSendToOverlayB" data-i18n="sendToOverlayB" data-i18n-title="sendToOverlayBTitle">疊圖分析圖 B</button>
+                    <div class="send-menu-sep xwin-only" role="separator"></div>
+                    <button type="button" role="menuitem" class="xwin-only" id="btnSendToNewWindow" data-i18n="sendToNewWindow" data-i18n-title="sendToNewWindowTitle">新視窗</button>
+                    <div class="send-menu-xwin" id="viewerSendXwin" hidden></div>
                 </div>
             </div>
         </div>
@@ -591,6 +594,9 @@
                         <button type="button" role="menuitem" id="edSendToAnalysis" data-i18n="sendToAnalysis" data-i18n-title="sendToAnalysisTitle">分析</button>
                         <button type="button" role="menuitem" id="edSendToOverlayA" data-i18n="sendToOverlayA" data-i18n-title="sendToOverlayATitle">疊圖分析圖 A</button>
                         <button type="button" role="menuitem" id="edSendToOverlayB" data-i18n="sendToOverlayB" data-i18n-title="sendToOverlayBTitle">疊圖分析圖 B</button>
+                        <div class="send-menu-sep xwin-only" role="separator"></div>
+                        <button type="button" role="menuitem" class="xwin-only" id="edSendToNewWindow" data-i18n="sendToNewWindow" data-i18n-title="sendToNewWindowTitle">新視窗</button>
+                        <div class="send-menu-xwin" id="edSendXwin" hidden></div>
                     </div>
                 </div>
             </div>
@@ -3831,6 +3837,7 @@
 <script src="js/bump-analysis.js"></script>
 <script src="js/analysis-ui.js"></script>
 <script src="js/info-dialog.js"></script>
+<script src="js/cross-window.js"></script>
 <script src="js/app.js"></script>
 
 </body>

@@ -205,6 +205,7 @@ body:has(#pageAnalysis.active.an-page-bump) {
     pointer-events: none;
 }
 #bcRoot .drop-veil { background: rgba(79, 140, 255, 0.16); color: white; font-size: 18px; z-index: 16; }
+#bcRoot .bc-placeholder.xwin-shift { bottom: 50%; align-items: flex-end; padding-bottom: 14px; }
 #bcRoot .stage { position: absolute; inset: 0; }
 #bcRoot .stage.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
 #bcRoot .pane { position: relative; min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }

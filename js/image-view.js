@@ -10344,6 +10344,9 @@ function createImageView(ids, options) {
         canUseCalc: () => !!st.dataset && !isScatter(st.dataset),
         applyCalc,
         getDataset: () => st.dataset ? cloneDatasetForTransfer(st.dataset) : null,
+        /** 唯讀參照，不可修改；只用來判斷資料是否換過 */
+        getDatasetRef: () => st.dataset || null,
+        prepareSendDataset: prepareDatasetForSend,
         getFilename: () => (st.dataset && st.dataset.filename) ? st.dataset.filename : '',
         getDatasetSignature: () => st.dataset ? getDatasetSignature(st.dataset) : null,
         getLastEditStep: () => st.edit.lastEditStep,

@@ -234,6 +234,7 @@ function applyLanguage(lang) {
         editorView.syncLang();
     }
     if (typeof syncCrossLoadPrompt === 'function') syncCrossLoadPrompt();
+    if (typeof CrossWindow !== 'undefined' && CrossWindow.syncLang) CrossWindow.syncLang();
     if (typeof AnalysisView !== 'undefined' && AnalysisView && AnalysisView.syncLang) {
         AnalysisView.syncLang();
     }
