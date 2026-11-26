@@ -78,3 +78,7 @@ alwaysApply: false
 - Bump 分析（點雲分析頁的「Bump分析」導覽項）→ `bump-engine.js`（演算法）、`bump-inspection.js`（分析子頁）、`bump-overlay.js`（疊圖分析子頁）、`bump-analysis.js`（整合）、`css/bump.css`
   - HTML 位於 `index.html` 的 `#bcRoot`；所有 id 皆以 `bc` 前綴、CSS 選擇器皆以 `#bcRoot` 開頭、翻譯鍵皆以 `bc.` 開頭
 - 翻譯字串 → `i18n.js`
+- 跨視窗傳送 / 外部 App 傳資料進來 → `cross-window.js`
+  - 外部 App 只支援「外部 App 自己 window.open() 開啟 CloudMap，再透過 window.opener 的 postMessage 傳入」（`cloudmap:ready` / `cloudmap:load` / `cloudmap:result`）
+  - BroadcastChannel（`cloudmap-xwin`）只供 CloudMap 分頁之間使用，不是對外介面
+  - 外部協定或資料集格式有變動時，必須同步更新 `docs/external-data-integration.md`

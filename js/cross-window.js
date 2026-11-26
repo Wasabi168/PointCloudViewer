@@ -2,6 +2,8 @@
  * 跨視窗資料傳送（同一瀏覽器、同網域的多個分頁之間，透過 BroadcastChannel）
  * - 空白頁的佔位區塊下方列出其他視窗的資料，點一下即載入（不主動彈出詢問）
  * - 「傳送」選單：新視窗（開新分頁並直接帶入）、其他視窗（推送到已開啟的分頁）
+ * - 外部 App：自己 window.open() 開啟 CloudMap 後，以 postMessage 傳入資料（本頁只接受 window.opener 的訊息）
+ *   BroadcastChannel 部分僅供 CloudMap 分頁之間使用，不是對外介面
  * 依賴：prefs.js（t, currentLang）、viewer-ui.js（currentDataset, cloneDatasetForTransfer,
  *       transferDatasetToViewer, transferDatasetToEditor, showToast）、image-view.js（editorView）、
  *       analysis-ui.js（AnalysisView, transferDatasetToAnalysis）、bump-*.js（BumpInspection, BumpAnalysis）、
@@ -90,8 +92,25 @@ const CrossWindow = (() => {
 
     /* ---------- 可接收資料的位置（各頁的空白佔位區塊） ---------- */
 
+    function showAnalysisTool(tool) {
+        if (typeof switchPage === 'function') switchPage('analysis');
+        if (typeof AnalysisView === 'undefined' || !AnalysisView.getTool || !AnalysisView.setTool) return;
+        if (!tool) {
+            const cur = AnalysisView.getTool();
+            if (cur === 'roughness' || cur === 'profile') return;
+            tool = 'roughness';
+        }
+        if (AnalysisView.getTool() !== tool) AnalysisView.setTool(tool);
+    }
+
+    async function loadIntoAnalysis(ds) {
+        showAnalysisTool();
+        return transferDatasetToAnalysis({ ds });
+    }
+
     async function loadIntoBump(ds) {
         if (typeof BumpInspection === 'undefined' || !BumpInspection.loadDataset) return false;
+        showAnalysisTool('bump');
         if (typeof BumpAnalysis !== 'undefined' && BumpAnalysis.setPage) BumpAnalysis.setPage('bcPageInspect');
         const ok = await BumpInspection.loadDataset(ds);
         if (ok && typeof BumpAnalysis !== 'undefined' && BumpAnalysis.refit) BumpAnalysis.refit();
@@ -112,7 +131,7 @@ const CrossWindow = (() => {
         analysis: {
             placeholderId: 'anPlaceholder',
             gridOnly: true,
-            load: (ds) => transferDatasetToAnalysis({ ds }),
+            load: loadIntoAnalysis,
         },
         bump: {
             placeholderId: 'bcPlaceholder',
@@ -617,6 +636,151 @@ const CrossWindow = (() => {
         refreshPanels();
     }
 
+    /* ---------- 外部 App：自己開啟 CloudMap，再透過 window.opener 傳資料 ---------- */
+    /* 規格見 docs/external-data-integration.md；改動訊息格式時要同步更新文件 */
+
+    const OPENER_PROTOCOL_VERSION = 1;
+    /** 允許的外部來源（例如 'https://example.com'）；空陣列表示接受任何開啟本頁的視窗 */
+    const OPENER_ALLOWED_ORIGINS = [];
+    const OPENER_KINDS = ['viewer', 'editor', 'analysis', 'bump'];
+    const OPENER_BUSY_WAIT_MS = 10000;
+    let openerQueue = Promise.resolve();
+
+    function readyMessage() {
+        return { type: 'cloudmap:ready', version: OPENER_PROTOCOL_VERSION, kinds: OPENER_KINDS.slice() };
+    }
+
+    function originLabel(origin) {
+        try { return new URL(origin).host || origin; } catch (_) { return origin; }
+    }
+
+    function toFloat32(arr) {
+        if (arr instanceof Float32Array) return arr;
+        if (Array.isArray(arr) || (ArrayBuffer.isView(arr) && !(arr instanceof DataView))) return Float32Array.from(arr);
+        return null;
+    }
+
+    function invalid(message) {
+        return { error: 'invalid-dataset', message };
+    }
+
+    /** 檢查並整理外部傳來的資料集，補齊 CloudMap 內部需要的欄位 */
+    function normalizeExternalDataset(raw) {
+        if (!raw || typeof raw !== 'object') return invalid('dataset must be an object');
+        const header = {};
+        if (raw.header && typeof raw.header === 'object') {
+            Object.keys(raw.header).forEach((k) => {
+                const v = raw.header[k];
+                if (v != null && typeof v !== 'object') header[k] = String(v);
+            });
+        }
+        if (!header.fileformat) header.fileformat = 'external';
+        const filename = typeof raw.filename === 'string' && raw.filename ? raw.filename : 'external';
+
+        if (raw.type === 'pcd-scatter') {
+            const x = toFloat32(raw.x);
+            const y = toFloat32(raw.y);
+            const z = toFloat32(raw.z);
+            if (!x || !y || !z) return invalid('x, y, z must be Float32Array');
+            if (!x.length || x.length !== y.length || x.length !== z.length) return invalid('x, y, z must be non-empty and the same length');
+            const bounds = { xmin: Infinity, xmax: -Infinity, ymin: Infinity, ymax: -Infinity };
+            for (let i = 0; i < x.length; i++) {
+                if (!Number.isFinite(x[i]) || !Number.isFinite(y[i])) continue;
+                if (x[i] < bounds.xmin) bounds.xmin = x[i];
+                if (x[i] > bounds.xmax) bounds.xmax = x[i];
+                if (y[i] < bounds.ymin) bounds.ymin = y[i];
+                if (y[i] > bounds.ymax) bounds.ymax = y[i];
+            }
+            if (!Number.isFinite(bounds.xmin) || !Number.isFinite(bounds.ymin)) return invalid('no finite x/y values');
+            const size = pcdScatterCanvasSize(bounds);
+            return {
+                ds: {
+                    type: 'pcd-scatter', filename, x, y, z,
+                    pointCount: x.length, bounds,
+                    width: size.width, height: size.height,
+                    header, pointRadius: 0,
+                },
+            };
+        }
+
+        const width = Number(raw.width);
+        const height = Number(raw.height);
+        if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
+            return invalid('width and height must be positive integers');
+        }
+        const data = toFloat32(raw.data);
+        if (!data) return invalid('data must be Float32Array');
+        if (data.length !== width * height) return invalid('data.length must equal width * height');
+        header.xpixels = String(width);
+        header.ypixels = String(height);
+        return { ds: { type: 'grid', filename, width, height, data, header } };
+    }
+
+    async function waitUntilIdle() {
+        const until = Date.now() + OPENER_BUSY_WAIT_MS;
+        while (typeof datasetTransferInProgress !== 'undefined' && datasetTransferInProgress) {
+            if (Date.now() > until) return false;
+            await new Promise((r) => setTimeout(r, 100));
+        }
+        return true;
+    }
+
+    async function loadFromOpener(m, origin, reply) {
+        const kind = m.kind == null ? 'viewer' : m.kind;
+        const fail = (error, message) => reply({ type: 'cloudmap:result', ok: false, kind, error, message: message || '' });
+        if (!OPENER_KINDS.includes(kind)) { fail('unsupported-kind', 'kind must be one of ' + OPENER_KINDS.join(', ')); return; }
+
+        const { ds, error, message } = normalizeExternalDataset(m.dataset);
+        if (!ds) {
+            showToast(t('xwinOpenerInvalid', originLabel(origin)), 'error');
+            fail(error, message);
+            return;
+        }
+        if (TARGETS[kind].gridOnly && ds.type === 'pcd-scatter') {
+            showToast(t('xwinOpenerScatter', originLabel(origin)), 'error');
+            fail('scatter-not-supported', kind + ' accepts grid height maps only');
+            return;
+        }
+        if (!(await waitUntilIdle())) { fail('busy', 'another transfer is still running'); return; }
+
+        const options = m.options && typeof m.options === 'object' ? m.options : {};
+        const opts = typeof options.colormap === 'string' ? { colormap: options.colormap } : {};
+        let ok = false;
+        try {
+            ok = await TARGETS[kind].load(ds, opts);
+        } catch (err) {
+            console.error(err);
+        }
+        if (!ok) { fail('load-failed', 'CloudMap could not display this dataset'); return; }
+        showToast(t('xwinOpenerLoaded', ds.filename, originLabel(origin)), 'info');
+        refreshPanels();
+        reply({ type: 'cloudmap:result', ok: true, kind, filename: ds.filename });
+    }
+
+    function onWindowMessage(e) {
+        if (!window.opener || e.source !== window.opener) return;
+        const m = e.data;
+        if (!m || typeof m !== 'object' || typeof m.type !== 'string' || !m.type.startsWith('cloudmap:')) return;
+        const target = e.origin && e.origin !== 'null' ? e.origin : '*';
+        const reply = (payload) => {
+            try { e.source.postMessage({ ...payload, id: m.id }, target); } catch (err) { console.error(err); }
+        };
+        if (OPENER_ALLOWED_ORIGINS.length && !OPENER_ALLOWED_ORIGINS.includes(e.origin)) {
+            reply({ type: 'cloudmap:result', ok: false, error: 'origin-not-allowed', message: e.origin });
+            return;
+        }
+        if (m.type === 'cloudmap:ping') {
+            reply(readyMessage());
+        } else if (m.type === 'cloudmap:load') {
+            openerQueue = openerQueue.then(() => loadFromOpener(m, e.origin, reply));
+        }
+    }
+
+    function announceToOpener() {
+        if (!window.opener) return;
+        try { window.opener.postMessage(readyMessage(), '*'); } catch (_) { /* opener 已關閉或被瀏覽器隔離 */ }
+    }
+
     /* ---------- 啟動 ---------- */
 
     function onPeersChanged() {
@@ -652,11 +816,14 @@ const CrossWindow = (() => {
             setInterval(tick, STATE_POLL_MS);
         }
 
+        window.addEventListener('message', onWindowMessage);
+
         const start = () => {
             lastStateKey = stateKey();
             updateTitle();
             query();
             if (token) runHandoff(token);
+            announceToOpener();
         };
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
         else setTimeout(start, 0);
